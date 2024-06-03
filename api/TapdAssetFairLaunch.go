@@ -15,6 +15,7 @@ import (
 	"github.com/wallet/models"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type IssuanceHistoryInfo struct {
