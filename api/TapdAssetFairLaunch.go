@@ -10,6 +10,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/vincent-petithory/dataurl"
 	"github.com/wallet/api/connect"
 	"github.com/wallet/models"
 	"io"
@@ -467,4 +468,25 @@ func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAs
 	}
 	err = errors.New("asset not found")
 	return "", err
+}
+
+// GetImageByImageData
+// @Description: Get Image By Image Data
+// @param imageData
+// @return []byte
+func GetImageByImageData(imageData string) []byte {
+	if imageData == "" {
+		return nil
+	}
+	dataUrl, err := dataurl.DecodeString(imageData)
+	if err != nil {
+		return nil
+	}
+	ContentType := dataUrl.MediaType.ContentType()
+	datatype := strings.Split(ContentType, "/")
+	if datatype[0] != "image" {
+		fmt.Println("is not image dataurl")
+		return nil
+	}
+	return dataUrl.Data
 }
