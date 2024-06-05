@@ -168,7 +168,7 @@ func ProcessOwnSetFairLaunchResponseToIssuanceHistoryInfo(fairLaunchInfos *[]mod
 			AssetID:              fairLaunchInfo.AssetID,
 			ReservedTotal:        fairLaunchInfo.ReserveTotal,
 			AssetType:            int(fairLaunchInfo.AssetType),
-			IssuanceTime:         fairLaunchInfo.IssuanceTime,
+			IssuanceTime:         fairLaunchInfo.SetTime,
 			State:                int(fairLaunchInfo.State),
 		})
 	}
