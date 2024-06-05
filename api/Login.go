@@ -20,6 +20,10 @@ func SetServerHost(server string) string {
 	return serverHost
 }
 
+func GetServerHost() string {
+	return serverHost
+}
+
 func Login(username, password string) (string, error) {
 	url := serverHost + LoginUrl
 	return login(url, username, password)
