@@ -22,6 +22,7 @@ type IssuanceHistoryInfo struct {
 	IsFairLaunchIssuance bool   `json:"isFairLaunchIssuance"`
 	AssetName            string `json:"asset_name"`
 	AssetID              string `json:"asset_id"`
+	ReservedTotal        int    `json:"reserved_total"`
 	AssetType            int    `json:"asset_type"`
 	IssuanceTime         int    `json:"issuance_time"`
 	State                int    `json:"state"`
@@ -165,6 +166,7 @@ func ProcessOwnSetFairLaunchResponseToIssuanceHistoryInfo(fairLaunchInfos *[]mod
 			IsFairLaunchIssuance: true,
 			AssetName:            fairLaunchInfo.Name,
 			AssetID:              fairLaunchInfo.AssetID,
+			ReservedTotal:        fairLaunchInfo.ReserveTotal,
 			AssetType:            int(fairLaunchInfo.AssetType),
 			IssuanceTime:         fairLaunchInfo.IssuanceTime,
 			State:                int(fairLaunchInfo.State),
