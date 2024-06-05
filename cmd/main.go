@@ -14,5 +14,5 @@ func main() {
 }
 
 func init() {
-	api.SetPath(PATH)
+	api.SetPath(PATH, "regtest")
 }
