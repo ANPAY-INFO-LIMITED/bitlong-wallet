@@ -93,6 +93,16 @@ func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int,
 
 func GetIssuanceTransactionByteSize() int {
 	// TODO: need to complete
+	return GetTapdMintAssetAndFinalizeTransactionByteSize() + GetTapdSendReservedAssetTransactionByteSize()
+}
+
+func GetTapdMintAssetAndFinalizeTransactionByteSize() int {
+	// TODO: need to complete
+	return 170
+}
+
+func GetTapdSendReservedAssetTransactionByteSize() int {
+	// TODO: need to complete
 	return 170
 }
 
