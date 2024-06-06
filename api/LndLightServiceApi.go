@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/wallet/api/connect"
+	"github.com/wallet/api/rpcclient"
 	"io"
 	"strconv"
 	"strings"
@@ -462,6 +463,29 @@ func ClosedChannels() string {
 		return err.Error()
 	}
 	return response.String()
+}
+
+func DecodePayReq(payReq string) string {
+	req, err := rpcclient.DecodePayReq(payReq)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	result := struct {
+		Description string `json:"description"`
+		Amount      int64  `json:"amount"`
+		Timestamp   int64  `json:"timestamp"`
+		Expiry      int64  `json:"expiry"`
+		PaymentHash string `json:"payment_hash"`
+		Destination string `json:"destination"`
+	}{
+		Description: req.Description,
+		Amount:      req.NumSatoshis,
+		Timestamp:   req.Timestamp,
+		Expiry:      req.Expiry,
+		PaymentHash: req.PaymentHash,
+		Destination: req.Destination,
+	}
+	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
 // ExportAllChannelBackups
@@ -992,29 +1016,6 @@ func EstimateFee(addr string, amount int64) string {
 		return ""
 	}
 	return response.String()
-}
-
-// DecodePayReq
-//
-//	@Description:DecodePayReq takes an encoded payment request string and attempts to decode it, returning a full description of the conditions encoded within the payment request.
-//	@return int64
-func DecodePayReq(payReq string) int64 {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-
-	defer clearUp()
-	client := lnrpc.NewLightningClient(conn)
-	request := &lnrpc.PayReqString{
-		PayReq: payReq,
-	}
-	response, err := client.DecodePayReq(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s client.DecodePayReq :%v\n", GetTimeNow(), err)
-		return -1
-	}
-	return response.NumSatoshis
 }
 
 // SendPaymentSync
