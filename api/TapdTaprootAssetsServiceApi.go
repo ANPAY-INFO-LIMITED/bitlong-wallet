@@ -50,8 +50,13 @@ func AddrReceives(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
 }
 
-func BurnAsset() {
-
+func BurnAsset(AssetIdStr string, amountToBurn uint64) string {
+	response, err := rpcclient.BurnAsset(AssetIdStr, amountToBurn)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
+	return MakeJsonErrorResult(SUCCESS, "", txHash)
 }
 
 func DebugLevel() {

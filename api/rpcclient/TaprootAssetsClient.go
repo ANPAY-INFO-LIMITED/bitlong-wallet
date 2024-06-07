@@ -33,6 +33,27 @@ func AddrReceives() (*taprpc.AddrReceivesResponse, error) {
 	return response, nil
 }
 
+func BurnAsset(AssetIdStr string, amountToBurn uint64) (*taprpc.BurnAssetResponse, error) {
+	client, clearUp, err := getTaprootAssetsClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+
+	request := &taprpc.BurnAssetRequest{
+		Asset: &taprpc.BurnAssetRequest_AssetIdStr{
+			AssetIdStr: AssetIdStr,
+		},
+		AmountToBurn:     amountToBurn,
+		ConfirmationText: "assets will be destroyed",
+	}
+	response, err := client.BurnAsset(context.Background(), request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 func DecodeAddr(addr string) (*taprpc.Addr, error) {
 
 	client, clearUp, err := getTaprootAssetsClient()
