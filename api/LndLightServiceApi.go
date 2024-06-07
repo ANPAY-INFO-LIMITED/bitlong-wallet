@@ -22,13 +22,14 @@ func getWalletBalance() (*lnrpc.WalletBalanceResponse, error) {
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
-
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.WalletBalanceRequest{}
-
 	response, err := client.WalletBalance(context.Background(), request)
-	fmt.Printf("%s lnrpc WalletBalance response: %v\n", GetTimeNow(), response.String())
+	if err != nil {
+		return nil, err
+	}
+	//fmt.Printf("%s lnrpc WalletBalance response: %v\n", GetTimeNow(), response.String())
 	return response, err
 
 }
