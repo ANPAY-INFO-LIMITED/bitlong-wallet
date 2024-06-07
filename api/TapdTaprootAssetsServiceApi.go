@@ -50,8 +50,8 @@ func AddrReceives(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
 }
 
-func BurnAsset(AssetIdStr string, amountToBurn uint64) string {
-	response, err := rpcclient.BurnAsset(AssetIdStr, amountToBurn)
+func BurnAsset(AssetIdStr string, amountToBurn int64) string {
+	response, err := rpcclient.BurnAsset(AssetIdStr, uint64(amountToBurn))
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
