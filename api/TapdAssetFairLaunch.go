@@ -25,6 +25,7 @@ type IssuanceHistoryInfo struct {
 	ReservedTotal        int    `json:"reserved_total"`
 	AssetType            int    `json:"asset_type"`
 	IssuanceTime         int    `json:"issuance_time"`
+	IssuanceAmount       int    `json:"issuance_amount"`
 	State                int    `json:"state"`
 }
 
@@ -350,6 +351,7 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 				AssetID:              assetId,
 				AssetType:            int(batchAsset.AssetType),
 				IssuanceTime:         timestamp,
+				IssuanceAmount:       int(batchAsset.Amount),
 				State:                int(batch.State),
 			})
 		}
