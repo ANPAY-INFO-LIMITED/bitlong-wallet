@@ -217,11 +217,11 @@ func QueryAllAddr() string {
 }
 
 //	 QueryAddresses
-//	 @Description:  Use listAddress to query the non-zero balance address, exported.
+//	 @Description:  Use listAddresses to query the non-zero balance address, exported.
 //					List of non-zero balance addresses constitutes the Total balance.
 //	 @return string
 func GetNonZeroBalanceAddresses() string {
-	listAddrResp, err := listAddress()
+	listAddrResp, err := listAddresses()
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), "")
 	}
@@ -252,7 +252,7 @@ func GetNonZeroBalanceAddresses() string {
 // @Description: Update all addresses by query non zero balance addresses
 // @return string
 func UpdateAllAddressesByGNZBA() string {
-	listAddrResp, err := listAddress()
+	listAddrResp, err := listAddresses()
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), "")
 	}

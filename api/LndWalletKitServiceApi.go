@@ -12,7 +12,7 @@ import (
 //	@Description: ListAddresses retrieves all the addresses along with their balance.
 //	An account name filter can be provided to filter through all the wallet accounts and return the addresses of only those matching.
 //	@return string
-func listAddress() (*walletrpc.ListAddressesResponse, error) {
+func listAddresses() (*walletrpc.ListAddressesResponse, error) {
 	conn, clearUp, err := connect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -42,13 +42,17 @@ func listAccounts() (*walletrpc.ListAccountsResponse, error) {
 	return response, err
 }
 
-func ListAddress() string {
-	response, err := listAddress()
+func ListAddresses() string {
+	response, err := listAddresses()
 	if err != nil {
 		fmt.Printf("%s walletrpc ListAddresses err: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func ListAddressesAndGetResponse() (*walletrpc.ListAddressesResponse, error) {
+	return listAddresses()
 }
 
 func ListAccounts() string {

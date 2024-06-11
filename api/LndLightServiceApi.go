@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/api/connect"
 	"github.com/wallet/api/rpcclient"
 	"io"
@@ -83,7 +85,44 @@ func GetWalletBalance() string {
 		fmt.Printf("%s lnrpc WalletBalance err: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
+	//@dev: mark imported tap addresses as locked
+	response, err = ProcessGetWalletBalanceResult(response)
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func ProcessGetWalletBalanceResult(walletBalanceResponse *lnrpc.WalletBalanceResponse) (*lnrpc.WalletBalanceResponse, error) {
+	addresses, err := ListAddressesAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	lockAmount := CalculateImportedTapAddressBalanceAmount(addresses)
+	walletBalanceResponse.ConfirmedBalance -= lockAmount
+	if walletBalanceResponse.ConfirmedBalance < 0 {
+		err = errors.New("confirmed wallet balance is negative")
+		return nil, err
+	}
+	walletBalanceResponse.LockedBalance += lockAmount
+	if walletBalanceResponse.LockedBalance < 0 {
+		err = errors.New("locked wallet balance is negative")
+		return nil, err
+	}
+	return walletBalanceResponse, nil
+}
+
+func CalculateImportedTapAddressBalanceAmount(listAddressesResponse *walletrpc.ListAddressesResponse) (imported int64) {
+	if listAddressesResponse == nil {
+		return 0
+	}
+	for _, addresses := range (*listAddressesResponse).AccountWithAddresses {
+		if addresses.Name == "imported" {
+			for _, address := range addresses.Addresses {
+				if address.Balance == 1000 {
+					imported += address.Balance
+				}
+			}
+		}
+	}
+	return imported
 }
 
 func GetInfoOfLnd() string {
