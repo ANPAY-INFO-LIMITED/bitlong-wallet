@@ -70,6 +70,16 @@ func GetMintTransactionFee(token string, id int, number int) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
+func GetLocalIssuanceTransactionFee(feeRate int) string {
+	result := GetLocalIssuanceTransactionByteSize() * feeRate
+	return MakeJsonErrorResult(SUCCESS, "", result)
+}
+
+func GetLocalIssuanceTransactionByteSize() int {
+	// TODO: need to complete
+	return 170
+}
+
 func GetIssuanceTransactionCalculatedFee(token string) (fee int, err error) {
 	size := GetIssuanceTransactionByteSize()
 	serverFeeRateResponse, err := GetServerFeeRate(token)
