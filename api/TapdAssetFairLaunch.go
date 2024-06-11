@@ -98,12 +98,13 @@ func GetIssuanceTransactionByteSize() int {
 
 func GetTapdMintAssetAndFinalizeTransactionByteSize() int {
 	// TODO: need to complete
-	return 170
+	return int(float64(170 * (1 + 0.25)))
+
 }
 
 func GetTapdSendReservedAssetTransactionByteSize() int {
 	// TODO: need to complete
-	return 170
+	return int(float64(170 * (1 + 0.25)))
 }
 
 func GetMintTransactionByteSize() int {
