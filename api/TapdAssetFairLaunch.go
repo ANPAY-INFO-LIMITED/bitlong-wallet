@@ -165,7 +165,7 @@ func ProcessOwnSetFairLaunchResponseToIssuanceHistoryInfo(fairLaunchInfos *[]mod
 		return nil, err
 	}
 	if len(*(fairLaunchInfos)) == 0 {
-		LogInfo("fairLaunchInfos length is zero")
+		//LogInfo("fairLaunchInfos length is zero")
 		return &issuanceHistoryInfos, nil
 	}
 	for _, fairLaunchInfo := range *fairLaunchInfos {
