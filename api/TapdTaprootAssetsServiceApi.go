@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/api/connect"
 	"github.com/wallet/api/rpcclient"
 	"strconv"
+	"strings"
 )
 
 func AddrReceives(assetId string) string {
@@ -482,4 +484,55 @@ func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAsse
 	}
 	response, err := client.ListAssets(context.Background(), request)
 	return response, err
+}
+
+func CheckAssetIssuanceIsLocal(assetId string) string {
+	keys, err := assetLeafKeys(assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+	if err != nil || len(keys.AssetKeys) == 0 {
+		return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+	}
+
+	result := struct {
+		IsLocal   bool   `json:"is_local"`
+		AssetId   string `json:"asset_id"`
+		BatchTxid string `json:"batch_txid"`
+		Amount    int64  `json:"amount"`
+		Timestamp int64  `json:"timestamp"`
+	}{
+		IsLocal: false,
+		AssetId: assetId,
+	}
+
+	Outpoint := keys.AssetKeys[0].Outpoint
+	if o, ok := Outpoint.(*universerpc.AssetKey_OpStr); ok {
+		opStr := strings.Split(o.OpStr, ":")
+		listBatch, err := ListBatchesAndGetResponse()
+		if err != nil {
+			return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get mint info: %v", err).Error(), "")
+		}
+		for _, batch := range listBatch.Batches {
+			if batch.BatchTxid == opStr[0] {
+				leaves, err := assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+				if err != nil {
+					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+				}
+				result.Amount = int64(leaves.Leaves[0].Asset.Amount)
+				transactions, err := GetTransactionsAndGetResponse()
+				if err != nil {
+					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+				}
+				for _, tx := range transactions.Transactions {
+					if tx.TxHash == opStr[0] {
+						result.Timestamp = tx.TimeStamp
+						break
+					}
+				}
+				result.IsLocal = true
+				result.BatchTxid = batch.BatchTxid
+				break
+			}
+		}
+		return MakeJsonErrorResult(SUCCESS, "", result)
+	}
+	return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 }

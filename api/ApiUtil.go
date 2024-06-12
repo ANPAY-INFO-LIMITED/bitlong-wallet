@@ -18,8 +18,9 @@ import (
 type ErrCode int
 
 const (
-	DefaultErr ErrCode = -1
-	SUCCESS    ErrCode = 200
+	DefaultErr   ErrCode = -1
+	SUCCESS      ErrCode = 200
+	NotFoundData ErrCode = 601
 )
 
 type JsonResult struct {
