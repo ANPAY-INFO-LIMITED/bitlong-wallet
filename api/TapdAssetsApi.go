@@ -1182,7 +1182,7 @@ type AssetGenesisStruct struct {
 	Name         string `json:"name"`
 	MetaHash     string `json:"meta_hash"`
 	AssetID      string `json:"asset_id"`
-	AssetType    string `json:"asset_type"`
+	AssetType    int    `json:"asset_type"`
 	OutputIndex  int    `json:"output_index"`
 	Version      int    `json:"version"`
 }
@@ -1269,7 +1269,7 @@ func ListAssetAndGetCustomResponse() (*[]ListAssetResponse, error) {
 				Name:         _asset.AssetGenesis.Name,
 				MetaHash:     hex.EncodeToString(_asset.AssetGenesis.MetaHash),
 				AssetID:      hex.EncodeToString(_asset.AssetGenesis.AssetId),
-				AssetType:    _asset.AssetGenesis.AssetType.String(),
+				AssetType:    int(_asset.AssetGenesis.AssetType),
 				OutputIndex:  int(_asset.AssetGenesis.OutputIndex),
 				Version:      int(_asset.AssetGenesis.Version),
 			},

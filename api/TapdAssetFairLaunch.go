@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/vincent-petithory/dataurl"
 	"github.com/wallet/models"
@@ -314,7 +315,7 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 		LogError("", err)
 		return nil, err
 	}
-	assets, err := ListAssetAndGetResponse()
+	listAssetResponse, err := ListAssetAndGetResponse()
 	if err != nil {
 		LogError("", err)
 		return nil, err
@@ -322,6 +323,8 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 	var timestamp int
 	var assetId string
 	var outpoint string
+	var assets *[]ListAssetResponse
+	var leave *universerpc.AssetLeafResponse
 	for _, batch := range (*batchs).Batches {
 		var transaction *lnrpc.Transaction
 		transaction, err = GetTransactionByBatchTxid(transactions, batch.BatchTxid)
@@ -333,23 +336,24 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 		}
 		timestamp = int(transaction.TimeStamp)
 		outpoint = transaction.PreviousOutpoints[0].Outpoint
-		//@dev: may not find
-		assetId, err = GetAssetIdByOutpointWithListAssetResponse(assets, outpoint)
-		// asset id not found, may be locked
+		assets, err = GetAssetsByOutpointWithListAssetResponse(listAssetResponse, outpoint)
 		if err != nil {
-			//LogError("", err)
-			//@dev: not found, do not continue.
-			//continue
-			// @dev:do not return
+			return nil, err
 		}
-		for _, batchAsset := range batch.Assets {
+		for _, asset := range *assets {
+			assetId = asset.AssetGenesis.AssetID
+			leave, err = AssetLeavesIssuance(assetId)
+			if err != nil {
+				return nil, err
+			}
+			leaveAsset := leave.Leaves[0].Asset
 			issuanceHistoryInfos = append(issuanceHistoryInfos, IssuanceHistoryInfo{
 				IsFairLaunchIssuance: false,
-				AssetName:            batchAsset.Name,
+				AssetName:            asset.AssetGenesis.Name,
 				AssetID:              assetId,
-				AssetType:            int(batchAsset.AssetType),
+				AssetType:            asset.AssetGenesis.AssetType,
 				IssuanceTime:         timestamp,
-				IssuanceAmount:       int(batchAsset.Amount),
+				IssuanceAmount:       int(leaveAsset.Amount),
 				State:                int(batch.State),
 			})
 		}
@@ -395,6 +399,7 @@ func GetTransactionByBatchTxid(transactionDetails *lnrpc.TransactionDetails, bat
 	err = errors.New("transaction not found")
 	return nil, err
 }
+
 func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, batchTxid string) (assetId string, err error) {
 	for _, asset := range listAssetResponse.Assets {
 		tx, _ := getTransactionAndIndexByOutpoint(asset.ChainAnchor.AnchorOutpoint)
@@ -406,14 +411,62 @@ func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAs
 	return "", err
 }
 
-func GetAssetIdByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string) (assetId string, err error) {
+// GetAssetIdByOutpointAndNameWithListAssetResponse
+// @dev: may be deprecated
+func GetAssetIdByOutpointAndNameWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string, name string) (assetId string, err error) {
 	for _, asset := range listAssetResponse.Assets {
-		if outpoint == asset.AssetGenesis.GenesisPoint {
+		if outpoint == asset.AssetGenesis.GenesisPoint && name == asset.AssetGenesis.Name {
 			return hex.EncodeToString(asset.AssetGenesis.AssetId), nil
 		}
 	}
 	err = errors.New("asset not found")
 	return "", err
+}
+
+func GetAssetsByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string) (*[]ListAssetResponse, error) {
+	var assets []ListAssetResponse
+	//var err error
+	isAssetIdExist := make(map[string]bool)
+	for _, asset := range listAssetResponse.Assets {
+		if outpoint == asset.AssetGenesis.GenesisPoint {
+			assetId := hex.EncodeToString(asset.AssetGenesis.AssetId)
+			if !isAssetIdExist[assetId] {
+				isAssetIdExist[assetId] = true
+				assets = append(assets, ListAssetResponse{
+					Version: asset.Version.String(),
+					AssetGenesis: AssetGenesisStruct{
+						GenesisPoint: asset.AssetGenesis.GenesisPoint,
+						Name:         asset.AssetGenesis.Name,
+						MetaHash:     hex.EncodeToString(asset.AssetGenesis.MetaHash),
+						AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
+						AssetType:    int(asset.AssetGenesis.AssetType),
+						OutputIndex:  int(asset.AssetGenesis.OutputIndex),
+						Version:      int(asset.AssetGenesis.Version),
+					},
+					Amount:           int(asset.Amount),
+					LockTime:         int(asset.LockTime),
+					RelativeLockTime: int(asset.RelativeLockTime),
+					ScriptVersion:    int(asset.ScriptVersion),
+					ScriptKey:        hex.EncodeToString(asset.ScriptKey),
+					ScriptKeyIsLocal: asset.ScriptKeyIsLocal,
+					ChainAnchor: ChainAnchorStruct{
+						AnchorTx:         hex.EncodeToString(asset.ChainAnchor.AnchorTx),
+						AnchorBlockHash:  asset.ChainAnchor.AnchorBlockHash,
+						AnchorOutpoint:   asset.ChainAnchor.AnchorOutpoint,
+						InternalKey:      hex.EncodeToString(asset.ChainAnchor.InternalKey),
+						MerkleRoot:       hex.EncodeToString(asset.ChainAnchor.MerkleRoot),
+						TapscriptSibling: hex.EncodeToString(asset.ChainAnchor.TapscriptSibling),
+						BlockHeight:      int(asset.ChainAnchor.BlockHeight),
+					},
+					IsSpent:     asset.IsSpent,
+					LeaseOwner:  hex.EncodeToString(asset.LeaseOwner),
+					LeaseExpiry: int(asset.LeaseExpiry),
+					IsBurn:      asset.IsBurn,
+				})
+			}
+		}
+	}
+	return &assets, nil
 }
 
 // GetImageByImageData
