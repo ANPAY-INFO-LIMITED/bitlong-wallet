@@ -38,6 +38,10 @@ func assetLeafKeys(id string, proofType universerpc.ProofType) (*universerpc.Ass
 	return response, nil
 }
 
+func AssetLeafKeysAndGetResponse(assetId string, proofType universerpc.ProofType) (*universerpc.AssetLeafKeyResponse, error) {
+	return assetLeafKeys(assetId, proofType)
+}
+
 func AssetLeafKeys(id string, proofType string) string {
 	var _proofType universerpc.ProofType
 	if proofType == "issuance" || proofType == "ISSUANCE" || proofType == "PROOF_TYPE_ISSUANCE" {
@@ -276,7 +280,6 @@ func assetLeaves(isGroup bool, id string, proofType universerpc.ProofType) (*uni
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
 	defer clearUp()
-
 	request := &universerpc.ID{
 		ProofType: proofType,
 	}
@@ -296,6 +299,10 @@ func assetLeaves(isGroup bool, id string, proofType universerpc.ProofType) (*uni
 	client := universerpc.NewUniverseClient(conn)
 	response, err := client.AssetLeaves(context.Background(), request)
 	return response, err
+}
+
+func AssetLeavesAndGetResponse(isGroup bool, id string, proofType universerpc.ProofType) (*universerpc.AssetLeafResponse, error) {
+	return assetLeaves(isGroup, id, proofType)
 }
 
 func queryAssetStats(assetId string) (*universerpc.UniverseAssetStats, error) {

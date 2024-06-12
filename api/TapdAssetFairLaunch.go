@@ -2,16 +2,13 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/vincent-petithory/dataurl"
-	"github.com/wallet/api/connect"
 	"github.com/wallet/models"
 	"io"
 	"net/http"
@@ -31,8 +28,6 @@ type IssuanceHistoryInfo struct {
 
 // GetUserOwnIssuanceHistoryInfos
 // @Description: Get User Own Issuance History Infos
-// @param token
-// @return string
 func GetUserOwnIssuanceHistoryInfos(token string) string {
 	result, err := GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token)
 	if err != nil {
@@ -44,8 +39,6 @@ func GetUserOwnIssuanceHistoryInfos(token string) string {
 
 // GetIssuanceTransactionFee
 // @Description: Get Issuance Transaction Fee
-// @param token
-// @return string
 func GetIssuanceTransactionFee(token string) string {
 	result, err := GetIssuanceTransactionCalculatedFee(token)
 	if err != nil {
@@ -57,10 +50,6 @@ func GetIssuanceTransactionFee(token string) string {
 
 // GetMintTransactionFee
 // @Description: Get Mint Transaction Fee
-// @param token
-// @param id
-// @param number
-// @return string
 func GetMintTransactionFee(token string, id int, number int) string {
 	result, err := GetMintTransactionCalculatedFee(token, id, number)
 	if err != nil {
@@ -166,11 +155,6 @@ func GetServerOwnSetFairLaunchInfos(token string) (fairLaunchInfos *[]models.Fai
 	}
 	return &ownSetFairLaunchInfos.Data, nil
 }
-
-// TODO: Assemble local and server asset issuance data
-// @dev: Use new makeJsonResult
-
-// http://127.0.0.1:8080/v1/fair_launch/query/own_set
 
 func ProcessOwnSetFairLaunchResponseToIssuanceHistoryInfo(fairLaunchInfos *[]models.FairLaunchInfo) (*[]IssuanceHistoryInfo, error) {
 	var err error
@@ -303,9 +287,6 @@ func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintRespo
 
 // GetServerIssuanceHistoryInfos
 // @Description: Get Server Issuance History Info
-// @param token
-// @return *[]IssuanceHistoryInfo
-// @return error
 func GetServerIssuanceHistoryInfos(token string) (*[]IssuanceHistoryInfo, error) {
 	fairLaunchInfos, err := GetServerOwnSetFairLaunchInfos(token)
 	if err != nil {
@@ -340,20 +321,26 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 	}
 	var timestamp int
 	var assetId string
+	var outpoint string
 	for _, batch := range (*batchs).Batches {
-		timestamp, err = GetTimestampByBatchTxidWithGetTransactionsResponse(transactions, batch.BatchTxid)
+		var transaction *lnrpc.Transaction
+		transaction, err = GetTransactionByBatchTxid(transactions, batch.BatchTxid)
 		// transaction not found
 		if err != nil {
 			//LogError("", err)
 			continue
 			//	@dev:do not return
 		}
-		assetId, err = GetAssetIdByBatchTxidWithListAssetResponse(assets, batch.BatchTxid)
-		// asset not found
+		timestamp = int(transaction.TimeStamp)
+		outpoint = transaction.PreviousOutpoints[0].Outpoint
+		//@dev: may not find
+		assetId, err = GetAssetIdByOutpointWithListAssetResponse(assets, outpoint)
+		// asset id not found, may be locked
 		if err != nil {
 			//LogError("", err)
-			continue
-			//	@dev:do not return
+			//@dev: not found, do not continue.
+			//continue
+			// @dev:do not return
 		}
 		for _, batchAsset := range batch.Assets {
 			issuanceHistoryInfos = append(issuanceHistoryInfos, IssuanceHistoryInfo{
@@ -372,9 +359,6 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 
 // GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos
 // @Description: Get User Own Issuance History Infos
-// @param token
-// @return *[]IssuanceHistoryInfo
-// @return error
 func GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token string) (*[]IssuanceHistoryInfo, error) {
 	var issuanceHistoryInfos []IssuanceHistoryInfo
 	serverResult, err := GetServerIssuanceHistoryInfos(token)
@@ -392,90 +376,6 @@ func GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token string) (*[]Issua
 	return &issuanceHistoryInfos, nil
 }
 
-func ListBatchesAndGetResponse() (*mintrpc.ListBatchResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := mintrpc.NewMintClient(conn)
-	request := &mintrpc.ListBatchRequest{}
-	response, err := client.ListBatches(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s mintrpc ListBatches Error: %v\n", GetTimeNow(), err)
-		return nil, err
-	}
-	return response, nil
-}
-
-func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := lnrpc.NewLightningClient(conn)
-	request := &lnrpc.GetTransactionsRequest{}
-	response, err := client.GetTransactions(context.Background(), request)
-	return response, err
-}
-
-func ListAssetAndGetCustomResponse() (*[]ListAssetResponse, error) {
-	response, err := listAssets(false, true, false)
-	if err != nil {
-		LogError("", err)
-		return nil, err
-	}
-	var listAssetResponses []ListAssetResponse
-	for _, asset := range (*response).Assets {
-		listAssetResponses = append(listAssetResponses, ListAssetResponse{
-			AssetGenesis: AssetGenesisStruct{
-				GenesisPoint: asset.AssetGenesis.GenesisPoint,
-				Name:         asset.AssetGenesis.Name,
-				MetaHash:     hex.EncodeToString(asset.AssetGenesis.MetaHash),
-				AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
-			},
-			Amount:           int64(asset.Amount),
-			ScriptKey:        hex.EncodeToString(asset.ScriptKey),
-			ScriptKeyIsLocal: asset.ScriptKeyIsLocal,
-			ChainAnchor: ChainAnchorStruct{
-				AnchorTx:        hex.EncodeToString(asset.ChainAnchor.AnchorTx),
-				AnchorBlockHash: asset.ChainAnchor.AnchorBlockHash,
-				AnchorOutpoint:  asset.ChainAnchor.AnchorOutpoint,
-				InternalKey:     hex.EncodeToString(asset.ChainAnchor.InternalKey),
-				MerkleRoot:      hex.EncodeToString(asset.ChainAnchor.MerkleRoot),
-			}})
-	}
-	return &listAssetResponses, nil
-}
-
-type AssetGenesisStruct struct {
-	GenesisPoint string `json:"genesis_point"`
-	Name         string `json:"name"`
-	MetaHash     string `json:"meta_hash"`
-	AssetID      string `json:"asset_id"`
-}
-
-type ChainAnchorStruct struct {
-	AnchorTx        string `json:"anchor_tx"`
-	AnchorBlockHash string `json:"anchor_block_hash"`
-	AnchorOutpoint  string `json:"anchor_outpoint"`
-	InternalKey     string `json:"internal_key"`
-	MerkleRoot      string `json:"merkle_root"`
-}
-
-type ListAssetResponse struct {
-	AssetGenesis     AssetGenesisStruct `json:"asset_genesis"`
-	Amount           int64              `json:"amount"`
-	ScriptKey        string             `json:"script_key"`
-	ScriptKeyIsLocal bool               `json:"script_key_is_local"`
-	ChainAnchor      ChainAnchorStruct  `json:"chain_anchor"`
-}
-
-func ListAssetAndGetResponse() (*taprpc.ListAssetResponse, error) {
-	return listAssets(false, true, false)
-}
-
 func GetTimestampByBatchTxidWithGetTransactionsResponse(transactionDetails *lnrpc.TransactionDetails, batchTxid string) (timestamp int, err error) {
 	for _, transaction := range transactionDetails.Transactions {
 		if batchTxid == transaction.TxHash {
@@ -486,6 +386,15 @@ func GetTimestampByBatchTxidWithGetTransactionsResponse(transactionDetails *lnrp
 	return 0, err
 }
 
+func GetTransactionByBatchTxid(transactionDetails *lnrpc.TransactionDetails, batchTxid string) (transaction *lnrpc.Transaction, err error) {
+	for _, transaction = range transactionDetails.Transactions {
+		if batchTxid == transaction.TxHash && transaction.Label == "tapd-asset-minting" {
+			return transaction, nil
+		}
+	}
+	err = errors.New("transaction not found")
+	return nil, err
+}
 func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, batchTxid string) (assetId string, err error) {
 	for _, asset := range listAssetResponse.Assets {
 		tx, _ := getTransactionAndIndexByOutpoint(asset.ChainAnchor.AnchorOutpoint)
@@ -497,10 +406,18 @@ func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAs
 	return "", err
 }
 
+func GetAssetIdByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string) (assetId string, err error) {
+	for _, asset := range listAssetResponse.Assets {
+		if outpoint == asset.AssetGenesis.GenesisPoint {
+			return hex.EncodeToString(asset.AssetGenesis.AssetId), nil
+		}
+	}
+	err = errors.New("asset not found")
+	return "", err
+}
+
 // GetImageByImageData
 // @Description: Get Image By Image Data
-// @param imageData
-// @return []byte
 func GetImageByImageData(imageData string) []byte {
 	if imageData == "" {
 		return nil

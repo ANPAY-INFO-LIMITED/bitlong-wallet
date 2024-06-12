@@ -44,7 +44,7 @@ func LoadConfig() {
 	connCfg.LitdCfg.grpcHost = base.QueryConfigByKey("litdhost")
 	connCfg.LitdCfg.tlsCertPath = filepath.Join(base.Configure("lit"), "tls.cert")
 	connCfg.LitdCfg.macaroonPath = filepath.Join(base.Configure("lit"), base.NetWork, "lit.macaroon")
-	log.Printf(" grpc config: %s", connCfg)
+	//log.Printf(" grpc config: %s", connCfg)
 }
 
 func GetConnection(grpcTarget string, isNoMacaroon bool) (*grpc.ClientConn, func(), error) {

@@ -9,7 +9,7 @@ import (
 
 func GetChildrenPayforParentByMempool() {}
 
-type GetTransactionsResponse struct {
+type TransactionsResponse struct {
 	Txid     string `json:"txid"`
 	Version  int    `json:"version"`
 	Locktime int    `json:"locktime"`
@@ -48,7 +48,7 @@ type GetTransactionsResponse struct {
 	} `json:"status"`
 }
 
-func getTransactionByMempool(transaction string) (*GetTransactionsResponse, error) {
+func getTransactionByMempool(transaction string) (*TransactionsResponse, error) {
 	targetUrl := "https://mempool.space/testnet/api/tx/" + transaction
 	response, err := http.Get(targetUrl)
 	if err != nil {
@@ -56,12 +56,12 @@ func getTransactionByMempool(transaction string) (*GetTransactionsResponse, erro
 		return nil, err
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
-	var getTransactionsResponse GetTransactionsResponse
-	if err := json.Unmarshal(bodyBytes, &getTransactionsResponse); err != nil {
+	var transactionsResponse TransactionsResponse
+	if err := json.Unmarshal(bodyBytes, &transactionsResponse); err != nil {
 		fmt.Printf("%s GTBM json.Unmarshal :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
-	return &getTransactionsResponse, nil
+	return &transactionsResponse, nil
 }
 
 func GetTransactionByMempool(transaction string) string {

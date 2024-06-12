@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/wallet/api/connect"
 	"github.com/wallet/api/rpcclient"
 	"github.com/wallet/base"
 	"strconv"
@@ -535,7 +539,7 @@ func assetLeavesIssuance(id string) *AssetIssuanceLeave {
 	return ProcessAssetIssuanceLeave(response)
 }
 
-// @dev
+// GetAssetInfoByIssuanceLeaf @dev
 func GetAssetInfoByIssuanceLeaf(id string) string {
 	response := assetLeavesIssuance(id)
 	if response == nil {
@@ -926,8 +930,6 @@ func GetAssetHoldInfosIncludeSpent(id string) *[]AssetHoldInfo {
 // GetAssetHoldInfosExcludeSpent
 // @Description: This function uses multiple http requests to call mempool's api during processing,
 // and it is recommended to store the data in a database and update it manually
-// @param id
-// @return *[]AssetHoldInfo
 // @dev: Get hold info of asset
 func GetAssetHoldInfosExcludeSpent(id string) *[]AssetHoldInfo {
 	assetLeavesTransfers := assetLeavesTransfer(id)
@@ -1084,12 +1086,282 @@ func AssetIDAndTransferScriptKeyToOutpoint(id string, scriptKey string) string {
 
 // GetAllAssetListWithoutProcession
 // ONLY_FOR_TEST
-// TODO: Need to look for the change transaction anchored outpoint, amount, and is_spent in previous witness.
-// TODO: Returns exclude spent
+// @dev: Need to look for the change transaction anchored outpoint, amount, and is_spent in previous witness.
+// @dev: Returns exclude spent
 func GetAllAssetListWithoutProcession() string {
 	response := allAssetList()
 	if response == nil {
 		return MakeJsonErrorResult(DefaultErr, "Null list asset response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func ListBatchesAndGetResponse() (*mintrpc.ListBatchResponse, error) {
+	conn, clearUp, err := connect.GetConnection("tapd", false)
+	if err != nil {
+		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+	}
+	defer clearUp()
+	client := mintrpc.NewMintClient(conn)
+	request := &mintrpc.ListBatchRequest{}
+	response, err := client.ListBatches(context.Background(), request)
+	if err != nil {
+		fmt.Printf("%s mintrpc ListBatches Error: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}
+
+type ListBatchesResponse struct {
+	BatchKey        string             `json:"batch_key"`
+	BatchTxid       string             `json:"batch_txid"`
+	State           string             `json:"state"`
+	Assets          []ListBatchesAsset `json:"asset_meta"`
+	Amount          int                `json:"amount"`
+	NewGroupedAsset bool               `json:"new_grouped_asset"`
+	GroupKey        string             `json:"group_key"`
+	GroupAnchor     string             `json:"group_anchor"`
+}
+
+type ListBatchesAsset struct {
+	AssetVersion string               `json:"asset_version"`
+	AssetType    string               `json:"asset_type"`
+	Name         string               `json:"name"`
+	AssetMeta    ListBatchesAssetMeta `json:"asset_meta"`
+}
+
+type ListBatchesAssetMeta struct {
+	Data     string `json:"data"`
+	Type     string `json:"type"`
+	MetaHash string `json:"meta_hash"`
+}
+
+func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
+	conn, clearUp, err := connect.GetConnection("lnd", false)
+	if err != nil {
+		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+	}
+	defer clearUp()
+	client := lnrpc.NewLightningClient(conn)
+	request := &lnrpc.GetTransactionsRequest{}
+	response, err := client.GetTransactions(context.Background(), request)
+	return response, err
+}
+
+type GetTransactionsResponse struct {
+	TxHash            string                             `json:"tx_hash"`
+	Amount            int                                `json:"amount"`
+	NumConfirmations  int                                `json:"num_confirmations"`
+	BlockHash         string                             `json:"block_hash"`
+	BlockHeight       int                                `json:"block_height"`
+	TimeStamp         int                                `json:"time_stamp"`
+	TotalFees         int                                `json:"total_fees"`
+	DestAddresses     []string                           `json:"dest_addresses"`
+	OutputDetails     []GetTransactionsOutputDetails     `json:"output_details"`
+	RawTxHex          string                             `json:"raw_tx_hex"`
+	Label             string                             `json:"label"`
+	PreviousOutpoints []GetTransactionsPreviousOutpoints `json:"previous_outpoints"`
+}
+
+type GetTransactionsOutputDetails struct {
+	OutputType   string `json:"output_type"`
+	Address      string `json:"address"`
+	PkScript     string `json:"pk_script"`
+	OutputIndex  int    `json:"output_index"`
+	Amount       int    `json:"amount"`
+	IsOurAddress bool   `json:"is_our_address"`
+}
+
+type GetTransactionsPreviousOutpoints struct {
+	Outpoint    string `json:"outpoint"`
+	IsOurOutput bool   `json:"is_our_output"`
+}
+
+type AssetGenesisStruct struct {
+	GenesisPoint string `json:"genesis_point"`
+	Name         string `json:"name"`
+	MetaHash     string `json:"meta_hash"`
+	AssetID      string `json:"asset_id"`
+	AssetType    string `json:"asset_type"`
+	OutputIndex  int    `json:"output_index"`
+	Version      int    `json:"version"`
+}
+
+type ChainAnchorStruct struct {
+	AnchorTx         string `json:"anchor_tx"`
+	AnchorBlockHash  string `json:"anchor_block_hash"`
+	AnchorOutpoint   string `json:"anchor_outpoint"`
+	InternalKey      string `json:"internal_key"`
+	MerkleRoot       string `json:"merkle_root"`
+	TapscriptSibling string `json:"tapscript_sibling"`
+	BlockHeight      int    `json:"block_height"`
+}
+
+type ListAssetResponse struct {
+	Version          string             `json:"version"`
+	AssetGenesis     AssetGenesisStruct `json:"asset_genesis"`
+	Amount           int                `json:"amount"`
+	LockTime         int                `json:"lock_time"`
+	RelativeLockTime int                `json:"relative_lock_time"`
+	ScriptVersion    int                `json:"script_version"`
+	ScriptKey        string             `json:"script_key"`
+	ScriptKeyIsLocal bool               `json:"script_key_is_local"`
+	ChainAnchor      ChainAnchorStruct  `json:"chain_anchor"`
+	IsSpent          bool               `json:"is_spent"`
+	LeaseOwner       string             `json:"lease_owner"`
+	LeaseExpiry      int                `json:"lease_expiry"`
+	IsBurn           bool               `json:"is_burn"`
+}
+
+func ListAssetAndGetResponse() (*taprpc.ListAssetResponse, error) {
+	return listAssets(false, true, false)
+}
+
+//@dev
+
+func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
+	response, err := ListBatchesAndGetResponse()
+	if err != nil {
+		LogError("", err)
+		return nil, err
+	}
+	var listBatchesResponse []ListBatchesResponse
+	for _, batch := range (*response).Batches {
+		var assets []ListBatchesAsset
+		for _, _asset := range batch.Assets {
+			assets = append(assets, ListBatchesAsset{
+				AssetVersion: _asset.AssetVersion.String(),
+				AssetType:    _asset.AssetType.String(),
+				Name:         _asset.Name,
+				AssetMeta: ListBatchesAssetMeta{
+					Data:     hex.EncodeToString(_asset.AssetMeta.Data),
+					Type:     _asset.AssetMeta.Type.String(),
+					MetaHash: hex.EncodeToString(_asset.AssetMeta.MetaHash),
+				},
+			})
+		}
+		listBatchesResponse = append(listBatchesResponse, ListBatchesResponse{
+			BatchKey:  hex.EncodeToString(batch.BatchKey),
+			BatchTxid: batch.BatchTxid,
+			State:     batch.State.String(),
+			Assets:    assets,
+			//Amount:    0,
+			//NewGroupedAsset: false,
+			//GroupKey:        "",
+			//GroupAnchor:     "",
+		})
+	}
+	return &listBatchesResponse, nil
+}
+
+func ListAssetAndGetCustomResponse() (*[]ListAssetResponse, error) {
+	response, err := listAssets(false, true, false)
+	if err != nil {
+		LogError("", err)
+		return nil, err
+	}
+	var listAssetResponses []ListAssetResponse
+	for _, _asset := range (*response).Assets {
+		listAssetResponses = append(listAssetResponses, ListAssetResponse{
+			Version: _asset.Version.String(),
+			AssetGenesis: AssetGenesisStruct{
+				GenesisPoint: _asset.AssetGenesis.GenesisPoint,
+				Name:         _asset.AssetGenesis.Name,
+				MetaHash:     hex.EncodeToString(_asset.AssetGenesis.MetaHash),
+				AssetID:      hex.EncodeToString(_asset.AssetGenesis.AssetId),
+				AssetType:    _asset.AssetGenesis.AssetType.String(),
+				OutputIndex:  int(_asset.AssetGenesis.OutputIndex),
+				Version:      int(_asset.AssetGenesis.Version),
+			},
+			Amount:           int(_asset.Amount),
+			LockTime:         int(_asset.LockTime),
+			RelativeLockTime: int(_asset.RelativeLockTime),
+			ScriptVersion:    int(_asset.ScriptVersion),
+			ScriptKey:        hex.EncodeToString(_asset.ScriptKey),
+			ScriptKeyIsLocal: _asset.ScriptKeyIsLocal,
+			ChainAnchor: ChainAnchorStruct{
+				AnchorTx:         hex.EncodeToString(_asset.ChainAnchor.AnchorTx),
+				AnchorBlockHash:  _asset.ChainAnchor.AnchorBlockHash,
+				AnchorOutpoint:   _asset.ChainAnchor.AnchorOutpoint,
+				InternalKey:      hex.EncodeToString(_asset.ChainAnchor.InternalKey),
+				MerkleRoot:       hex.EncodeToString(_asset.ChainAnchor.MerkleRoot),
+				TapscriptSibling: hex.EncodeToString(_asset.ChainAnchor.TapscriptSibling),
+				BlockHeight:      int(_asset.ChainAnchor.BlockHeight),
+			},
+			IsSpent:     _asset.IsSpent,
+			LeaseOwner:  hex.EncodeToString(_asset.LeaseOwner),
+			LeaseExpiry: int(_asset.LeaseExpiry),
+			IsBurn:      _asset.IsBurn,
+		})
+	}
+	return &listAssetResponses, nil
+}
+
+func GetTransactionsAndGetCustomResponse() (*[]GetTransactionsResponse, error) {
+	response, err := GetTransactionsAndGetResponse()
+	if err != nil {
+		LogError("", err)
+		return nil, err
+	}
+	var getTransactionsResponse []GetTransactionsResponse
+	for _, transaction := range response.Transactions {
+		var outputDetails []GetTransactionsOutputDetails
+		for _, output := range transaction.OutputDetails {
+			outputDetails = append(outputDetails, GetTransactionsOutputDetails{
+				OutputType:   output.OutputType.String(),
+				Address:      output.Address,
+				PkScript:     output.PkScript,
+				OutputIndex:  int(output.OutputIndex),
+				Amount:       int(output.Amount),
+				IsOurAddress: output.IsOurAddress,
+			})
+		}
+		var previousOutpoints []GetTransactionsPreviousOutpoints
+		for _, previousOutpoint := range transaction.PreviousOutpoints {
+			previousOutpoints = append(previousOutpoints, GetTransactionsPreviousOutpoints{
+				Outpoint:    previousOutpoint.Outpoint,
+				IsOurOutput: previousOutpoint.IsOurOutput,
+			})
+		}
+		getTransactionsResponse = append(getTransactionsResponse, GetTransactionsResponse{
+			TxHash:            transaction.TxHash,
+			Amount:            int(transaction.Amount),
+			NumConfirmations:  int(transaction.NumConfirmations),
+			BlockHash:         transaction.BlockHash,
+			BlockHeight:       int(transaction.BlockHeight),
+			TimeStamp:         int(transaction.TimeStamp),
+			TotalFees:         int(transaction.TotalFees),
+			DestAddresses:     transaction.DestAddresses,
+			OutputDetails:     outputDetails,
+			RawTxHex:          transaction.RawTxHex,
+			Label:             transaction.Label,
+			PreviousOutpoints: previousOutpoints,
+		})
+	}
+	return &getTransactionsResponse, nil
+}
+
+func AssetLeafKeysIssuance(assetId string) (*universerpc.AssetLeafKeyResponse, error) {
+	proofType := universerpc.ProofType_PROOF_TYPE_ISSUANCE
+	return AssetLeafKeysAndGetResponse(assetId, proofType)
+}
+
+func AssetLeavesIssuance(assetId string) (*universerpc.AssetLeafResponse, error) {
+	proofType := universerpc.ProofType_PROOF_TYPE_ISSUANCE
+	return AssetLeavesAndGetResponse(false, assetId, proofType)
+}
+
+func GetTransactionsWhoseLabelIsTapdAssetMinting() (*[]GetTransactionsResponse, error) {
+	response, err := GetTransactionsAndGetCustomResponse()
+	if err != nil {
+		LogError("", err)
+		return nil, err
+	}
+	var getTransactionsResponse []GetTransactionsResponse
+	for _, transaction := range *response {
+		if transaction.Label == "tapd-asset-minting" {
+			getTransactionsResponse = append(getTransactionsResponse, transaction)
+		}
+	}
+	return &getTransactionsResponse, nil
 }
