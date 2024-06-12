@@ -497,6 +497,7 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 		AssetId   string `json:"asset_id"`
 		BatchTxid string `json:"batch_txid"`
 		Amount    int64  `json:"amount"`
+		Timestamp int64  `json:"timestamp"`
 	}{
 		IsLocal: false,
 		AssetId: assetId,
@@ -515,14 +516,23 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 				if err != nil {
 					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 				}
+				result.Amount = int64(leaves.Leaves[0].Asset.Amount)
+				transactions, err := GetTransactionsAndGetResponse()
+				if err != nil {
+					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+				}
+				for _, tx := range transactions.Transactions {
+					if tx.TxHash == opStr[0] {
+						result.Timestamp = tx.TimeStamp
+						break
+					}
+				}
 				result.IsLocal = true
 				result.BatchTxid = batch.BatchTxid
-				result.Amount = int64(leaves.Leaves[0].Asset.Amount)
 				break
 			}
 		}
 		return MakeJsonErrorResult(SUCCESS, "", result)
 	}
 	return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
-
 }
