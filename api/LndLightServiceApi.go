@@ -79,6 +79,13 @@ func sendCoins(addr string, amount int64, feeRate uint64, all bool) (*lnrpc.Send
 	return response, err
 }
 
+type WalletBalanceResponse struct {
+	TotalBalance       int `json:"total_balance"`
+	ConfirmedBalance   int `json:"confirmed_balance"`
+	UnconfirmedBalance int `json:"unconfirmed_balance"`
+	LockedBalance      int `json:"locked_balance"`
+}
+
 func GetWalletBalance() string {
 	response, err := getWalletBalance()
 	if err != nil {
@@ -87,7 +94,15 @@ func GetWalletBalance() string {
 	}
 	//@dev: mark imported tap addresses as locked
 	response, err = ProcessGetWalletBalanceResult(response)
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", WalletBalanceResponse{
+		TotalBalance:       int(response.TotalBalance),
+		ConfirmedBalance:   int(response.ConfirmedBalance),
+		UnconfirmedBalance: int(response.UnconfirmedBalance),
+		LockedBalance:      int(response.LockedBalance),
+	})
 }
 
 func ProcessGetWalletBalanceResult(walletBalanceResponse *lnrpc.WalletBalanceResponse) (*lnrpc.WalletBalanceResponse, error) {
