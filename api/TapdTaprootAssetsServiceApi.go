@@ -108,9 +108,9 @@ func GetInfoOfTap() string {
 	response, err := client.GetInfo(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s taprpc GetInfo Error: %v\n", GetTimeNow(), err)
-		return ""
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	return response.String()
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
 // ListAssets
