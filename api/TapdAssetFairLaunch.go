@@ -16,6 +16,14 @@ import (
 	"strings"
 )
 
+type (
+	ByteSize float64
+)
+
+const (
+	BaseTransactionByteSize = 170
+)
+
 type IssuanceHistoryInfo struct {
 	IsFairLaunchIssuance bool   `json:"isFairLaunchIssuance"`
 	AssetName            string `json:"asset_name"`
@@ -82,7 +90,7 @@ func GetIssuanceTransactionCalculatedFee(token string) (fee int, err error) {
 }
 
 func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int, err error) {
-	size := GetMintTransactionByteSize()
+	size := int(GetMintTransactionByteSize())
 	serverQueryMintResponse, err := GetServerQueryMint(token, id, number)
 	if err != nil {
 		LogError("", err)
@@ -94,24 +102,25 @@ func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int,
 
 func GetIssuanceTransactionByteSize() int {
 	// TODO: need to complete
-	return GetTapdMintAssetAndFinalizeTransactionByteSize() + GetTapdSendReservedAssetTransactionByteSize()
+	return int(float64(GetTapdMintAssetAndFinalizeTransactionByteSize()) + float64(GetTapdSendReservedAssetTransactionByteSize()))
 }
 
-func GetTapdMintAssetAndFinalizeTransactionByteSize() int {
+func GetTapdMintAssetAndFinalizeTransactionByteSize() ByteSize {
 	// TODO: need to complete
-	byteSize := 170 * (1 + 0.25)
-	return int(byteSize)
+	byteSize := BaseTransactionByteSize * (1 + 0x1p-2)
+	return ByteSize(byteSize)
 }
 
-func GetTapdSendReservedAssetTransactionByteSize() int {
+func GetTapdSendReservedAssetTransactionByteSize() ByteSize {
 	// TODO: need to complete
-	byteSize := 170 * (1 + 0.25)
-	return int(byteSize)
+	byteSize := BaseTransactionByteSize * (1 + 0x1p-2)
+	return ByteSize(byteSize)
 }
 
-func GetMintTransactionByteSize() int {
+func GetMintTransactionByteSize() ByteSize {
 	// TODO: need to complete
-	return 170
+	byteSize := BaseTransactionByteSize * (1 + 0e0)
+	return ByteSize(byteSize)
 }
 
 type ServerOwnSetFairLaunchInfoResponse struct {
