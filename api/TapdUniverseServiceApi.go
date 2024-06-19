@@ -230,13 +230,13 @@ func QueryProof() {}
 
 func SetFederationSyncConfig() {}
 
-func SyncUniverse(universeHost string, asset_id string) string {
+func SyncUniverse(universeHost string, assetId string) string {
 	var targets []*universerpc.SyncTarget
 	universeID := &universerpc.ID{
 		Id: &universerpc.ID_AssetIdStr{
-			AssetIdStr: asset_id,
+			AssetIdStr: assetId,
 		},
-		ProofType: 1,
+		ProofType: universerpc.ProofType_PROOF_TYPE_ISSUANCE,
 	}
 	if universeID != nil {
 		targets = append(targets, &universerpc.SyncTarget{
@@ -253,12 +253,11 @@ func SyncUniverse(universeHost string, asset_id string) string {
 	if universeHost == "" {
 		universeHost = defaultHost
 	}
-	response, err := syncUniverse(universeHost, targets, 0)
+	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
-
 }
 
 func UniverseStats() {}

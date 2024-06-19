@@ -822,7 +822,6 @@ func SyncUniverseFullNoSlice() string {
 		universeHost = "mainnet.universe.lightning.finance:10029"
 	}
 	var targets []*universerpc.SyncTarget
-
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
