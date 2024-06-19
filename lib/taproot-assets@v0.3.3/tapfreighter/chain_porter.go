@@ -677,13 +677,6 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 		return nil
 	}
 
-	// If we have a non-interactive proof, then we'll launch several
-	// goroutines to deliver the proof(s) to the receiver(s).
-	err := fn.ParSlice(ctx, pkg.OutboundPkg.Outputs, deliver)
-	if err != nil {
-		return fmt.Errorf("error delivering proof(s): %w", err)
-	}
-
 	log.Infof("Marking parcel (txid=%v) as confirmed!",
 		pkg.OutboundPkg.AnchorTx.TxHash())
 
@@ -717,7 +710,7 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 
 	// At this point we have the confirmation signal, so we can mark the
 	// parcel delivery as completed in the database.
-	err = p.cfg.ExportLog.ConfirmParcelDelivery(ctx, &AssetConfirmEvent{
+	err := p.cfg.ExportLog.ConfirmParcelDelivery(ctx, &AssetConfirmEvent{
 		AnchorTXID:             pkg.OutboundPkg.AnchorTx.TxHash(),
 		BlockHash:              *pkg.TransferTxConfEvent.BlockHash,
 		BlockHeight:            int32(pkg.TransferTxConfEvent.BlockHeight),
@@ -728,6 +721,13 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 	if err != nil {
 		return fmt.Errorf("unable to log parcel delivery "+
 			"confirmation: %w", err)
+	}
+
+	// If we have a non-interactive proof, then we'll launch several
+	// goroutines to deliver the proof(s) to the receiver(s).
+	err = fn.ParSlice(ctx, pkg.OutboundPkg.Outputs, deliver)
+	if err != nil {
+		return fmt.Errorf("error delivering proof(s): %w", err)
 	}
 
 	pkg.SendState = SendStateComplete
