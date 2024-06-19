@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wallet/base"
 	"io"
 	"net/http"
 )
@@ -130,7 +131,14 @@ func SimplifyTransactions(address string, responses *GetAddressTransactionsRespo
 // @param address
 // @return string
 func GetAddressInfoByMempool(address string) string {
-	targetUrl := "https://mempool.space/testnet/api/address/" + address
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/address/" + address
+
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/address/" + address
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
@@ -146,7 +154,14 @@ func GetAddressInfoByMempool(address string) string {
 }
 
 func getAddressInfoByMempool(address string) *GetAddressResponse {
-	targetUrl := "https://mempool.space/testnet/api/address/" + address
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/address/" + address
+
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/address/" + address
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
@@ -166,7 +181,14 @@ func getAddressInfoByMempool(address string) *GetAddressResponse {
 // @param address
 // @return string
 func GetAddressTransactionsByMempool(address string) string {
-	targetUrl := "https://mempool.space/testnet/api/address/" + address + "/txs"
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/address/" + address + "/txs"
+
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/address/" + address + "/txs"
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)

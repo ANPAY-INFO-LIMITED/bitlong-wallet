@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wallet/base"
 	"io"
 	"net/http"
 )
@@ -49,7 +50,14 @@ type TransactionsResponse struct {
 }
 
 func getTransactionByMempool(transaction string) (*TransactionsResponse, error) {
-	targetUrl := "https://mempool.space/testnet/api/tx/" + transaction
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/tx/" + transaction
+
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/tx/" + transaction
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
