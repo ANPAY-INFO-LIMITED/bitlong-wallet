@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/api/connect"
+	"github.com/wallet/base"
 )
 
 func AddFederationServer() {}
@@ -242,8 +243,15 @@ func SyncUniverse(universeHost string, asset_id string) string {
 			Id: universeID,
 		})
 	}
+	var defaultHost string
+	switch base.NetWork {
+	case base.UseMainNet:
+		defaultHost = "universe.lightning.finance:10029"
+	case base.UseTestNet:
+		defaultHost = "testnet.universe.lightning.finance:10029"
+	}
 	if universeHost == "" {
-		universeHost = "testnet.universe.lightning.finance:10029"
+		universeHost = defaultHost
 	}
 	response, err := syncUniverse(universeHost, targets, 0)
 	if err != nil {
