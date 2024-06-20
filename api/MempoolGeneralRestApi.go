@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wallet/base"
 	"io"
 	"net/http"
 )
@@ -24,7 +25,14 @@ type DifficultyResponse struct {
 }
 
 func GetDifficultyAdjustmentByMempool() string {
-	targetUrl := "https://mempool.space/testnet/api/v1/difficulty-adjustment"
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/v1/difficulty-adjustment"
+
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/v1/difficulty-adjustment"
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/wallet/base"
 	"io"
 	"net/http"
 	"strconv"
@@ -20,7 +21,13 @@ func GetBlockRawByMempool() {}
 func GetBlockStatusByMempool() {}
 
 func GetBlockTipHeightByMempool() string {
-	targetUrl := "https://mempool.space/testnet/api/blocks/tip/height"
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/blocks/tip/height"
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/blocks/tip/height"
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
@@ -35,7 +42,13 @@ func GetBlockTipHeightByMempool() string {
 // BlockTipHeight
 // @dev: NOT STANDARD RESULT RETURN
 func BlockTipHeight() int {
-	targetUrl := "https://mempool.space/testnet/api/blocks/tip/height"
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/blocks/tip/height"
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/blocks/tip/height"
+	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
 		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
