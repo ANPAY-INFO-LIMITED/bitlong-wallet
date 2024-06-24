@@ -213,6 +213,14 @@ func GetAddressTransferOut(address string) (*[]TransactionsSimplified, error) {
 	return &outTransfers, nil
 }
 
+func GetAddressTransferOutResult(address string) string {
+	transfers, err := GetAddressTransferOut(address)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, "Get Address Transfer Out Result fail.", "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", *transfers)
+}
+
 // GetAddressTransactionsByMempool
 // @Description: Get address transactions by mempool api
 // @param address
