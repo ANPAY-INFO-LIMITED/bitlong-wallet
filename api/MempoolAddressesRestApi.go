@@ -176,31 +176,52 @@ func getAddressInfoByMempool(address string) *GetAddressResponse {
 	return &getAddressResponse
 }
 
+func GetAddressTransactions(address string) (*[]TransactionsSimplified, error) {
+	var targetUrl string
+	switch base.NetWork {
+	case base.UseMainNet:
+		targetUrl = "https://mempool.space/api/address/" + address + "/txs"
+	case base.UseTestNet:
+		targetUrl = "https://mempool.space/testnet/api/address/" + address + "/txs"
+	default:
+		targetUrl = "https://mempool.space/api/address/" + address + "/txs"
+	}
+	response, err := http.Get(targetUrl)
+	if err != nil {
+		return nil, err
+	}
+	bodyBytes, _ := io.ReadAll(response.Body)
+	var getAddressTransactionsResponse GetAddressTransactionsResponse
+	if err = json.Unmarshal(bodyBytes, &getAddressTransactionsResponse); err != nil {
+		return nil, err
+	}
+	transactions := SimplifyTransactions(address, &getAddressTransactionsResponse)
+	return transactions, nil
+}
+
+func GetAddressTransferOut(address string) (*[]TransactionsSimplified, error) {
+	var outTransfers []TransactionsSimplified
+	transactions, err := GetAddressTransactions(address)
+	if err != nil {
+		return nil, err
+	}
+	for _, transaction := range *transactions {
+		if transaction.BalanceResult < 0 {
+			outTransfers = append(outTransfers, transaction)
+		}
+	}
+	return &outTransfers, nil
+}
+
 // GetAddressTransactionsByMempool
 // @Description: Get address transactions by mempool api
 // @param address
 // @return string
 func GetAddressTransactionsByMempool(address string) string {
-	var targetUrl string
-	switch base.NetWork {
-	case base.UseMainNet:
-		targetUrl = "https://mempool.space/api/address/" + address + "/txs"
-
-	case base.UseTestNet:
-		targetUrl = "https://mempool.space/testnet/api/address/" + address + "/txs"
-	}
-	response, err := http.Get(targetUrl)
+	transactions, err := GetAddressTransactions(address)
 	if err != nil {
-		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "http get fail.", "")
+		return MakeJsonErrorResult(DefaultErr, "Get Address Transactions", "")
 	}
-	bodyBytes, _ := io.ReadAll(response.Body)
-	var getAddressTransactionsResponse GetAddressTransactionsResponse
-	if err := json.Unmarshal(bodyBytes, &getAddressTransactionsResponse); err != nil {
-		fmt.Printf("%s GATBM json.Unmarshal :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", "")
-	}
-	transactions := SimplifyTransactions(address, &getAddressTransactionsResponse)
 	return MakeJsonErrorResult(SUCCESS, "", transactions)
 }
 
