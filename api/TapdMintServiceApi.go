@@ -97,6 +97,8 @@ type Meta struct {
 	Acronym     string `json:"acronym,omitempty"`
 	Description string `json:"description,omitempty"`
 	Image_Data  string `json:"image_data,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Email       string `json:"email,omitempty"`
 }
 
 const (
@@ -144,9 +146,18 @@ func (m *Meta) GetMetaFromStr(metaStr string) {
 	if metaStr == "" {
 		m.Description = "This asset has no meta."
 	}
-	err := json.Unmarshal([]byte(metaStr), m)
+
+	first := metaStr[:1]
+	end := metaStr[len(metaStr)-1:]
+	var s string
+	if first == "\"" && end == "\"" {
+		s = metaStr[1 : len(metaStr)-1]
+	} else {
+		s = metaStr
+	}
+	err := json.Unmarshal([]byte(s), m)
 	if err != nil {
-		m.Description = metaStr
+		m.Description = s
 	}
 }
 
