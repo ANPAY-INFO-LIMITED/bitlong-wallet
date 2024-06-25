@@ -1,13 +1,12 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/api/connect"
+	"github.com/wallet/api/rpcclient"
 	"github.com/wallet/base"
 )
 
@@ -102,19 +101,22 @@ func GetAssetInfo(id string) string {
 	if response.Leaves == nil {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
-	proof, err := decodeProof(response.Leaves[0].Proof, 0, true, false)
+
+	proof, err := rpcclient.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	block, err := GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
-	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
-	}
-	msgBlock := &wire.MsgBlock{}
-	blockReader := bytes.NewReader(block.RawBlock)
-	err = msgBlock.Deserialize(blockReader)
-	timeStamp := msgBlock.Header.Timestamp
-	createTime := timeStamp.Unix()
+	//block, err := GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
+	//if err != nil {
+	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	//}
+	//
+	//msgBlock := &wire.MsgBlock{}
+	//blockReader := bytes.NewReader(block.RawBlock)
+	//err = msgBlock.Deserialize(blockReader)
+	//timeStamp := msgBlock.Header.Timestamp
+	//createTime := timeStamp.Unix()
+	createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
 
 	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
 	assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
@@ -127,8 +129,7 @@ func GetAssetInfo(id string) string {
 	assetName := proof.DecodedProof.Asset.AssetGenesis.Name
 
 	var newMeta Meta
-	meta := proof.DecodedProof.MetaReveal.Data
-	newMeta.GetMetaFromStr(string(meta))
+	newMeta.FetchAssetMeta(false, id)
 
 	var assetInfo = struct {
 		AssetId      string `json:"assetId"`
@@ -138,7 +139,7 @@ func GetAssetInfo(id string) string {
 		AssetIsGroup bool   `json:"assetIsGroup"`
 		Amount       uint64 `json:"amount"`
 		Meta         string `json:"meta"`
-		CreateTime   int64  `json:"createTime"`
+		CreateHeight int64  `json:"createHeight"`
 	}{
 		AssetId:      assetId,
 		Name:         assetName,
@@ -146,8 +147,8 @@ func GetAssetInfo(id string) string {
 		AssetType:    assetType,
 		AssetIsGroup: assetIsGroup,
 		Amount:       amount,
-		Meta:         string(meta),
-		CreateTime:   createTime,
+		Meta:         newMeta.Description,
+		CreateHeight: int64(createHeight),
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }

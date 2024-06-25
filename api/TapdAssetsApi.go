@@ -550,7 +550,7 @@ func GetAssetInfoByIssuanceLeaf(id string) string {
 }
 
 func DecodeRawProofByte(rawProof []byte) *taprpc.DecodeProofResponse {
-	result, err := decodeProof(rawProof, 0, false, false)
+	result, err := rpcclient.DecodeProof(rawProof, 0, false, false)
 	if err != nil {
 		return nil
 	}
