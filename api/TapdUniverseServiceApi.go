@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/api/connect"
 	"github.com/wallet/api/rpcclient"
@@ -106,16 +108,16 @@ func GetAssetInfo(id string) string {
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	//block, err := GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
-	//if err != nil {
-	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
-	//}
-	//
-	//msgBlock := &wire.MsgBlock{}
-	//blockReader := bytes.NewReader(block.RawBlock)
-	//err = msgBlock.Deserialize(blockReader)
-	//timeStamp := msgBlock.Header.Timestamp
-	//createTime := timeStamp.Unix()
+	block, err := rpcclient.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+
+	msgBlock := &wire.MsgBlock{}
+	blockReader := bytes.NewReader(block.RawBlock)
+	err = msgBlock.Deserialize(blockReader)
+	timeStamp := msgBlock.Header.Timestamp
+	createTime := timeStamp.Unix()
 	createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
 
 	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
@@ -140,6 +142,7 @@ func GetAssetInfo(id string) string {
 		Amount       uint64 `json:"amount"`
 		Meta         string `json:"meta"`
 		CreateHeight int64  `json:"createHeight"`
+		CreateTime   int64  `json:"createTime"`
 	}{
 		AssetId:      assetId,
 		Name:         assetName,
@@ -149,6 +152,7 @@ func GetAssetInfo(id string) string {
 		Amount:       amount,
 		Meta:         newMeta.Description,
 		CreateHeight: int64(createHeight),
+		CreateTime:   createTime,
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
