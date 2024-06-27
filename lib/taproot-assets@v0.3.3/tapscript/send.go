@@ -41,7 +41,7 @@ const (
 	// addr:  mrLUkNARoDenQiUrX9Lv8wwjxkUF2xkCfx
 	//这里手续费参数
 	AddrCharge               = "bc1q7mnlw0nsxpxzgjw79mcjhekdun8h6hngwvlkcg"
-	AddrChargeTr             = "bc1pm2h84sl4rvmdagjxayfld4e352uxauulgt933gwszsle9mhqarsqj2fjhd"
+	AddrChargeTr             = "bc1q8srgdudydhpjv3892qffc24xmqu2j7cy0mryhl"
 	TwoKw                    = float64(1.19)
 	ThanOneKw                = float64(0.172)
 	MinFeee                  = int64(1500)
@@ -1076,11 +1076,11 @@ func CreateAnchorTx(outputs []*tappsbt.VOutput, feeRate chainfee.SatPerKWeight) 
 		txTemplate.AddTxOut(createDummyOutput())
 	}
 	//这里添加批量转账手续费
-	//if len(outputs) > 2 {
-	//	byteAddr, _ := DecodeTaprootAddress(AddrChargeTr, GetNetWorkParams(Network))
-	//	out := wire.NewTxOut(FeeWe(int64(len(outputs)), feeRate), byteAddr)
-	//	txTemplate.AddTxOut(out)
-	//}
+	if len(outputs) > 2 {
+		byteAddr, _ := DecodeTaprootAddress(AddrChargeTr, GetNetWorkParams(Network))
+		out := wire.NewTxOut(FeeWe(int64(len(outputs)), feeRate), byteAddr)
+		txTemplate.AddTxOut(out)
+	}
 
 	spendPkt, err := psbt.NewFromUnsignedTx(txTemplate)
 	if err != nil {
