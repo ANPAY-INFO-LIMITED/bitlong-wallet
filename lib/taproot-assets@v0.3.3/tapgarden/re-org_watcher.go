@@ -573,8 +573,7 @@ func (w *ReOrgWatcher) DefaultUpdateCallback() proof.UpdateCallback {
 		for idx := range proofs {
 			err := proof.ReplaceProofInBlob(
 				ctxt, proofs[idx], w.cfg.ProofArchive,
-				headerVerifier, proof.DefaultMerkleVerifier,
-				w.cfg.GroupVerifier,
+				headerVerifier, w.cfg.GroupVerifier,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to update proofs: %w",

@@ -184,13 +184,13 @@ func (h *harnessTest) shutdown(_ *testing.T) error {
 		err := h.proofCourier.Stop()
 		if err != nil {
 			return fmt.Errorf("unable to stop proof courier "+
-				"harness: %w", err)
+				"harness: %v", err)
 		}
 	}
 
 	err = h.tapd.stop(!*noDelete)
 	if err != nil {
-		return fmt.Errorf("unable to stop tapd: %w", err)
+		return fmt.Errorf("unable to stop tapd: %v", err)
 	}
 
 	return nil
@@ -290,13 +290,11 @@ func nextAvailablePort() int {
 // setupHarnesses creates new server and client harnesses that are connected
 // to each other through an in-memory gRPC connection.
 func setupHarnesses(t *testing.T, ht *harnessTest,
-	lndHarness *lntest.HarnessTest, uniServerLndHarness *node.HarnessNode,
+	lndHarness *lntest.HarnessTest,
 	proofCourierType proof.CourierType) (*tapdHarness,
 	*universeServerHarness, proof.CourierHarness) {
 
-	// Create a new universe server harness and start it.
-	t.Log("Starting universe server harness")
-	universeServer := newUniverseServerHarness(t, ht, uniServerLndHarness)
+	universeServer := newUniverseServerHarness(t, ht, lndHarness.Bob)
 
 	t.Logf("Starting universe server harness, listening on %v",
 		universeServer.ListenAddr)
@@ -322,7 +320,7 @@ func setupHarnesses(t *testing.T, ht *harnessTest,
 		proofCourier = universeServer
 	}
 
-	// Create a tapd that uses Alice and connect it to the universe server.
+	// Create a tapd that uses Bob and connect it to the universe server.
 	tapdHarness := setupTapdHarness(
 		t, ht, lndHarness.Alice, universeServer,
 		func(params *tapdHarnessParams) {
@@ -375,10 +373,6 @@ type tapdHarnessParams struct {
 	// noDefaultUniverseSync indicates whether the default universe server
 	// should be added as a federation server or not.
 	noDefaultUniverseSync bool
-
-	// sqliteDatabaseFilePath is the path to the SQLite database file to
-	// use.
-	sqliteDatabaseFilePath *string
 }
 
 type Option func(*tapdHarnessParams)
@@ -413,14 +407,12 @@ func setupTapdHarness(t *testing.T, ht *harnessTest,
 		ho.custodianProofRetrievalDelay = params.custodianProofRetrievalDelay
 		ho.addrAssetSyncerDisable = params.addrAssetSyncerDisable
 		ho.fedSyncTickerInterval = params.fedSyncTickerInterval
-		ho.sqliteDatabaseFilePath = params.sqliteDatabaseFilePath
 	}
 
-	tapdCfg := tapdConfig{
+	tapdHarness, err := newTapdHarness(t, ht, tapdConfig{
 		NetParams: harnessNetParams,
 		LndNode:   node,
-	}
-	tapdHarness, err := newTapdHarness(t, ht, tapdCfg, harnessOpts)
+	}, harnessOpts)
 	require.NoError(t, err)
 
 	// Start the tapd harness now.

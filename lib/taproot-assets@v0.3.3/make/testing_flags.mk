@@ -5,7 +5,6 @@ LOG_TAGS =
 TEST_FLAGS =
 ITEST_FLAGS = -logoutput
 COVER_PKG = $$(go list -deps -tags="$(DEV_TAGS)" ./... | grep '$(PKG)' | grep -v lnrpc)
-RACE_PKG = go list -deps -tags="$(DEV_TAGS)" ./... | grep '$(PKG)'
 COVER_HTML = go tool cover -html=coverage.txt -o coverage.html
 POSTGRES_START_DELAY = 5
 
@@ -20,7 +19,6 @@ ifneq ($(pkg),)
 UNITPKG := $(PKG)/$(pkg)
 UNIT_TARGETED = yes
 COVER_PKG = $(PKG)/$(pkg)
-RACE_PKG = $(PKG)/$(pkg)
 endif
 
 # If a specific unit test case is being target, construct test.run filter.
@@ -80,7 +78,7 @@ TEST_FLAGS += -test.timeout=$(timeout)
 else ifneq ($(optional),)
 TEST_FLAGS += -test.timeout=240m
 else
-TEST_FLAGS += -test.timeout=20m
+TEST_FLAGS += -test.timeout=60m
 endif
 
 GOLIST := go list -tags="$(DEV_TAGS)" -deps $(PKG)/... | grep '$(PKG)'| grep -v '/vendor/'

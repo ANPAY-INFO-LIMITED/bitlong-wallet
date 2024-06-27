@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -18,12 +17,10 @@ import (
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/lndclient"
-	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/mssmt"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
@@ -430,10 +427,8 @@ func (w *Witness) Decode(r io.Reader) error {
 	return stream.Decode(r)
 }
 
-// DeepEqual returns true if this witness is equal with the given witness. If
-// the skipTxWitness boolean is set, the TxWitness field of the Witness is not
-// compared.
-func (w *Witness) DeepEqual(skipTxWitness bool, o *Witness) bool {
+// DeepEqual returns true if this witness is equal with the given witness.
+func (w *Witness) DeepEqual(o *Witness) bool {
 	if w == nil || o == nil {
 		return w == o
 	}
@@ -442,17 +437,11 @@ func (w *Witness) DeepEqual(skipTxWitness bool, o *Witness) bool {
 		return false
 	}
 
-	if !w.SplitCommitment.DeepEqual(o.SplitCommitment) {
+	if !reflect.DeepEqual(w.TxWitness, o.TxWitness) {
 		return false
 	}
 
-	// If we're not comparing the TxWitness, we're done. This might be
-	// useful when comparing witnesses of segregated witness version assets.
-	if skipTxWitness {
-		return true
-	}
-
-	return reflect.DeepEqual(w.TxWitness, o.TxWitness)
+	return w.SplitCommitment.DeepEqual(o.SplitCommitment)
 }
 
 // ScriptVersion denotes the asset script versioning scheme.
@@ -465,175 +454,6 @@ const (
 	// multiple spending conditions.
 	ScriptV0 ScriptVersion = 0
 )
-
-// TapscriptTreeNodes represents the two supported ways to define a tapscript
-// tree to be used as a sibling for a Taproot Asset commitment, an asset group
-// key, or an asset script key. This type is used for interfacing with the DB,
-// not for supplying in a proof or key derivation. The inner fields are mutually
-// exclusive.
-type TapscriptTreeNodes struct {
-	// leaves is created from an ordered list of TapLeaf objects and
-	// represents a Tapscript tree.
-	leaves *TapLeafNodes
-
-	// branch is created from a TapBranch and represents the tapHashes of
-	// the child nodes of a TapBranch.
-	branch *TapBranchNodes
-}
-
-// GetLeaves returns an Option containing a copy of the internal TapLeafNodes,
-// if it exists.
-func GetLeaves(ttn TapscriptTreeNodes) fn.Option[TapLeafNodes] {
-	return fn.MaybeSome(ttn.leaves)
-}
-
-// GetBranch returns an Option containing a copy of the internal TapBranchNodes,
-// if it exists.
-func GetBranch(ttn TapscriptTreeNodes) fn.Option[TapBranchNodes] {
-	return fn.MaybeSome(ttn.branch)
-}
-
-// FromBranch creates a TapscriptTreeNodes object from a TapBranchNodes object.
-func FromBranch(tbn TapBranchNodes) TapscriptTreeNodes {
-	return TapscriptTreeNodes{
-		branch: &tbn,
-	}
-}
-
-// FromLeaves creates a TapscriptTreeNodes object from a TapLeafNodes object.
-func FromLeaves(tln TapLeafNodes) TapscriptTreeNodes {
-	return TapscriptTreeNodes{
-		leaves: &tln,
-	}
-}
-
-// CheckTapLeafSanity asserts that a TapLeaf script is smaller than the maximum
-// witness size, and that the TapLeaf version is Tapscript v0.
-func CheckTapLeafSanity(leaf *txscript.TapLeaf) error {
-	if leaf == nil {
-		return fmt.Errorf("leaf cannot be nil")
-	}
-
-	if leaf.LeafVersion != txscript.BaseLeafVersion {
-		return fmt.Errorf("tapleaf version %d not supported",
-			leaf.LeafVersion)
-	}
-
-	if len(leaf.Script) == 0 {
-		return fmt.Errorf("tapleaf script is empty")
-	}
-
-	if len(leaf.Script) >= blockchain.MaxBlockWeight {
-		return fmt.Errorf("tapleaf script too large")
-	}
-
-	return nil
-}
-
-// TapLeafNodes represents an ordered list of TapLeaf objects, that have been
-// checked for their script version and size. These leaves can be stored to and
-// loaded from the DB.
-type TapLeafNodes struct {
-	v []txscript.TapLeaf
-}
-
-// TapTreeNodesFromLeaves sanity checks an ordered list of TapLeaf objects and
-// constructs a TapscriptTreeNodes object if all leaves are valid.
-func TapTreeNodesFromLeaves(leaves []txscript.TapLeaf) (*TapscriptTreeNodes,
-	error) {
-
-	err := CheckTapLeavesSanity(leaves)
-	if err != nil {
-		return nil, err
-	}
-
-	nodes := TapscriptTreeNodes{
-		leaves: &TapLeafNodes{
-			v: leaves,
-		},
-	}
-
-	return &nodes, nil
-}
-
-// CheckTapLeavesSanity asserts that a slice of TapLeafs is below the maximum
-// size, and that each leaf passes a sanity check for script version and size.
-func CheckTapLeavesSanity(leaves []txscript.TapLeaf) error {
-	if len(leaves) == 0 {
-		return fmt.Errorf("no leaves given")
-	}
-
-	// The maximum number of leaves we will allow for a Tapscript tree we
-	// store is 2^15 - 1. To use a larger tree, create a TapscriptTreeNodes
-	// object from a TapBranch instead.
-	if len(leaves) > math.MaxInt16 {
-		return fmt.Errorf("tapleaf count larger than %d",
-			math.MaxInt16)
-	}
-
-	// Reject any leaf not using the initial Tapscript version, or with a
-	// script size above the maximum blocksize.
-	for i := range leaves {
-		err := CheckTapLeafSanity(&leaves[i])
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ToLeaves returns the TapLeaf slice inside a TapLeafNodes object.
-func ToLeaves(l TapLeafNodes) []txscript.TapLeaf {
-	return append([]txscript.TapLeaf{}, l.v...)
-}
-
-// LeafNodesRootHash returns the root hash of a Tapscript tree built from the
-// TapLeaf nodes in a TapLeafNodes object.
-func LeafNodesRootHash(l TapLeafNodes) chainhash.Hash {
-	return txscript.AssembleTaprootScriptTree(l.v...).RootNode.TapHash()
-}
-
-// TapBranchNodesLen is the length of a TapBranch represented as a byte arrray.
-const TapBranchNodesLen = 64
-
-// TapBranchNodes represents the tapHashes of the child nodes of a TapBranch.
-// These tapHashes can be stored to and loaded from the DB.
-type TapBranchNodes struct {
-	left  [chainhash.HashSize]byte
-	right [chainhash.HashSize]byte
-}
-
-// TapTreeNodesFromBranch creates a TapscriptTreeNodes object from a TapBranch.
-func TapTreeNodesFromBranch(branch txscript.TapBranch) TapscriptTreeNodes {
-	return TapscriptTreeNodes{
-		branch: &TapBranchNodes{
-			left:  branch.Left().TapHash(),
-			right: branch.Right().TapHash(),
-		},
-	}
-}
-
-// ToBranch returns an encoded TapBranchNodes object.
-func ToBranch(b TapBranchNodes) [][]byte {
-	return EncodeTapBranchNodes(b)
-}
-
-// BranchNodesRootHash returns the root hash of a Tapscript tree built from the
-// tapHashes stored in a TapBranchNodes object.
-func BranchNodesRootHash(b TapBranchNodes) chainhash.Hash {
-	return NewTapBranchHash(b.left, b.right)
-}
-
-// NewTapBranchHash takes the raw tap hashes of the left and right nodes and
-// hashes them into a branch.
-func NewTapBranchHash(l, r chainhash.Hash) chainhash.Hash {
-	if bytes.Compare(l[:], r[:]) > 0 {
-		l, r = r, l
-	}
-
-	return *chainhash.TaggedHash(chainhash.TagTapBranch, l[:], r[:])
-}
 
 // AssetGroup holds information about an asset group, including the genesis
 // information needed re-tweak the raw key.
@@ -673,28 +493,6 @@ type GroupKey struct {
 	Witness wire.TxWitness
 }
 
-// GroupKeyRequest contains the essential fields used to derive a group key.
-type GroupKeyRequest struct {
-	// RawKey is the raw group key before the tweak with the genesis point
-	// has been applied.
-	RawKey keychain.KeyDescriptor
-
-	// AnchorGen is the genesis of the group anchor, which is the asset used
-	// to derive the single tweak for the group key. For a new group key,
-	// this will be the genesis of the new asset.
-	AnchorGen Genesis
-
-	// TapscriptRoot is the root of a Tapscript tree that includes script
-	// spend conditions for the group key. A group key with an empty
-	// Tapscript root can only authorize reissuance with a signature.
-	TapscriptRoot []byte
-
-	// NewAsset is the asset which we are requesting group membership for.
-	// A successful request will produce a witness that authorizes this
-	// to be a member of this asset group.
-	NewAsset *Asset
-}
-
 // GroupKeyReveal is a type for representing the data used to derive the tweaked
 // key used to identify an asset group. The final tweaked key is the result of:
 // TapTweak(groupInternalKey, tapscriptRoot)
@@ -717,7 +515,7 @@ type GroupKeyReveal struct {
 func (g *GroupKeyReveal) GroupPubKey(assetID ID) (*btcec.PublicKey, error) {
 	rawKey, err := g.RawKey.ToPubKey()
 	if err != nil {
-		return nil, fmt.Errorf("group reveal raw key invalid: %w", err)
+		return nil, err
 	}
 
 	return GroupPubKey(rawKey, assetID[:], g.TapscriptRoot)
@@ -778,7 +576,11 @@ func (g *GroupKey) IsEqual(otherGroupKey *GroupKey) bool {
 		return false
 	}
 
-	return slices.EqualFunc(g.Witness, otherGroupKey.Witness, bytes.Equal)
+	return slices.EqualFunc(
+		g.Witness, otherGroupKey.Witness, func(a, b []byte) bool {
+			return bytes.Equal(a, b)
+		},
+	)
 }
 
 // IsEqualGroup returns true if this group key describes the same asset group
@@ -998,79 +800,35 @@ func NewScriptKeyBip86(rawKey keychain.KeyDescriptor) ScriptKey {
 	}
 }
 
-// NewGroupKeyRequest constructs and validates a group key request.
-func NewGroupKeyRequest(internalKey keychain.KeyDescriptor, anchorGen Genesis,
-	newAsset *Asset, scriptRoot []byte) (*GroupKeyRequest, error) {
-
-	req := &GroupKeyRequest{
-		RawKey:        internalKey,
-		AnchorGen:     anchorGen,
-		NewAsset:      newAsset,
-		TapscriptRoot: scriptRoot,
-	}
-
-	err := req.Validate()
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// ValidateGroupKeyRequest ensures that the asset intended to be a member of an
-// asset group is well-formed.
-func (req *GroupKeyRequest) Validate() error {
-	// Perform the final checks on the asset being authorized for group
-	// membership.
-	if req.NewAsset == nil {
-		return fmt.Errorf("grouped asset cannot be nil")
-	}
-
-	// The asset in the request must have the default genesis asset witness,
-	// and no group key. Those fields can only be populated after group
-	// witness creation.
-	if !req.NewAsset.HasGenesisWitness() {
-		return fmt.Errorf("asset is not a genesis asset")
-	}
-
-	if req.NewAsset.GroupKey != nil {
-		return fmt.Errorf("asset already has group key")
-	}
-
-	if req.AnchorGen.Type != req.NewAsset.Type {
-		return fmt.Errorf("asset group type mismatch")
-	}
-
-	if req.RawKey.PubKey == nil {
-		return fmt.Errorf("missing group internal key")
-	}
-
-	return nil
-}
-
 // DeriveGroupKey derives an asset's group key based on an internal public
 // key descriptor, the original group asset genesis, and the asset's genesis.
 func DeriveGroupKey(genSigner GenesisSigner, genBuilder GenesisTxBuilder,
-	req GroupKeyRequest) (*GroupKey, error) {
+	rawKey keychain.KeyDescriptor, initialGen Genesis,
+	newAsset *Asset) (*GroupKey, error) {
 
 	// First, perform the final checks on the asset being authorized for
 	// group membership.
-	err := req.Validate()
-	if err != nil {
-		return nil, err
+	if newAsset == nil {
+		return nil, fmt.Errorf("grouped asset cannot be nil")
+	}
+
+	if !newAsset.HasGenesisWitness() {
+		return nil, fmt.Errorf("asset is not a genesis asset")
+	}
+
+	if initialGen.Type != newAsset.Type {
+		return nil, fmt.Errorf("asset group type mismatch")
 	}
 
 	// Compute the tweaked group key and set it in the asset before
 	// creating the virtual minting transaction.
-	genesisTweak := req.AnchorGen.ID()
-	tweakedGroupKey, err := GroupPubKey(
-		req.RawKey.PubKey, genesisTweak[:], nil,
-	)
+	genesisTweak := initialGen.ID()
+	tweakedGroupKey, err := GroupPubKey(rawKey.PubKey, genesisTweak[:], nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot tweak group key: %w", err)
 	}
 
-	assetWithGroup := req.NewAsset.Copy()
+	assetWithGroup := newAsset.Copy()
 	assetWithGroup.GroupKey = &GroupKey{
 		GroupPubKey: *tweakedGroupKey,
 	}
@@ -1086,7 +844,7 @@ func DeriveGroupKey(genSigner GenesisSigner, genBuilder GenesisTxBuilder,
 	// minting transaction. This is restricted to group keys with an empty
 	// tapscript root and key path spends.
 	signDesc := &lndclient.SignDescriptor{
-		KeyDesc:     req.RawKey,
+		KeyDesc:     rawKey,
 		SingleTweak: genesisTweak[:],
 		SignMethod:  input.TaprootKeySpendBIP0086SignMethod,
 		Output:      prevOut,
@@ -1099,120 +857,9 @@ func DeriveGroupKey(genSigner GenesisSigner, genBuilder GenesisTxBuilder,
 	}
 
 	return &GroupKey{
-		RawKey:      req.RawKey,
+		RawKey:      rawKey,
 		GroupPubKey: *tweakedGroupKey,
 		Witness:     wire.TxWitness{sig.Serialize()},
-	}, nil
-}
-
-// DeriveCustomGroupKey derives an asset's group key based on a signing
-// descriptor, the original group asset genesis, and the asset's genesis.
-func DeriveCustomGroupKey(genSigner GenesisSigner, genBuilder GenesisTxBuilder,
-	req GroupKeyRequest, tapLeaf *psbt.TaprootTapLeafScript,
-	scriptWitness []byte) (*GroupKey, error) {
-
-	// First, perform the final checks on the asset being authorized for
-	// group membership.
-	err := req.Validate()
-	if err != nil {
-		return nil, err
-	}
-
-	// Compute the tweaked group key and set it in the asset before
-	// creating the virtual minting transaction.
-	genesisTweak := req.AnchorGen.ID()
-	tweakedGroupKey, err := GroupPubKey(
-		req.RawKey.PubKey, genesisTweak[:], req.TapscriptRoot,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("cannot tweak group key: %w", err)
-	}
-
-	assetWithGroup := req.NewAsset.Copy()
-	assetWithGroup.GroupKey = &GroupKey{
-		GroupPubKey: *tweakedGroupKey,
-	}
-
-	// Exit early if a group witness is already given, since we don't need
-	// to construct a virtual TX nor produce a signature.
-	if scriptWitness != nil {
-		if tapLeaf == nil {
-			return nil, fmt.Errorf("need tap leaf with group " +
-				"script witness")
-		}
-
-		witness := wire.TxWitness{
-			scriptWitness, tapLeaf.Script, tapLeaf.ControlBlock,
-		}
-
-		return &GroupKey{
-			RawKey:        req.RawKey,
-			GroupPubKey:   *tweakedGroupKey,
-			TapscriptRoot: req.TapscriptRoot,
-			Witness:       witness,
-		}, nil
-	}
-
-	// Build the virtual transaction that represents the minting of the new
-	// asset, which will be signed to generate the group witness.
-	genesisTx, prevOut, err := genBuilder.BuildGenesisTx(assetWithGroup)
-	if err != nil {
-		return nil, fmt.Errorf("cannot build virtual tx: %w", err)
-	}
-
-	// Populate the signing descriptor needed to sign the virtual minting
-	// transaction.
-	signDesc := &lndclient.SignDescriptor{
-		KeyDesc:     req.RawKey,
-		SingleTweak: genesisTweak[:],
-		TapTweak:    req.TapscriptRoot,
-		Output:      prevOut,
-		HashType:    txscript.SigHashDefault,
-		InputIndex:  0,
-	}
-
-	// There are three possible signing cases: BIP-0086 key spend path, key
-	// spend path with a script root, and script spend path.
-	switch {
-	// If there is no tapscript root, we're doing a BIP-0086 key spend.
-	case len(signDesc.TapTweak) == 0:
-		signDesc.SignMethod = input.TaprootKeySpendBIP0086SignMethod
-
-	// No leaf means we're not signing a specific script, so this is the key
-	// spend path with a tapscript root.
-	case len(signDesc.TapTweak) != 0 && tapLeaf == nil:
-		signDesc.SignMethod = input.TaprootKeySpendSignMethod
-
-	// One leaf hash and a merkle root means we're signing a specific
-	// script.
-	case len(signDesc.TapTweak) != 0 && tapLeaf != nil:
-		signDesc.SignMethod = input.TaprootScriptSpendSignMethod
-		signDesc.WitnessScript = tapLeaf.Script
-
-	default:
-		return nil, fmt.Errorf("bad sign descriptor for group key")
-	}
-
-	sig, err := genSigner.SignVirtualTx(signDesc, genesisTx, prevOut)
-	if err != nil {
-		return nil, err
-	}
-
-	witness := wire.TxWitness{sig.Serialize()}
-
-	// If this was a script spend, we also have to add the script itself and
-	// the control block to the witness, otherwise the verifier will reject
-	// the generated witness.
-	if signDesc.SignMethod == input.TaprootScriptSpendSignMethod {
-		witness = append(witness, signDesc.WitnessScript)
-		witness = append(witness, tapLeaf.ControlBlock)
-	}
-
-	return &GroupKey{
-		RawKey:        signDesc.KeyDesc,
-		GroupPubKey:   *tweakedGroupKey,
-		TapscriptRoot: signDesc.TapTweak,
-		Witness:       witness,
 	}, nil
 }
 
@@ -1563,10 +1210,9 @@ func (a *Asset) Copy() *Asset {
 
 	if a.GroupKey != nil {
 		assetCopy.GroupKey = &GroupKey{
-			RawKey:        a.GroupKey.RawKey,
-			GroupPubKey:   a.GroupKey.GroupPubKey,
-			TapscriptRoot: a.GroupKey.TapscriptRoot,
-			Witness:       a.GroupKey.Witness,
+			RawKey:      a.GroupKey.RawKey,
+			GroupPubKey: a.GroupKey.GroupPubKey,
+			Witness:     a.GroupKey.Witness,
 		}
 	}
 
@@ -1575,20 +1221,6 @@ func (a *Asset) Copy() *Asset {
 
 // DeepEqual returns true if this asset is equal with the given asset.
 func (a *Asset) DeepEqual(o *Asset) bool {
-	return a.deepEqual(false, o)
-}
-
-// DeepEqualAllowSegWitIgnoreTxWitness returns true if this asset is equal with
-// the given asset, ignoring the TxWitness field of the Witness if the asset
-// version is v1.
-func (a *Asset) DeepEqualAllowSegWitIgnoreTxWitness(o *Asset) bool {
-	return a.deepEqual(true, o)
-}
-
-// deepEqual returns true if this asset is equal with the given asset. The
-// allowSegWitIgnoreTxWitness flag is used to determine whether the TxWitness
-// field of the Witness should be ignored if the asset version is v1.
-func (a *Asset) deepEqual(allowSegWitIgnoreTxWitness bool, o *Asset) bool {
 	if a.Version != o.Version {
 		return false
 	}
@@ -1628,9 +1260,7 @@ func (a *Asset) deepEqual(allowSegWitIgnoreTxWitness bool, o *Asset) bool {
 	}
 
 	for i := range a.PrevWitnesses {
-		oPrevWitness := &o.PrevWitnesses[i]
-		skipTxWitness := a.Version == V1 && allowSegWitIgnoreTxWitness
-		if !a.PrevWitnesses[i].DeepEqual(skipTxWitness, oPrevWitness) {
+		if !a.PrevWitnesses[i].DeepEqual(&o.PrevWitnesses[i]) {
 			return false
 		}
 	}

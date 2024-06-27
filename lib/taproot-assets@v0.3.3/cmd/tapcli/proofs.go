@@ -59,7 +59,8 @@ var verifyProofCommand = cli.Command{
 }
 
 func verifyProof(ctx *cli.Context) error {
-	if ctx.String(proofPathName) == "" {
+	switch {
+	case ctx.String(proofPathName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 
@@ -125,7 +126,8 @@ func decodeProof(ctx *cli.Context) error {
 	client, cleanUp := getClient(ctx)
 	defer cleanUp()
 
-	if !ctx.IsSet(proofPathName) {
+	switch {
+	case !ctx.IsSet(proofPathName):
 		_ = cli.ShowCommandHelp(ctx, "decode")
 		return nil
 	}
@@ -174,7 +176,8 @@ var verifyOwnershipCommand = cli.Command{
 }
 
 func verifyOwnershipProof(ctx *cli.Context) error {
-	if ctx.String(proofPathName) == "" {
+	switch {
+	case ctx.String(proofPathName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 

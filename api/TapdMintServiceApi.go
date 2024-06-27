@@ -285,7 +285,7 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 	_assetMetaDataByteSlice := []byte(assetMetaData)
 	var _assetMetaType taprpc.AssetMetaType
 	if AssetMetaTypeIsJsonNotOpaque {
-		_assetMetaType = taprpc.AssetMetaType_META_TYPE_JSON
+		//_assetMetaType = taprpc.AssetMetaType_META_TYPE_JSON
 	} else {
 		_assetMetaType = taprpc.AssetMetaType_META_TYPE_OPAQUE
 	}

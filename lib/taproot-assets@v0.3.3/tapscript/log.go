@@ -1,4 +1,4 @@
-package tapsend
+package tapscript
 
 import (
 	"github.com/btcsuite/btclog"

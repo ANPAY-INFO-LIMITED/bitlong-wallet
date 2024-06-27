@@ -1,19 +1,15 @@
 package tapdb
 
 import (
-	"context"
 	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/taproot-assets/internal/test"
-	"github.com/lightninglabs/taproot-assets/tapdb/sqlc"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/constraints"
 )
@@ -101,7 +97,7 @@ func extractSqlInt32[T constraints.Integer](num sql.NullInt32) T {
 // NOTE: This function is intended to be used along with the wire.WriteOutPoint
 // function. Once the ReadOutPoint function is exported, then it can be used in
 // place of this.
-func readOutPoint(r io.Reader, _ uint32, _ uint32, op *wire.OutPoint) error {
+func readOutPoint(r io.Reader, pver uint32, version int32, op *wire.OutPoint) error {
 	_, err := io.ReadFull(r, op.Hash[:])
 	if err != nil {
 		return err
@@ -167,7 +163,7 @@ func parseCoalesceNumericType[T constraints.Integer](value any) (T, error) {
 		parsedValue, err := strconv.ParseInt(typedValue, 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("unable to parse value '%v' as "+
-				"number: %w", value, err)
+				"number: %v", value, err)
 		}
 
 		return T(parsedValue), nil
@@ -176,27 +172,4 @@ func parseCoalesceNumericType[T constraints.Integer](value any) (T, error) {
 		return 0, fmt.Errorf("unexpected column type '%T' to parse "+
 			"value '%v' as number", value, value)
 	}
-}
-
-// InsertTestdata reads the given file from the testdata directory and inserts
-// its content into the given database.
-func InsertTestdata(t *testing.T, db *BaseDB, fileName string) {
-	ctx := context.Background()
-	var opts AssetStoreTxOptions
-	tx, err := db.BeginTx(ctx, &opts)
-	require.NoError(t, err)
-
-	testData := test.ReadTestDataFile(t, fileName)
-
-	// If we're using Postgres, we need to convert the SQLite hex literals
-	// (X'<hex>') to Postgres hex literals ('\x<hex>').
-	if db.Backend() == sqlc.BackendTypePostgres {
-		rex := regexp.MustCompile(`X'([0-9a-f]+?)'`)
-		testData = rex.ReplaceAllString(testData, `'\x$1'`)
-		t.Logf("Postgres test data: %v", testData)
-	}
-
-	_, err = tx.Exec(testData)
-	require.NoError(t, err)
-	require.NoError(t, tx.Commit())
 }

@@ -11,14 +11,11 @@ GOACC_BIN := $(GO_BIN)/go-acc
 GOIMPORTS_BIN := $(GO_BIN)/gosimports
 MIGRATE_BIN := $(GO_BIN)/migrate
 
-# VERSION_GO_FILE is the golang file which defines the current project version.
-VERSION_GO_FILE := "version.go"
-
 COMMIT := $(shell git describe --tags --dirty)
 
 GOBUILD := GOEXPERIMENT=loopvar GO111MODULE=on go build -v
 GOINSTALL := GOEXPERIMENT=loopvar GO111MODULE=on go install -v
-GOTEST := GOEXPERIMENT=loopvar GO111MODULE=on go test
+GOTEST := GOEXPERIMENT=loopvar GO111MODULE=on go test 
 GOMOD := GO111MODULE=on go mod
 
 GOLIST := go list -deps $(PKG)/... | grep '$(PKG)'
@@ -118,17 +115,6 @@ release:
 	$(VERSION_CHECK)
 	./scripts/release.sh build-release "$(VERSION_TAG)" "$(BUILD_SYSTEM)" "$(RELEASE_TAGS)" "$(RELEASE_LDFLAGS)"
 
-release-tag:
-	@$(call print, "Adding release tag.")
-
-	tag=$$(./scripts/get-git-tag-name.sh ${VERSION_GO_FILE}); \
-	exit_status=$$?; \
-	if [ $$exit_status -ne 0 ]; then \
-		echo "Script encountered an error with exit status $$exit_status."; \
-	fi; \
-	echo "Adding git tag: $$tag"; \
-	git tag -as -m "Tag generated using command \`make release-tag\`." "$$tag";
-
 docker-release:
 	@$(call print, "Building release helper docker image.")
 	if [ "$(tag)" = "" ]; then echo "Must specify tag=<commit_or_tag>!"; exit 1; fi
@@ -182,7 +168,7 @@ unit-cover: $(GOACC_BIN)
 
 unit-race:
 	@$(call print, "Running unit race tests.")
-	env CGO_ENABLED=1 GORACE="history_size=7 halt_on_errors=1" $(UNIT_RACE)
+	env CGO_ENABLED=1 GORACE="history_size=7 halt_on_errors=1" $(GOLIST) | $(XARGS) env $(GOTEST) -race -test.timeout=20m
 
 itest: build-itest itest-only
 
@@ -212,15 +198,11 @@ endif
 
 flakehunter: build-itest
 	@$(call print, "Flake hunting ${backend} integration tests.")
-	while [ $$? -eq 0 ]; do make itest-only-trace; done
+	while [ $$? -eq 0 ]; do make itest-only; done
 
 flake-unit:
 	@$(call print, "Flake hunting unit tests.")
-	while [ $$? -eq 0 ]; do make unit nocache=1; done
-
-flake-unit-trace:
-	@$(call print, "Flake hunting unit tests in debug mode.")
-	while [ $$? -eq 0 ]; do make unit-trace nocache=1; done
+	while [ $$? -eq 0 ]; do '$(GOLIST) | $(XARGS) env $(GOTEST) -test.timeout=20m -count=1'; done
 
 flake-unit-race:
 	@$(call print, "Flake hunting races in unit tests.")
@@ -302,16 +284,16 @@ mod-check: mod-tidy
 
 gen-deterministic-test-vectors:
 	@$(call print, "Generating deterministic test vectors.")
-	make unit gen-test-vectors=true pkg=address case=^TestAddressEncoding$
-	make unit gen-test-vectors=true pkg=asset case=^TestAssetEncoding$
-	make unit gen-test-vectors=true pkg=asset case=^TestDeriveBurnKey$
-	make unit gen-test-vectors=true pkg=mssmt case=^TestProofEncoding$
-	make unit gen-test-vectors=true pkg=mssmt case=^TestInsertionOverflow$
-	make unit gen-test-vectors=true pkg=mssmt case=^TestReplaceWithEmptyBranch$
-	make unit gen-test-vectors=true pkg=mssmt case=^TestReplace$
-	make unit gen-test-vectors=true pkg=proof case=^TestGenesisProofVerification$
-	make unit gen-test-vectors=true pkg=tappsbt case=^TestEncodingDecoding$
-	make unit gen-test-vectors=true pkg=vm case=^TestVM$
+	make unit gen-test-vectors=true pkg=address case=TestAddressEncoding
+	make unit gen-test-vectors=true pkg=asset case=TestAssetEncoding
+	make unit gen-test-vectors=true pkg=asset case=TestDeriveBurnKey
+	make unit gen-test-vectors=true pkg=mssmt case=TestProofEncoding
+	make unit gen-test-vectors=true pkg=mssmt case=TestInsertionOverflow
+	make unit gen-test-vectors=true pkg=mssmt case=TestReplaceWithEmptyBranch
+	make unit gen-test-vectors=true pkg=mssmt case=TestReplace
+	make unit gen-test-vectors=true pkg=proof case=TestGenesisProofVerification
+	make unit gen-test-vectors=true pkg=tappsbt case=TestEncodingDecoding
+	make unit gen-test-vectors=true pkg=vm case=TestVM
 
 gen-itest-test-vectors:
 	@$(call print, "Generating test vectors from integration tests.")

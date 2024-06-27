@@ -13,7 +13,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/address"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/rfq"
 	"github.com/lightninglabs/taproot-assets/tapdb"
 	"github.com/lightninglabs/taproot-assets/tapdb/sqlc"
 	"github.com/lightninglabs/taproot-assets/tapfreighter"
@@ -62,7 +61,7 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 			cfg.DatabaseBackend)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to open database: %w", err)
+		return nil, fmt.Errorf("unable to open database: %v", err)
 	}
 
 	defaultClock := clock.NewDefaultClock()
@@ -97,8 +96,6 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 	keyRing := tap.NewLndRpcKeyRing(lndServices)
 	walletAnchor := tap.NewLndRpcWalletAnchor(lndServices)
 	chainBridge := tap.NewLndRpcChainBridge(lndServices)
-	msgTransportClient := tap.NewLndMsgTransportClient(lndServices)
-	lndRouterClient := tap.NewLndRouterClient(lndServices)
 
 	assetStore := tapdb.NewAssetStore(assetDB, defaultClock)
 
@@ -145,7 +142,6 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 			)
 		},
 		HeaderVerifier: headerVerifier,
-		MerkleVerifier: proof.DefaultMerkleVerifier,
 		GroupVerifier:  groupVerifier,
 		Multiverse:     multiverse,
 		UniverseStats:  universeStats,
@@ -162,7 +158,7 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 
 	proofFileStore, err := proof.NewFileArchiver(cfg.networkDir)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open disk archive: %w", err)
+		return nil, fmt.Errorf("unable to open disk archive: %v", err)
 	}
 	proofArchive := proof.NewMultiArchiver(
 		&proof.BaseVerifier{}, tapdb.DefaultStoreTimeout,
@@ -220,7 +216,7 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse fallback proof "+
-			"courier address: %w", err)
+			"courier address: %v", err)
 	}
 
 	// If default proof courier address is set, use it as the default.
@@ -230,7 +226,7 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse default proof "+
-				"courier address: %w", err)
+				"courier address: %v", err)
 		}
 	}
 
@@ -265,7 +261,7 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 	var runtimeIDBytes [8]byte
 	_, err = rand.Read(runtimeIDBytes[:])
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate runtime ID: %w", err)
+		return nil, fmt.Errorf("unable to generate runtime ID: %v", err)
 	}
 
 	runtimeID := int64(binary.BigEndian.Uint64(runtimeIDBytes[:]))
@@ -302,15 +298,14 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 	virtualTxSigner := tap.NewLndRpcVirtualTxSigner(lndServices)
 	coinSelect := tapfreighter.NewCoinSelect(assetStore)
 	assetWallet := tapfreighter.NewAssetWallet(&tapfreighter.WalletConfig{
-		CoinSelector:     coinSelect,
-		AssetProofs:      proofArchive,
-		AddrBook:         tapdbAddrBook,
-		KeyRing:          keyRing,
-		Signer:           virtualTxSigner,
-		TxValidator:      &tap.ValidatorV0{},
-		WitnessValidator: &tap.WitnessValidatorV0{},
-		Wallet:           walletAnchor,
-		ChainParams:      &tapChainParams,
+		CoinSelector: coinSelect,
+		AssetProofs:  proofArchive,
+		AddrBook:     tapdbAddrBook,
+		KeyRing:      keyRing,
+		Signer:       virtualTxSigner,
+		TxValidator:  &tap.ValidatorV0{},
+		Wallet:       walletAnchor,
+		ChainParams:  &tapChainParams,
 	})
 
 	// Addresses can have different proof couriers configured, but both
@@ -325,22 +320,6 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 
 	multiNotifier := proof.NewMultiArchiveNotifier(assetStore, multiverse)
 
-	// TODO(ffranr): Replace the mock price oracle with a real one.
-	priceOracle := rfq.NewMockPriceOracle(3600)
-
-	// Construct the RFQ manager.
-	rfqManager, err := rfq.NewManager(
-		rfq.ManagerCfg{
-			PeerMessenger:   msgTransportClient,
-			HtlcInterceptor: lndRouterClient,
-			PriceOracle:     priceOracle,
-			ErrChan:         mainErrChan,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	return &tap.Config{
 		DebugLevel:   cfg.DebugLevel,
 		RuntimeID:    runtimeID,
@@ -352,7 +331,6 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 				Wallet:                walletAnchor,
 				ChainBridge:           chainBridge,
 				Log:                   assetMintingStore,
-				TreeStore:             assetMintingStore,
 				KeyRing:               keyRing,
 				GenSigner:             virtualTxSigner,
 				GenTxBuilder:          &tapscript.GroupTxBuilder{},
@@ -414,7 +392,6 @@ func genServerConfig(cfg *Config, cfgLogger btclog.Logger,
 		UniversePublicAccess:     cfg.Universe.PublicAccess,
 		UniverseQueriesPerSecond: cfg.Universe.UniverseQueriesPerSecond,
 		UniverseQueriesBurst:     cfg.Universe.UniverseQueriesBurst,
-		RfqManager:               rfqManager,
 		LogWriter:                cfg.LogWriter,
 		DatabaseConfig: &tap.DatabaseConfig{
 			RootKeyStore: tapdb.NewRootKeyStore(rksDB),
@@ -441,7 +418,7 @@ func CreateServerFromConfig(cfg *Config, cfgLogger btclog.Logger,
 		cfg, cfgLogger,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load TLS credentials: %w",
+		return nil, fmt.Errorf("unable to load TLS credentials: %v",
 			err)
 	}
 
@@ -451,7 +428,7 @@ func CreateServerFromConfig(cfg *Config, cfgLogger btclog.Logger,
 		cfg.ChainConf.Network, cfg.Lnd, shutdownInterceptor,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to connect to lnd node: %w", err)
+		return nil, fmt.Errorf("unable to connect to lnd node: %v", err)
 	}
 
 	cfgLogger.Infof("lnd connection initialized")
@@ -460,7 +437,7 @@ func CreateServerFromConfig(cfg *Config, cfgLogger btclog.Logger,
 		cfg, cfgLogger, &lndConn.LndServices, mainErrChan,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate server config: %w",
+		return nil, fmt.Errorf("unable to generate server config: %v",
 			err)
 	}
 
@@ -499,7 +476,7 @@ func CreateSubServerFromConfig(cfg *Config, cfgLogger btclog.Logger,
 		cfg, cfgLogger, lndServices, mainErrChan,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to generate server config: %w",
+		return nil, fmt.Errorf("unable to generate server config: %v",
 			err)
 	}
 

@@ -64,13 +64,14 @@ var newAddrCommand = cli.Command{
 }
 
 func newAddr(ctx *cli.Context) error {
-	if ctx.String(assetIDName) == "" {
+	switch {
+	case ctx.String(assetIDName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 
 	assetID, err := hex.DecodeString(ctx.String(assetIDName))
 	if err != nil {
-		return fmt.Errorf("unable to decode assetID: %w", err)
+		return fmt.Errorf("unable to decode assetID: %v", err)
 	}
 
 	ctxc := getContext()
@@ -162,12 +163,12 @@ func queryAddr(ctx *cli.Context) error {
 
 	addrs, err := client.QueryAddrs(ctxc, &taprpc.QueryAddrRequest{
 		CreatedAfter:  start,
-		CreatedBefore: end,
+		CreatedBefore: int64(end),
 		Limit:         int32(ctx.Int64(limitName)),
 		Offset:        int32(ctx.Int64(offsetName)),
 	})
 	if err != nil {
-		return fmt.Errorf("unable to make addrs: %w", err)
+		return fmt.Errorf("unable to make addrs: %v", err)
 	}
 
 	printRespJSON(addrs)

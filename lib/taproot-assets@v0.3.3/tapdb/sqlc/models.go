@@ -77,7 +77,6 @@ type AssetMintingBatch struct {
 	GenesisID         sql.NullInt64
 	HeightHint        int32
 	CreationTimeUnix  time.Time
-	TapscriptSibling  []byte
 }
 
 type AssetProof struct {
@@ -266,21 +265,6 @@ type MssmtRoot struct {
 	RootHash  []byte
 }
 
-type MultiverseLeafe struct {
-	ID                int64
-	MultiverseRootID  int64
-	AssetID           []byte
-	GroupKey          []byte
-	LeafNodeKey       []byte
-	LeafNodeNamespace string
-}
-
-type MultiverseRoot struct {
-	ID            int64
-	NamespaceRoot string
-	ProofType     string
-}
-
 type PassiveAsset struct {
 	PassiveID       int64
 	TransferID      int64
@@ -303,24 +287,6 @@ type ScriptKey struct {
 	InternalKeyID    int64
 	TweakedScriptKey []byte
 	Tweak            []byte
-}
-
-type TapscriptEdge struct {
-	EdgeID     int64
-	RootHashID int64
-	NodeIndex  int64
-	RawNodeID  int64
-}
-
-type TapscriptNode struct {
-	NodeID  int64
-	RawNode []byte
-}
-
-type TapscriptRoot struct {
-	RootID     int64
-	RootHash   []byte
-	BranchOnly bool
 }
 
 type UniverseEvent struct {

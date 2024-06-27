@@ -1,7 +1,6 @@
 package tapgarden
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -22,7 +21,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/internal/test"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -69,7 +67,7 @@ func RandSeedlingMintingBatch(t testing.TB, numSeedlings int) *MintingBatch {
 }
 
 type MockWalletAnchor struct {
-	FundPsbtSignal     chan *tapsend.FundedPsbt
+	FundPsbtSignal     chan *FundedPsbt
 	SignPsbtSignal     chan struct{}
 	ImportPubKeySignal chan *btcec.PublicKey
 	ListUnspentSignal  chan struct{}
@@ -83,7 +81,7 @@ type MockWalletAnchor struct {
 
 func NewMockWalletAnchor() *MockWalletAnchor {
 	return &MockWalletAnchor{
-		FundPsbtSignal:     make(chan *tapsend.FundedPsbt),
+		FundPsbtSignal:     make(chan *FundedPsbt),
 		SignPsbtSignal:     make(chan struct{}),
 		ImportPubKeySignal: make(chan *btcec.PublicKey),
 		ListUnspentSignal:  make(chan struct{}),
@@ -94,7 +92,7 @@ func NewMockWalletAnchor() *MockWalletAnchor {
 }
 
 func (m *MockWalletAnchor) FundPsbt(_ context.Context, packet *psbt.Packet,
-	_ uint32, _ chainfee.SatPerKWeight) (*tapsend.FundedPsbt, error) {
+	_ uint32, _ chainfee.SatPerKWeight) (FundedPsbt, error) {
 
 	// Take the PSBT packet and add an additional input and output to
 	// simulate the wallet funding the transaction.
@@ -103,35 +101,27 @@ func (m *MockWalletAnchor) FundPsbt(_ context.Context, packet *psbt.Packet,
 			Index: rand.Uint32(),
 		},
 	})
-
-	// Use a P2TR input by default.
-	anchorInput := psbt.PInput{
+	packet.Inputs = append(packet.Inputs, psbt.PInput{
 		WitnessUtxo: &wire.TxOut{
 			Value:    100000,
-			PkScript: bytes.Clone(tapsend.GenesisDummyScript),
+			PkScript: []byte{0x1},
 		},
 		SighashType: txscript.SigHashDefault,
-	}
-	packet.Inputs = append(packet.Inputs, anchorInput)
-
-	// Use a non-P2TR change output by default so we avoid generating
-	// exclusion proofs.
-	changeOutput := wire.TxOut{
+	})
+	packet.UnsignedTx.AddTxOut(&wire.TxOut{
 		Value:    50000,
-		PkScript: bytes.Clone(tapsend.GenesisDummyScript),
-	}
-	changeOutput.PkScript[0] = txscript.OP_0
-	packet.UnsignedTx.AddTxOut(&changeOutput)
+		PkScript: []byte{0x2},
+	})
 	packet.Outputs = append(packet.Outputs, psbt.POutput{})
 
 	// We always have the change output be the second output, so this means
 	// the Taproot Asset commitment will live in the first output.
-	pkt := &tapsend.FundedPsbt{
+	pkt := FundedPsbt{
 		Pkt:               packet,
 		ChangeOutputIndex: 1,
 	}
 
-	m.FundPsbtSignal <- pkt
+	m.FundPsbtSignal <- &pkt
 
 	return pkt, nil
 }
@@ -252,11 +242,6 @@ type MockChainBridge struct {
 
 	ReqCount int
 	ConfReqs map[int]*chainntnfs.ConfirmationEvent
-
-	failFeeEstimates bool
-	emptyConf        bool
-	errConf          bool
-	confErr          chan error
 }
 
 func NewMockChainBridge() *MockChainBridge {
@@ -270,27 +255,11 @@ func NewMockChainBridge() *MockChainBridge {
 	}
 }
 
-func (m *MockChainBridge) FailFeeEstimates(enable bool) {
-	m.failFeeEstimates = enable
-}
-
-func (m *MockChainBridge) FailConf(enable bool) {
-	m.errConf = enable
-}
-func (m *MockChainBridge) EmptyConf(enable bool) {
-	m.emptyConf = enable
-}
-
 func (m *MockChainBridge) SendConfNtfn(reqNo int, blockHash *chainhash.Hash,
 	blockHeight, blockIndex int, block *wire.MsgBlock,
 	tx *wire.MsgTx) {
 
 	req := m.ConfReqs[reqNo]
-	if m.emptyConf {
-		req.Confirmed <- nil
-		return
-	}
-
 	req.Confirmed <- &chainntnfs.TxConfirmation{
 		BlockHash:   blockHash,
 		BlockHeight: uint32(blockHeight),
@@ -318,7 +287,7 @@ func (m *MockChainBridge) RegisterConfirmationsNtfn(ctx context.Context,
 		Confirmed: make(chan *chainntnfs.TxConfirmation),
 		Cancel:    func() {},
 	}
-	m.confErr = make(chan error, 1)
+	errChan := make(chan error)
 
 	m.ConfReqs[m.ReqCount] = req
 
@@ -327,11 +296,7 @@ func (m *MockChainBridge) RegisterConfirmationsNtfn(ctx context.Context,
 	case <-ctx.Done():
 	}
 
-	if m.errConf {
-		m.confErr <- fmt.Errorf("confirmation error")
-	}
-
-	return req, m.confErr, nil
+	return req, errChan, nil
 }
 
 func (m *MockChainBridge) RegisterBlockEpochNtfn(
@@ -394,10 +359,6 @@ func (m *MockChainBridge) EstimateFee(ctx context.Context,
 
 	case <-ctx.Done():
 		return 0, fmt.Errorf("shutting down")
-	}
-
-	if m.failFeeEstimates {
-		return 0, fmt.Errorf("failed to estimate fee")
 	}
 
 	return 253, nil
@@ -520,7 +481,7 @@ func (m *MockKeyRing) DeriveNextKey(ctx context.Context,
 
 	priv, err := btcec.NewPrivateKey()
 	if err != nil {
-		return keychain.KeyDescriptor{}, err
+		return keychain.KeyDescriptor{}, nil
 	}
 
 	loc := keychain.KeyLocator{
@@ -604,9 +565,9 @@ func (m *MockProofArchive) FetchProofs(ctx context.Context,
 	return nil, nil
 }
 
-func (m *MockProofArchive) ImportProofs(context.Context,
-	proof.HeaderVerifier, proof.MerkleVerifier, proof.GroupVerifier,
-	bool, ...*proof.AnnotatedProof) error {
+func (m *MockProofArchive) ImportProofs(ctx context.Context,
+	headerVerifier proof.HeaderVerifier, groupVerifier proof.GroupVerifier,
+	replace bool, proofs ...*proof.AnnotatedProof) error {
 
 	return nil
 }
@@ -633,42 +594,3 @@ func (m *MockProofWatcher) DefaultUpdateCallback() proof.UpdateCallback {
 		return nil
 	}
 }
-
-type FallibleTapscriptTreeMgr struct {
-	store               MintingStore
-	FailLoad, FailStore bool
-}
-
-func (mgr FallibleTapscriptTreeMgr) DeleteTapscriptTree(ctx context.Context,
-	rootHash chainhash.Hash) error {
-
-	return mgr.store.DeleteTapscriptTree(ctx, rootHash)
-}
-
-func (mgr FallibleTapscriptTreeMgr) LoadTapscriptTree(ctx context.Context,
-	rootHash chainhash.Hash) (*asset.TapscriptTreeNodes, error) {
-
-	if mgr.FailLoad {
-		return nil, fmt.Errorf("failed to load tapscript tree")
-	}
-
-	return mgr.store.LoadTapscriptTree(ctx, rootHash)
-}
-
-func (mgr FallibleTapscriptTreeMgr) StoreTapscriptTree(ctx context.Context,
-	treeNodes asset.TapscriptTreeNodes) (*chainhash.Hash, error) {
-
-	if mgr.FailStore {
-		return nil, fmt.Errorf("unable to store tapscript tree")
-	}
-
-	return mgr.store.StoreTapscriptTree(ctx, treeNodes)
-}
-
-func NewFallibleTapscriptTreeMgr(store MintingStore) FallibleTapscriptTreeMgr {
-	return FallibleTapscriptTreeMgr{
-		store: store,
-	}
-}
-
-var _ asset.TapscriptTreeManager = (*FallibleTapscriptTreeMgr)(nil)

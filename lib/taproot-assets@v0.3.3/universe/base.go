@@ -12,7 +12,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/fn"
-	"github.com/lightninglabs/taproot-assets/mssmt"
 	"github.com/lightninglabs/taproot-assets/proof"
 )
 
@@ -27,10 +26,6 @@ type ArchiveConfig struct {
 	// HeaderVerifier is used to verify the validity of the header for a
 	// genesis proof.
 	HeaderVerifier proof.HeaderVerifier
-
-	// MerkleVerifier is used to verify the validity of the transaction
-	// merkle proof.
-	MerkleVerifier proof.MerkleVerifier
 
 	// GroupVerifier is used to verify the validity of the group key for a
 	// genesis proof.
@@ -144,76 +139,6 @@ func (a *Archive) RootNodes(ctx context.Context,
 	return a.cfg.Multiverse.RootNodes(ctx, q)
 }
 
-// MultiverseRoot returns the root node of the multiverse for the specified
-// proof type. If the given list of universe IDs is non-empty, then the root
-// will be calculated just for those universes.
-func (a *Archive) MultiverseRoot(ctx context.Context, proofType ProofType,
-	filterByIDs []Identifier) (fn.Option[MultiverseRoot], error) {
-
-	log.Debugf("Fetching multiverse root for proof type: %v", proofType)
-
-	none := fn.None[MultiverseRoot]()
-
-	// If we don't have any IDs, then we'll return the multiverse root for
-	// the given proof type.
-	if len(filterByIDs) == 0 {
-		rootNode, err := a.cfg.Multiverse.MultiverseRootNode(
-			ctx, proofType,
-		)
-		if err != nil {
-			return none, err
-		}
-
-		return rootNode, nil
-	}
-
-	// Otherwise, we'll run the query to fetch the multiverse leaf for each
-	// of the specified assets.
-	uniTargets := make([]MultiverseLeafDesc, len(filterByIDs))
-	for idx, id := range filterByIDs {
-		if id.GroupKey != nil {
-			uniTargets[idx] = fn.NewRight[asset.ID](*id.GroupKey)
-		} else {
-			uniTargets[idx] = fn.NewLeft[asset.ID, btcec.PublicKey](
-				id.AssetID,
-			)
-		}
-	}
-
-	multiverseLeaves, err := a.cfg.Multiverse.FetchLeaves(
-		ctx, uniTargets, proofType,
-	)
-	if err != nil {
-		return none, fmt.Errorf("unable to fetch multiverse "+
-			"leaves: %w", err)
-	}
-
-	// Now that we have the leaves, we'll insert them into an in-memory
-	// tree, so we can obtain the root for this unique combination.
-	memStore := mssmt.NewDefaultStore()
-	tree := mssmt.NewCompactedTree(memStore)
-
-	for _, leaf := range multiverseLeaves {
-		_, err = tree.Insert(ctx, leaf.ID.Bytes(), leaf.LeafNode)
-		if err != nil {
-			return none, fmt.Errorf("unable to insert "+
-				"leaf: %w", err)
-		}
-	}
-
-	customRoot, err := tree.Root(ctx)
-	if err != nil {
-		return none, fmt.Errorf("unable to obtain root: %w", err)
-	}
-
-	multiverseRoot := MultiverseRoot{
-		ProofType: proofType,
-		Node:      customRoot,
-	}
-
-	return fn.Some(multiverseRoot), nil
-}
-
 // UpsertProofLeaf attempts to upsert a proof for an asset issuance or transfer
 // event. This method will return an error if the passed proof is invalid. If
 // the leaf is already known, then no action is taken and the existing
@@ -310,7 +235,7 @@ func (a *Archive) UpsertProofLeaf(ctx context.Context, id Identifier,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to register new "+
-			"issuance: %w", err)
+			"issuance: %v", err)
 	}
 
 	// Log a sync event for the newly inserted leaf in the background as an
@@ -336,10 +261,10 @@ func (a *Archive) verifyIssuanceProof(ctx context.Context, id Identifier,
 
 	assetSnapshot, err := newProof.Verify(
 		ctx, prevAssetSnapshot, a.cfg.HeaderVerifier,
-		a.cfg.MerkleVerifier, a.cfg.GroupVerifier,
+		a.cfg.GroupVerifier,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to verify proof: %w", err)
+		return nil, fmt.Errorf("unable to verify proof: %v", err)
 	}
 
 	newAsset := assetSnapshot.Asset
@@ -559,7 +484,7 @@ func (a *Archive) getPrevAssetSnapshot(ctx context.Context,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse previous "+
-			"script key: %w", err)
+			"script key: %v", err)
 	}
 	prevScriptKey := asset.NewScriptKey(prevScriptKeyPubKey)
 

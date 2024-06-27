@@ -39,7 +39,6 @@ var universeCommands = []cli.Command{
 		Usage:     "Interact with a local or remote tap universe",
 		Category:  "Universe",
 		Subcommands: []cli.Command{
-			multiverseRootCommand,
 			universeRootsCommand,
 			universeDeleteRootCommand,
 			universeLeavesCommand,
@@ -51,48 +50,6 @@ var universeCommands = []cli.Command{
 			universeStatsCommand,
 		},
 	},
-}
-
-var multiverseRootCommand = cli.Command{
-	Name:        "multiverse",
-	ShortName:   "m",
-	Description: "Show the multiverse root",
-	Usage: `
-	Calculate the multiverse root from the current known asset universes of
-	the given proof type.
-	`,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name: proofTypeName,
-			Usage: "the type of proof to show the root for, " +
-				"either 'issuance' or 'transfer'",
-			Value: universe.ProofTypeIssuance.String(),
-		},
-	},
-	Action: multiverseRoot,
-}
-
-func multiverseRoot(ctx *cli.Context) error {
-	ctxc := getContext()
-	client, cleanUp := getUniverseClient(ctx)
-	defer cleanUp()
-
-	rpcProofType, err := parseProofType(ctx)
-	if err != nil {
-		return err
-	}
-
-	multiverseRoot, err := client.MultiverseRoot(
-		ctxc, &unirpc.MultiverseRootRequest{
-			ProofType: *rpcProofType,
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	printRespJSON(multiverseRoot)
-	return nil
 }
 
 var universeRootsCommand = cli.Command{
@@ -516,7 +473,8 @@ var universeProofInsertInsert = cli.Command{
 }
 
 func universeProofInsert(ctx *cli.Context) error {
-	if ctx.String(proofPathName) == "" {
+	switch {
+	case ctx.String(proofPathName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 
@@ -616,7 +574,8 @@ var universeSyncCommand = cli.Command{
 }
 
 func universeSync(ctx *cli.Context) error {
-	if ctx.String(universeHostName) == "" {
+	switch {
+	case ctx.String(universeHostName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 
@@ -719,7 +678,8 @@ var universeFederationAddCommand = cli.Command{
 }
 
 func universeFederationAdd(ctx *cli.Context) error {
-	if ctx.String(universeHostName) == "" {
+	switch {
+	case ctx.String(universeHostName) == "":
 		return cli.ShowSubcommandHelp(ctx)
 	}
 
@@ -768,9 +728,9 @@ var universeFederationDelCommand = cli.Command{
 }
 
 func universeFederationDel(ctx *cli.Context) error {
-	if ctx.String(universeHostName) == "" &&
-		ctx.Int(universeServerID) == 0 {
-
+	switch {
+	case ctx.String(universeHostName) == "" &&
+		ctx.Int(universeServerID) == 0:
 		return cli.ShowSubcommandHelp(ctx)
 	}
 

@@ -51,6 +51,9 @@ func ipAddresses(tlsExtraIPs []string, tlsDisableAutofill bool) ([]net.IP,
 		// Add all the interface IPs that aren't already in the slice.
 		addrs, err := anet.InterfaceAddrs()
 		if err != nil {
+			fmt.Println("cert: failed to get interface addresses:", err)
+		}
+		if err != nil {
 			return nil, err
 		}
 		for _, a := range addrs {

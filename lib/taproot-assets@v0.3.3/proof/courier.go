@@ -129,7 +129,7 @@ func (u *URLDispatch) NewCourier(addr *url.URL,
 
 		hashMailBox, err := NewHashMailBox(addr)
 		if err != nil {
-			return nil, fmt.Errorf("unable to make mailbox: %w",
+			return nil, fmt.Errorf("unable to make mailbox: %v",
 				err)
 		}
 
@@ -621,7 +621,7 @@ func (b *BackoffHandler) Exec(ctx context.Context, proofLocator Locator,
 		backoff    = b.cfg.InitialBackoff
 		numTries   = b.cfg.NumTries
 		maxBackoff = b.cfg.MaxBackoff
-
+		//111
 		// Transfer function return error.
 		errExec error = nil
 	)
@@ -1163,7 +1163,10 @@ func (c *UniverseRpcCourier) ReceiveProof(ctx context.Context,
 			// Retrieve proof from courier.
 			resp, err := c.client.QueryProof(ctx, &universeKey)
 			if err != nil {
-				return fmt.Errorf("error retrieving proof "+
+				return err
+			}
+			if err != nil {
+				return fmt.Errorf("error retreving proof "+
 					"from universe courier service: %w",
 					err)
 			}

@@ -17,7 +17,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/tapdb/sqlc"
 	"github.com/lightninglabs/taproot-assets/tapgarden"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/keychain"
 	"golang.org/x/exp/maps"
 )
@@ -60,10 +59,6 @@ type (
 
 	// AssetGroupKey is used to insert a new asset key group into the DB.
 	AssetGroupKey = sqlc.UpsertAssetGroupKeyParams
-
-	// BatchTapSiblingUpdate is used to update a batch with the root hash
-	// of a tapscript sibling associated with it.
-	BatchTapSiblingUpdate = sqlc.BindMintingBatchWithTapSiblingParams
 
 	// BatchChainUpdate is used to update a batch with the minting
 	// transaction associated with it.
@@ -138,10 +133,6 @@ type PendingAssetStore interface {
 	// GroupStore houses the methods related to querying asset groups.
 	GroupStore
 
-	// TapscriptTreeStore houses the methods related to storing, fetching,
-	// and deleting tapscript trees.
-	TapscriptTreeStore
-
 	// NewMintingBatch creates a new minting batch.
 	NewMintingBatch(ctx context.Context, arg MintingBatchInit) error
 
@@ -185,11 +176,6 @@ type PendingAssetStore interface {
 	// FetchSeedlingByID is used to look up a specific seedling.
 	FetchSeedlingByID(ctx context.Context,
 		seedlingID int64) (AssetSeedling, error)
-
-	// BindMintingBatchWithTapSibling adds a tapscript tree root hash to an
-	// existing batch.
-	BindMintingBatchWithTapSibling(ctx context.Context,
-		arg BatchTapSiblingUpdate) error
 
 	// BindMintingBatchWithTx adds the minting transaction to an existing
 	// batch.
@@ -311,21 +297,6 @@ func (a *AssetMintingStore) CommitMintingBatch(ctx context.Context,
 		}); err != nil {
 			return fmt.Errorf("unable to insert minting "+
 				"batch: %w", err)
-		}
-
-		// With the batch key and batch itself inserted, we can insert
-		// the batch tapscript sibling if present.
-		newBatchSibling := newBatch.TapSibling()
-		if newBatchSibling != nil {
-			tapSibling := BatchTapSiblingUpdate{
-				RawKey:           rawBatchKey,
-				TapscriptSibling: newBatchSibling,
-			}
-			err = q.BindMintingBatchWithTapSibling(ctx, tapSibling)
-			if err != nil {
-				return fmt.Errorf("unable to insert batch "+
-					"sibling: %w", err)
-			}
 		}
 
 		// Now that our minting batch is in place, which references the
@@ -463,7 +434,7 @@ func (a *AssetMintingStore) AddSeedlingsToBatch(ctx context.Context,
 			err = q.InsertAssetSeedlingIntoBatch(ctx, dbSeedling)
 			if err != nil {
 				return fmt.Errorf("unable to insert "+
-					"seedling into db: %w", err)
+					"seedling into db: %v", err)
 			}
 		}
 
@@ -621,8 +592,10 @@ func fetchAssetSprouts(ctx context.Context, q PendingAssetStore,
 						Index: extractSqlInt32[uint32](
 							sprout.GroupKeyIndex,
 						),
-						Family: extractSqlInt32[keychain.KeyFamily](
-							sprout.GroupKeyFamily,
+						Family: keychain.KeyFamily(
+							extractSqlInt32[keychain.KeyFamily](
+								sprout.GroupKeyFamily,
+							),
 						),
 					},
 				},
@@ -674,7 +647,7 @@ func fetchAssetSprouts(ctx context.Context, q PendingAssetStore,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create new sprout: "+
-				"%w", err)
+				"%v", err)
 		}
 
 		// TODO(roasbeef): need to update the above to set the
@@ -876,15 +849,6 @@ func marshalMintingBatch(ctx context.Context, q PendingAssetStore,
 
 	batch.UpdateState(batchState)
 
-	if len(dbBatch.TapscriptSibling) != 0 {
-		batchSibling, err := chainhash.NewHash(dbBatch.TapscriptSibling)
-		if err != nil {
-			return nil, err
-		}
-
-		batch.UpdateTapSibling(batchSibling)
-	}
-
 	if dbBatch.MintingTxPsbt != nil {
 		genesisPkt, err := psbt.NewFromRawBytes(
 			bytes.NewReader(dbBatch.MintingTxPsbt), false,
@@ -892,7 +856,7 @@ func marshalMintingBatch(ctx context.Context, q PendingAssetStore,
 		if err != nil {
 			return nil, err
 		}
-		batch.GenesisPacket = &tapsend.FundedPsbt{
+		batch.GenesisPacket = &tapgarden.FundedPsbt{
 			Pkt: genesisPkt,
 			ChangeOutputIndex: extractSqlInt32[int32](
 				dbBatch.ChangeOutputIndex,
@@ -952,22 +916,6 @@ func (a *AssetMintingStore) UpdateBatchState(ctx context.Context,
 	})
 }
 
-// CommitBatchTapSibling updates the tapscript sibling of a batch based on the
-// batch key.
-func (a *AssetMintingStore) CommitBatchTapSibling(ctx context.Context,
-	batchKey *btcec.PublicKey, batchSibling *chainhash.Hash) error {
-
-	siblingUpdate := BatchTapSiblingUpdate{
-		RawKey:           batchKey.SerializeCompressed(),
-		TapscriptSibling: batchSibling[:],
-	}
-
-	var writeTxOpts AssetStoreTxOptions
-	return a.db.ExecTx(ctx, &writeTxOpts, func(q PendingAssetStore) error {
-		return q.BindMintingBatchWithTapSibling(ctx, siblingUpdate)
-	})
-}
-
 // encodeOutpoint encodes the outpoint point in Bitcoin wire format, returning
 // the final result.
 func encodeOutpoint(outPoint wire.OutPoint) ([]byte, error) {
@@ -984,7 +932,7 @@ func encodeOutpoint(outPoint wire.OutPoint) ([]byte, error) {
 // binds the genesis transaction (which will create the set of assets in the
 // batch) to the batch itself.
 func (a *AssetMintingStore) AddSproutsToBatch(ctx context.Context,
-	batchKey *btcec.PublicKey, genesisPacket *tapsend.FundedPsbt,
+	batchKey *btcec.PublicKey, genesisPacket *tapgarden.FundedPsbt,
 	assetRoot *commitment.TapCommitment) error {
 
 	// Before we open the DB transaction below, we'll fetch the set of
@@ -1026,7 +974,7 @@ func (a *AssetMintingStore) AddSproutsToBatch(ctx context.Context,
 		// the genesis packet, and genesis point information.
 		var psbtBuf bytes.Buffer
 		if err := genesisPacket.Pkt.Serialize(&psbtBuf); err != nil {
-			return fmt.Errorf("unable to encode psbt: %w", err)
+			return fmt.Errorf("unable to encode psbt: %v", err)
 		}
 		err = q.BindMintingBatchWithTx(ctx, BatchChainUpdate{
 			RawKey:        rawBatchKey,
@@ -1057,9 +1005,8 @@ func (a *AssetMintingStore) AddSproutsToBatch(ctx context.Context,
 // TODO(roasbeef): or could just re-read assets from disk and set the script
 // root manually?
 func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
-	batchKey *btcec.PublicKey, genesisPkt *tapsend.FundedPsbt,
-	anchorOutputIndex uint32, merkleRoot, tapTreeRoot []byte,
-	tapSibling []byte) error {
+	batchKey *btcec.PublicKey, genesisPkt *tapgarden.FundedPsbt,
+	anchorOutputIndex uint32, merkleRoot []byte) error {
 
 	// The managed UTXO we'll insert only contains the raw tx of the
 	// genesis packet, so we'll extract that now.
@@ -1127,11 +1074,13 @@ func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
 		// batch, we'll create a new managed UTXO for this batch as
 		// this is where all the assets will be anchored within.
 		utxoID, err := q.UpsertManagedUTXO(ctx, RawManagedUTXO{
-			RawKey:           rawBatchKey,
-			Outpoint:         anchorOutpoint,
-			AmtSats:          anchorOutput.Value,
-			TaprootAssetRoot: tapTreeRoot,
-			TapscriptSibling: tapSibling,
+			RawKey:   rawBatchKey,
+			Outpoint: anchorOutpoint,
+			AmtSats:  anchorOutput.Value,
+			// When minting, we never have a tapscript sibling, so
+			// the TaprootAssetRoot root is always equal to the
+			// merkle root.
+			TaprootAssetRoot: merkleRoot,
 			MerkleRoot:       merkleRoot,
 			TxnID:            chainTXID,
 		})
@@ -1147,11 +1096,10 @@ func (a *AssetMintingStore) CommitSignedGenesisTx(ctx context.Context,
 			AnchorUtxoID: sqlInt64(utxoID),
 		})
 		if err != nil {
-			return fmt.Errorf("unable to anchor pending assets: %w",
-				err)
+			return fmt.Errorf("unable to anchor pending assets: %v", err)
 		}
 
-		// Next, we'll anchor the genesis point-to-point to the chain
+		// Next, we'll anchor the genesis point to point to the chain
 		// transaction we inserted above.
 		if err := q.AnchorGenesisPoint(ctx, GenesisPointAnchor{
 			PrevOut:    genesisOutpoint,
@@ -1262,122 +1210,6 @@ func (a *AssetMintingStore) FetchGroupByGroupKey(ctx context.Context,
 	return dbGroup, nil
 }
 
-// StoreTapscriptTree persists a Tapscript tree given a validated set of
-// TapLeafs or a TapBranch. If the store succeeds, the root hash of the
-// Tapscript tree is returned.
-func (a *AssetMintingStore) StoreTapscriptTree(ctx context.Context,
-	treeNodes asset.TapscriptTreeNodes) (*chainhash.Hash, error) {
-
-	var (
-		rootHash       chainhash.Hash
-		isBranch       bool
-		treeNodesBytes [][]byte
-		err            error
-	)
-
-	asset.GetLeaves(treeNodes).WhenSome(func(tln asset.TapLeafNodes) {
-		rootHash = asset.LeafNodesRootHash(tln)
-		treeNodesBytes, err = asset.EncodeTapLeafNodes(tln)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// For a TapBranch, we must set isBranch to ensure that the branch data
-	// will be decoded correctly.
-	asset.GetBranch(treeNodes).WhenSome(func(tbn asset.TapBranchNodes) {
-		isBranch = true
-		rootHash = asset.BranchNodesRootHash(tbn)
-		treeNodesBytes = asset.EncodeTapBranchNodes(tbn)
-	})
-
-	// If no tapscript tree data was encoded, the given tapscript tree was
-	// malformed. Return before modifying the database.
-	if len(treeNodesBytes) == 0 {
-		return nil, fmt.Errorf("unable to encode tapscript tree")
-	}
-
-	var writeTxOpts AssetStoreTxOptions
-	err = a.db.ExecTx(ctx, &writeTxOpts, func(a PendingAssetStore) error {
-		return upsertTapscriptTree(
-			ctx, a, rootHash[:], isBranch, treeNodesBytes,
-		)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &rootHash, nil
-}
-
-// LoadTapscriptTree loads the Tapscript tree with the given root hash, and
-// decodes the tree into a TapscriptTreeNodes object.
-func (a *AssetMintingStore) LoadTapscriptTree(ctx context.Context,
-	rootHash chainhash.Hash) (*asset.TapscriptTreeNodes, error) {
-
-	var (
-		dbTreeNodes []TapscriptTreeNode
-		err         error
-	)
-
-	readOpts := NewAssetStoreReadTx()
-	dbErr := a.db.ExecTx(ctx, &readOpts, func(a PendingAssetStore) error {
-		dbTreeNodes, err = a.FetchTapscriptTree(ctx, rootHash[:])
-		return err
-	})
-	if dbErr != nil {
-		return nil, dbErr
-	}
-
-	// The query can return zero nodes without returning an error, so handle
-	// that case explicitly here.
-	if len(dbTreeNodes) == 0 {
-		return nil, asset.ErrTreeNotFound
-	}
-
-	nodeBytes := fn.Map(dbTreeNodes, func(dbNode TapscriptTreeNode) []byte {
-		return dbNode.RawNode
-	})
-
-	// Each node signals if the tree was stored as a set of leaves or a
-	// branch, so we can read this flag from any node.
-	isBranch := dbTreeNodes[0].BranchOnly
-	if isBranch {
-		// For a tree stored as a TapBranch, there can only be two nodes
-		// returned.
-		if len(dbTreeNodes) != 2 {
-			return nil, asset.ErrInvalidTapBranch
-		}
-
-		branchNodes, err := asset.DecodeTapBranchNodes(nodeBytes)
-		if err != nil {
-			return nil, err
-		}
-
-		return fn.Ptr(asset.FromBranch(*branchNodes)), nil
-	}
-
-	// If the tree was not stored as a branch, it must be a set of leaves.
-	leafNodes, err := asset.DecodeTapLeafNodes(nodeBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return fn.Ptr(asset.FromLeaves(*leafNodes)), nil
-}
-
-// DeleteTapscriptTree deletes the Tapscript tree with the given root hash,
-// including all nodes and edges.
-func (a *AssetMintingStore) DeleteTapscriptTree(ctx context.Context,
-	rootHash chainhash.Hash) error {
-
-	var writeTxOpts AssetStoreTxOptions
-	return a.db.ExecTx(ctx, &writeTxOpts, func(a PendingAssetStore) error {
-		return deleteTapscriptTree(ctx, a, rootHash[:])
-	})
-}
-
 // A compile-time assertion to ensure that AssetMintingStore meets the
 // tapgarden.MintingStore interface.
 var _ tapgarden.MintingStore = (*AssetMintingStore)(nil)
-var _ asset.TapscriptTreeManager = (*AssetMintingStore)(nil)

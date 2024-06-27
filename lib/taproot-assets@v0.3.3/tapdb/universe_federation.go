@@ -279,7 +279,7 @@ func (u *UniverseFederationDB) RemoveServers(ctx context.Context,
 			// host string instead. This avoids bugs where a user
 			// doesn't set the ID value, and we try to delete the
 			// very first server.
-			uniID := a.ID
+			uniID := int64(a.ID)
 			if a.HostStr() != "" {
 				uniID = -1
 			}
@@ -787,7 +787,7 @@ func (u *UniverseFederationDB) QueryFederationSyncConfigs(
 				pubKey, err = btcec.ParsePubKey(config.GroupKey)
 				if err != nil {
 					return fmt.Errorf("unable to parse "+
-						"group key: %w", err)
+						"group key: %v", err)
 				}
 			}
 

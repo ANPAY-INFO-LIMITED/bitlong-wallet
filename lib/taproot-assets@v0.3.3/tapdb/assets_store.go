@@ -141,20 +141,6 @@ type (
 	// QueryProofTransAttemptsParams is a type alias for the params needed
 	// to query the proof transfer attempts log.
 	QueryProofTransAttemptsParams = sqlc.QueryProofTransferAttemptsParams
-
-	// TapscriptTreeRootHash is a type alias for the params needed to insert
-	// a tapscript tree root hash.
-	TapscriptTreeRootHash = sqlc.UpsertTapscriptTreeRootHashParams
-
-	// TapscriptTreeEdge is a type alias for the params needed to insert an
-	// edge that links a tapscript tree node to a root hash, and records
-	// the order of the node in the tapscript tree.
-	TapscriptTreeEdge = sqlc.UpsertTapscriptTreeEdgeParams
-
-	// TapscriptTreeNode is a type alias for a tapscript tree node returned
-	// when fetching a tapscript tree, which includes the serialized node
-	// and the node index in the tree.
-	TapscriptTreeNode = sqlc.FetchTapscriptTreeRow
 )
 
 // ActiveAssetsStore is a sub-set of the main sqlc.Querier interface that
@@ -649,7 +635,7 @@ func (a *AssetStore) dbAssetsToChainAssets(dbAssets []ConfirmedAsset,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create new sprout: "+
-				"%w", err)
+				"%v", err)
 		}
 
 		// We cannot use 0 as the amount when creating a new asset with
@@ -835,7 +821,7 @@ func fetchAssetsWithWitness(ctx context.Context, q ActiveAssetsStore,
 	// First, we'll fetch all the assets we know of on disk.
 	dbAssets, err := q.QueryAssets(ctx, assetFilter)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to read db assets: %w", err)
+		return nil, nil, fmt.Errorf("unable to read db assets: %v", err)
 	}
 
 	assetIDs := fMap(dbAssets, func(a ConfirmedAsset) int64 {
@@ -1153,8 +1139,7 @@ func (a *AssetStore) FetchAssetProofs(ctx context.Context,
 		// TODO(roasbeef): can modify the query to use IN somewhere
 		// instead? then would take input params and insert into
 		// virtual rows to use
-		for ind := range targetAssets {
-			locator := targetAssets[ind]
+		for _, locator := range targetAssets {
 			args, err := locatorToProofQuery(locator)
 			if err != nil {
 				return err
@@ -1427,7 +1412,7 @@ func (a *AssetStore) insertAssetWitnesses(ctx context.Context,
 			WitnessIndex:         int32(idx),
 		})
 		if err != nil {
-			return fmt.Errorf("unable to insert witness: %w", err)
+			return fmt.Errorf("unable to insert witness: %v", err)
 		}
 	}
 
@@ -1600,7 +1585,7 @@ func (a *AssetStore) upsertAssetProof(ctx context.Context,
 //
 // NOTE: This implements the proof.ArchiveBackend interface.
 func (a *AssetStore) ImportProofs(ctx context.Context, _ proof.HeaderVerifier,
-	_ proof.MerkleVerifier, _ proof.GroupVerifier, replace bool,
+	_ proof.GroupVerifier, replace bool,
 	proofs ...*proof.AnnotatedProof) error {
 
 	var writeTxOpts AssetStoreTxOptions
@@ -2047,27 +2032,11 @@ func (a *AssetStore) LogPendingParcel(ctx context.Context,
 			}
 		}
 
-		// Then the passive assets.
-		if len(spend.PassiveAssets) > 0 {
-			if spend.PassiveAssetsAnchor == nil {
-				return fmt.Errorf("passive assets anchor is " +
-					"required")
-			}
-
-			err = insertPassiveAssets(
-				ctx, q, transferID, txnID,
-				spend.PassiveAssetsAnchor, spend.PassiveAssets,
-			)
-			if err != nil {
-				return fmt.Errorf("unable to insert passive "+
-					"assets: %w", err)
-			}
-		}
-
 		// And then finally the outputs.
 		for idx := range spend.Outputs {
 			err = insertAssetTransferOutput(
 				ctx, q, transferID, txnID, spend.Outputs[idx],
+				spend.PassiveAssets,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to insert asset "+
@@ -2152,65 +2121,11 @@ func fetchAssetTransferInputs(ctx context.Context, q ActiveAssetsStore,
 	return inputs, nil
 }
 
-// insertPassiveAssets creates the database entries for the passive assets. The
-// main difference between an active and passive asset on the database level is
-// that we do not create a new asset entry for the passive assets. Instead, we
-// simply re-anchor the existing asset entry to the new anchor point.
-func insertPassiveAssets(ctx context.Context, q ActiveAssetsStore,
-	transferID, txnID int64, anchor *tapfreighter.Anchor,
-	passiveAssets []*tappsbt.VPacket) error {
-
-	anchorPointBytes, err := encodeOutpoint(anchor.OutPoint)
-	if err != nil {
-		return err
-	}
-
-	internalKeyBytes := anchor.InternalKey.PubKey.SerializeCompressed()
-
-	// First, we'll insert the new internal on disk, so we can reference it
-	// later when we go to apply the new transfer.
-	_, err = q.UpsertInternalKey(ctx, InternalKey{
-		RawKey:    internalKeyBytes,
-		KeyFamily: int32(anchor.InternalKey.Family),
-		KeyIndex:  int32(anchor.InternalKey.Index),
-	})
-	if err != nil {
-		return fmt.Errorf("unable to upsert internal key: %w", err)
-	}
-
-	// Now that the chain transaction has been inserted, we can now insert
-	// a _new_ managed UTXO which houses the information related to the new
-	// anchor point of the transaction.
-	newUtxoID, err := q.UpsertManagedUTXO(ctx, RawManagedUTXO{
-		RawKey:           internalKeyBytes,
-		Outpoint:         anchorPointBytes,
-		AmtSats:          int64(anchor.Value),
-		TaprootAssetRoot: anchor.TaprootAssetRoot,
-		MerkleRoot:       anchor.MerkleRoot,
-		TapscriptSibling: anchor.TapscriptSibling,
-		TxnID:            txnID,
-	})
-	if err != nil {
-		return fmt.Errorf("unable to insert new managed utxo: %w", err)
-	}
-
-	// And now that we know the ID of that new anchor TX, we can
-	// store the passive assets, referencing that new UTXO.
-	err = logPendingPassiveAssets(
-		ctx, q, transferID, newUtxoID, passiveAssets,
-	)
-	if err != nil {
-		return fmt.Errorf("unable to log passive assets: %w",
-			err)
-	}
-
-	return nil
-}
-
 // insertAssetTransferOutput inserts a new asset transfer output into the DB
 // and returns its ID.
 func insertAssetTransferOutput(ctx context.Context, q ActiveAssetsStore,
-	transferID, txnID int64, output tapfreighter.TransferOutput) error {
+	transferID, txnID int64, output tapfreighter.TransferOutput,
+	passiveAssets []*tapfreighter.PassiveAssetReAnchor) error {
 
 	anchor := output.Anchor
 	anchorPointBytes, err := encodeOutpoint(anchor.OutPoint)
@@ -2245,6 +2160,19 @@ func insertAssetTransferOutput(ctx context.Context, q ActiveAssetsStore,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to insert new managed utxo: %w", err)
+	}
+
+	// Is this the output that will be used to re-anchor the passive asset?
+	if output.Anchor.NumPassiveAssets > 0 {
+		// And now that we know the ID of that new anchor TX, we can
+		// store the passive assets, referencing that new UTXO.
+		err = logPendingPassiveAssets(
+			ctx, q, transferID, newUtxoID, passiveAssets,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to log passive assets: %w",
+				err)
+		}
 	}
 
 	var (
@@ -2440,25 +2368,17 @@ func fetchAssetTransferOutputs(ctx context.Context, q ActiveAssetsStore,
 // logPendingPassiveAssets logs passive assets re-anchoring data to disk.
 func logPendingPassiveAssets(ctx context.Context,
 	q ActiveAssetsStore, transferID, newUtxoID int64,
-	passiveAssets []*tappsbt.VPacket) error {
+	passiveAssets []*tapfreighter.PassiveAssetReAnchor) error {
 
 	for idx := range passiveAssets {
-		passiveAsset := passiveAssets[idx]
-		passiveIn := passiveAsset.Inputs[0]
-		passiveOut := passiveAsset.Outputs[0]
-		witnesses, err := passiveOut.PrevWitnesses()
-		if err != nil {
-			return fmt.Errorf("unable to extract prev witnesses: "+
-				"%w", err)
-		}
-
 		// Encode new witness data.
 		var (
+			passiveAsset  = passiveAssets[idx]
 			newWitnessBuf bytes.Buffer
 			buf           [8]byte
 		)
-		err = asset.WitnessEncoder(
-			&newWitnessBuf, &witnesses, &buf,
+		err := asset.WitnessEncoder(
+			&newWitnessBuf, &passiveAsset.NewWitnessData, &buf,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to encode witness: "+
@@ -2467,7 +2387,7 @@ func logPendingPassiveAssets(ctx context.Context,
 
 		// Encode new proof.
 		var newProofBuf bytes.Buffer
-		err = passiveOut.ProofSuffix.Encode(&newProofBuf)
+		err = passiveAsset.NewProof.Encode(&newProofBuf)
 		if err != nil {
 			return fmt.Errorf("unable to encode new passive "+
 				"asset proof: %w", err)
@@ -2475,7 +2395,7 @@ func logPendingPassiveAssets(ctx context.Context,
 
 		// Encode previous anchor outpoint.
 		prevOutpointBytes, err := encodeOutpoint(
-			passiveIn.PrevID.OutPoint,
+			passiveAsset.PrevAnchorPoint,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to encode prev outpoint: "+
@@ -2483,7 +2403,7 @@ func logPendingPassiveAssets(ctx context.Context,
 		}
 
 		// Encode script key.
-		scriptKey := passiveOut.ScriptKey
+		scriptKey := passiveAsset.ScriptKey
 		scriptKeyBytes := scriptKey.PubKey.SerializeCompressed()
 
 		err = q.InsertPassiveAsset(
@@ -2494,8 +2414,8 @@ func logPendingPassiveAssets(ctx context.Context,
 				NewProof:        newProofBuf.Bytes(),
 				PrevOutpoint:    prevOutpointBytes,
 				ScriptKey:       scriptKeyBytes,
-				AssetGenesisID:  passiveIn.PrevID.ID[:],
-				AssetVersion:    int32(passiveOut.AssetVersion),
+				AssetGenesisID:  passiveAsset.GenesisID[:],
+				AssetVersion:    int32(passiveAsset.AssetVersion),
 			},
 		)
 		if err != nil {
@@ -2652,7 +2572,9 @@ func (a *AssetStore) ConfirmParcelDelivery(ctx context.Context,
 			isNumsKey := scriptPubKey.IsEqual(asset.NUMSPubKey)
 			isTombstone := isNumsKey &&
 				out.Amount == 0 &&
-				out.OutputType == int16(tappsbt.TypeSplitRoot)
+				out.OutputType != int16(
+					tappsbt.TypePassiveAssetsOnly,
+				)
 			isBurn := !isNumsKey && len(witnessData) > 0 &&
 				asset.IsBurnKey(scriptPubKey, witnessData[0])
 
@@ -2881,31 +2803,22 @@ func (a *AssetStore) reAnchorPassiveAssets(ctx context.Context,
 func (a *AssetStore) PendingParcels(
 	ctx context.Context) ([]*tapfreighter.OutboundParcel, error) {
 
-	return a.QueryParcels(ctx, nil, true)
+	return a.QueryParcels(ctx, true)
 }
 
 // QueryParcels returns the set of confirmed or unconfirmed parcels.
 func (a *AssetStore) QueryParcels(ctx context.Context,
-	anchorTxHash *chainhash.Hash,
 	pending bool) ([]*tapfreighter.OutboundParcel, error) {
 
 	var transfers []*tapfreighter.OutboundParcel
 
 	readOpts := NewAssetStoreReadTx()
 	dbErr := a.db.ExecTx(ctx, &readOpts, func(q ActiveAssetsStore) error {
-		// Construct transfer query.
-		transferQuery := TransferQuery{
-			UnconfOnly: pending,
-		}
-
-		// Include anchor tx hash if specified.
-		if anchorTxHash != nil {
-			transferQuery.AnchorTxHash = anchorTxHash[:]
-		}
-
 		// If we want every unconfirmed transfer, then we only pass in
 		// the UnconfOnly field.
-		dbTransfers, err := q.QueryAssetTransfers(ctx, transferQuery)
+		dbTransfers, err := q.QueryAssetTransfers(ctx, TransferQuery{
+			UnconfOnly: pending,
+		})
 		if err != nil {
 			return err
 		}

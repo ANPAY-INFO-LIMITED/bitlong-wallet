@@ -15,7 +15,6 @@ import (
 	"github.com/lightninglabs/lndclient"
 	"github.com/lightninglabs/taproot-assets/tapfreighter"
 	"github.com/lightninglabs/taproot-assets/tapgarden"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/lightningnetwork/lnd/lnwallet"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -44,12 +43,13 @@ const (
 // FundPsbt attaches enough inputs to the target PSBT packet for it to be
 // valid.
 func (l *LndRpcWalletAnchor) FundPsbt(ctx context.Context, packet *psbt.Packet,
-	minConfs uint32, feeRate chainfee.SatPerKWeight) (*tapsend.FundedPsbt,
+	minConfs uint32, feeRate chainfee.SatPerKWeight) (tapgarden.FundedPsbt,
 	error) {
 
 	var psbtBuf bytes.Buffer
 	if err := packet.Serialize(&psbtBuf); err != nil {
-		return nil, fmt.Errorf("unable to encode psbt: %w", err)
+		return tapgarden.FundedPsbt{}, fmt.Errorf("unable to encode "+
+			"psbt: %w", err)
 	}
 
 	pkt, changeIndex, leasedUtxos, err := l.lnd.WalletKit.FundPsbt(
@@ -65,14 +65,15 @@ func (l *LndRpcWalletAnchor) FundPsbt(ctx context.Context, packet *psbt.Packet,
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to fund psbt: %w", err)
+		return tapgarden.FundedPsbt{}, fmt.Errorf("unable to fund "+
+			"psbt: %w", err)
 	}
 
 	lockedUtxos := make([]wire.OutPoint, len(leasedUtxos))
 	for i, utxo := range leasedUtxos {
 		txid, err := chainhash.NewHash(utxo.Outpoint.TxidBytes)
 		if err != nil {
-			return nil, err
+			return tapgarden.FundedPsbt{}, err
 		}
 		lockedUtxos[i] = wire.OutPoint{
 			Hash:  *txid,
@@ -80,7 +81,7 @@ func (l *LndRpcWalletAnchor) FundPsbt(ctx context.Context, packet *psbt.Packet,
 		}
 	}
 
-	return &tapsend.FundedPsbt{
+	return tapgarden.FundedPsbt{
 		Pkt:               pkt,
 		ChangeOutputIndex: changeIndex,
 		LockedUTXOs:       lockedUtxos,

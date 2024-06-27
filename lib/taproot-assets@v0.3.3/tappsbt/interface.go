@@ -3,7 +3,6 @@ package tappsbt
 import (
 	"bytes"
 	"fmt"
-	"net/url"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil"
@@ -14,7 +13,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/fn"
-	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -52,26 +50,16 @@ var (
 	PsbtKeyTypeOutputTapAsset                              = []byte{0x76}
 	PsbtKeyTypeOutputTapSplitAsset                         = []byte{0x77}
 	PsbtKeyTypeOutputTapAnchorTapscriptSibling             = []byte{0x78}
-	PsbtKeyTypeOutputTapAssetVersion                       = []byte{0x79}
-	PsbtKeyTypeOutputTapProofDeliveryAddress               = []byte{0x7a}
-	PsbtKeyTypeOutputTapAssetProofSuffix                   = []byte{0x7b}
+	PsbtKeyTypeOutputAssetVersion                          = []byte{0x79}
 )
 
 // The following keys are used as custom fields on the BTC level anchor
 // transaction PSBTs only. They are defined here for completeness' sake but are
 // not directly used by the tappsbt package.
 var (
-	// PsbtKeyTypeOutputTaprootMerkleRoot is the key used to store the
-	// Taproot Merkle root in the BTC level anchor transaction PSBT. This
-	// is the top level Merkle root, meaning that it combines the Taproot
-	// Asset commitment root below and tapscript sibling (if present). If
-	// this is equal to the asset root then that means there is no tapscript
-	// sibling.
-	PsbtKeyTypeOutputTaprootMerkleRoot = []byte{0x70}
+	PsbtKeyTypeInputTapProof = []byte{0x70}
 
-	// PsbtKeyTypeOutputAssetRoot is the key used to store the Taproot Asset
-	// commitment root hash in the BTC level anchor transaction PSBT.
-	PsbtKeyTypeOutputAssetRoot = []byte{0x71}
+	PsbtKeyTypeOutputTapProof = []byte{0x70}
 )
 
 // VOutPredicate is a function that can be used to filter virtual outputs.
@@ -90,6 +78,12 @@ var (
 	// output is a split root output.
 	VOutIsSplitRoot = func(o *VOutput) bool {
 		return o.Type.IsSplitRoot()
+	}
+
+	// VOutCanCarryPassive is a predicate that returns true if the virtual
+	// output can carry passive assets.
+	VOutCanCarryPassive = func(o *VOutput) bool {
+		return o.Type.CanCarryPassive()
 	}
 
 	// VOutIsNotSplitRoot is a predicate that returns true if the virtual
@@ -162,11 +156,12 @@ type VPacket struct {
 }
 
 // SetInputAsset sets the input asset that is being spent.
-func (p *VPacket) SetInputAsset(index int, a *asset.Asset) {
+func (p *VPacket) SetInputAsset(index int, a *asset.Asset, proof []byte) {
 	if index >= len(p.Inputs) {
 		p.Inputs = append(p.Inputs, &VInput{})
 	}
 	p.Inputs[index].asset = a.Copy()
+	p.Inputs[index].proof = proof
 	p.Inputs[index].serializeScriptKey(
 		a.ScriptKey, p.ChainParams.HDCoinType,
 	)
@@ -229,6 +224,18 @@ func (p *VPacket) SplitRootOutput() (*VOutput, error) {
 	return fn.First(p.Outputs, VOutIsSplitRoot)
 }
 
+// PassiveAssetsOutput returns the output in the virtual transaction that can
+// carry passive assets, or an error if there is none or more than one.
+func (p *VPacket) PassiveAssetsOutput() (*VOutput, error) {
+	count := fn.Count(p.Outputs, VOutCanCarryPassive)
+	if count != 1 {
+		return nil, fmt.Errorf("expected 1 passive assets carrier "+
+			"output, got %d", count)
+	}
+
+	return fn.First(p.Outputs, VOutCanCarryPassive)
+}
+
 // FirstNonSplitRootOutput returns the first non-change output in the virtual
 // transaction.
 func (p *VPacket) FirstNonSplitRootOutput() (*VOutput, error) {
@@ -249,27 +256,6 @@ func (p *VPacket) FirstInteractiveOutput() (*VOutput, error) {
 	}
 
 	return result, nil
-}
-
-// AssetID returns the asset ID of the virtual transaction. It returns an error
-// if the virtual transaction has no inputs or if the inputs have different
-// asset IDs.
-func (p *VPacket) AssetID() (asset.ID, error) {
-	if len(p.Inputs) == 0 {
-		return asset.ID{}, fmt.Errorf("no inputs")
-	}
-
-	firstID := p.Inputs[0].PrevID.ID
-	for idx := range p.Inputs {
-		if p.Inputs[idx].PrevID.ID != firstID {
-			return asset.ID{}, fmt.Errorf("packet has inputs with "+
-				"different asset IDs, index 0 has ID %v and "+
-				"index %d has ID %v", firstID, idx,
-				p.Inputs[idx].PrevID.ID)
-		}
-	}
-
-	return firstID, nil
 }
 
 // Anchor is a struct that contains all the information about an anchor output.
@@ -323,14 +309,21 @@ type VInput struct {
 	// input struct for the signing to work correctly.
 	asset *asset.Asset
 
-	// Proof is a transition proof that proves the asset being spent was
-	// committed to in the anchor transaction above.
-	Proof *proof.Proof
+	// proof is the proof blob that proves the asset being spent was
+	// committed to in the anchor transaction above. This cannot be of type
+	// proof.Proof directly because that would cause a circular dependency.
+	proof []byte
 }
 
 // Asset returns the input's asset that's being spent.
 func (i *VInput) Asset() *asset.Asset {
 	return i.asset
+}
+
+// Proof returns the proof blob that the asset being spent was committed to in
+// the anchor transaction.
+func (i *VInput) Proof() []byte {
+	return i.proof
 }
 
 // serializeScriptKey serializes the input asset's script key as the PSBT
@@ -391,12 +384,59 @@ const (
 	// split or a tombstone from a non-interactive full value send output.
 	// In either case, the asset of this output has a tx witness.
 	TypeSplitRoot VOutputType = 1
+
+	// TypePassiveAssetsOnly indicates that this output only carries passive
+	// assets and therefore the asset in this output is nil. The passive
+	// assets themselves are signed in their own virtual transactions and
+	// are not present in this packet.
+	TypePassiveAssetsOnly VOutputType = 2
+
+	// TypePassiveSplitRoot is a split root output that carries the change
+	// from a split or a tombstone from a non-interactive full value send
+	// output, as well as passive assets.
+	TypePassiveSplitRoot VOutputType = 3
+
+	// TypeSimplePassiveAssets is a plain full-value interactive send output
+	// that also carries passive assets. This is a special case where we
+	// send the full value of a single asset in a commitment to a new script
+	// key, but also carry passive assets in the same output. This is useful
+	// for key rotation (send-to-self) scenarios or asset burns where we
+	// burn the full supply of a single asset within a commitment.
+	TypeSimplePassiveAssets VOutputType = 4
 )
 
 // IsSplitRoot returns true if the output type is a split root, indicating that
 // the asset has a tx witness instead of a split witness.
 func (t VOutputType) IsSplitRoot() bool {
-	return t == TypeSplitRoot
+	return t == TypeSplitRoot || t == TypePassiveSplitRoot
+}
+
+// CanBeInteractive returns true if the output type is compatible with being an
+// interactive send.
+func (t VOutputType) CanBeInteractive() bool {
+	switch t {
+	case TypeSimple, TypeSplitRoot, TypePassiveAssetsOnly,
+		TypePassiveSplitRoot, TypeSimplePassiveAssets:
+
+		return true
+
+	default:
+		return false
+	}
+}
+
+// CanCarryPassive returns true if the output type is compatible with carrying
+// passive assets.
+func (t VOutputType) CanCarryPassive() bool {
+	switch t {
+	case TypePassiveAssetsOnly, TypePassiveSplitRoot,
+		TypeSimplePassiveAssets:
+
+		return true
+
+	default:
+		return false
+	}
 }
 
 // String returns a human-readable string representation of the output type.
@@ -408,18 +448,23 @@ func (t VOutputType) String() string {
 	case TypeSplitRoot:
 		return "split_root"
 
+	case TypePassiveAssetsOnly:
+		return "passive_assets_only"
+
+	case TypePassiveSplitRoot:
+		return "passive_split_root"
+
+	case TypeSimplePassiveAssets:
+		return "simple_passive_assets"
+
 	default:
 		return fmt.Sprintf("unknown <%d>", t)
 	}
 }
 
-// InputCommitments is a map from virtual package input prevID to its
+// InputCommitments is a map from virtual package input index to its
 // associated Taproot Asset commitment.
-type InputCommitments = map[asset.PrevID]*commitment.TapCommitment
-
-// OutputCommitments is a map from anchor transaction output index to its
-// associated Taproot Asset commitment.
-type OutputCommitments = map[uint32]*commitment.TapCommitment
+type InputCommitments = map[int]*commitment.TapCommitment
 
 // VOutput represents an output of a virtual asset state transition.
 type VOutput struct {
@@ -484,17 +529,6 @@ type VOutput struct {
 	// serialized, this will be stored in the TaprootInternalKey and
 	// TaprootDerivationPath fields of the PSBT output.
 	ScriptKey asset.ScriptKey
-
-	// ProofDeliveryAddress is the address to which the proof of the asset
-	// transfer should be delivered.
-	ProofDeliveryAddress *url.URL
-
-	// ProofSuffix is the optional new transition proof blob that is created
-	// once the asset output was successfully committed to the anchor
-	// transaction referenced above. The proof suffix is not yet complete
-	// since the header information needs to be added once the anchor
-	// transaction was confirmed in a block.
-	ProofSuffix *proof.Proof
 }
 
 // SplitLocator creates a split locator from the output. The asset ID is passed
@@ -541,23 +575,6 @@ func (o *VOutput) AnchorKeyToDesc() (keychain.KeyDescriptor, error) {
 	}
 
 	return KeyDescFromBip32Derivation(o.AnchorOutputBip32Derivation[0])
-}
-
-// PrevWitnesses returns the previous witnesses of the asset output. If the
-// asset is a split root, the witness of the root asset is returned. If the
-// output asset is nil an error is returned.
-func (o *VOutput) PrevWitnesses() ([]asset.Witness, error) {
-	if o.Asset == nil {
-		return nil, fmt.Errorf("asset is not set")
-	}
-
-	prevWitness := o.Asset.PrevWitnesses
-	if o.Asset.HasSplitCommitmentWitness() {
-		rootAsset := prevWitness[0].SplitCommitment.RootAsset
-		prevWitness = rootAsset.PrevWitnesses
-	}
-
-	return prevWitness, nil
 }
 
 // KeyDescFromBip32Derivation attempts to extract the key descriptor from the
@@ -646,39 +663,6 @@ func AddTaprootBip32Derivation(derivations []*psbt.TaprootBip32Derivation,
 	return append(derivations, target)
 }
 
-// ExtractCustomField returns the value of a custom field in the given unknown
-// values by key. If the key is not found, nil is returned.
-func ExtractCustomField(unknowns []*psbt.Unknown, key []byte) []byte {
-	for _, customField := range unknowns {
-		if bytes.Equal(customField.Key, key) {
-			return customField.Value
-		}
-	}
-
-	return nil
-}
-
-// AddCustomField adds a custom field to the given unknown values. If the key is
-// already present, the value is updated.
-func AddCustomField(unknowns []*psbt.Unknown, key,
-	value []byte) []*psbt.Unknown {
-
-	// Do we already have a custom field with this key?
-	unknown, err := fn.First(unknowns, func(u *psbt.Unknown) bool {
-		return bytes.Equal(u.Key, key)
-	})
-	if err != nil {
-		// An error means no item found. So we add a new one.
-		return append(unknowns, &psbt.Unknown{
-			Key:   key,
-			Value: value,
-		})
-	}
-
-	unknown.Value = value
-	return unknowns
-}
-
 // extractLocatorFromPath extracts the key family and index from the given
 // BIP-0032 derivation path. The derivation path is expected to be of the form:
 //
@@ -765,20 +749,4 @@ func deserializeTweakedScriptKey(pOut psbt.POutput) (*asset.TweakedScriptKey,
 		RawKey: rawKeyDesc,
 		Tweak:  tweak,
 	}, nil
-}
-
-// Encode encodes the virtual packet into a byte slice.
-func Encode(vPkt *VPacket) ([]byte, error) {
-	var buf bytes.Buffer
-	err := vPkt.Serialize(&buf)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// Decode decodes a virtual packet from a byte slice.
-func Decode(encoded []byte) (*VPacket, error) {
-	return NewFromRawBytes(bytes.NewReader(encoded), false)
 }
