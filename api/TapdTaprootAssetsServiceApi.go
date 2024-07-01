@@ -120,7 +120,6 @@ func GetInfoOfTap() string {
 func ListAssets(withWitness, includeSpent, includeLeased bool) string {
 	response, err := listAssets(withWitness, includeSpent, includeLeased)
 	if err != nil {
-		fmt.Printf("%s taprpc ListAssets Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
@@ -428,6 +427,11 @@ type ListAssetBalanceInfo struct {
 	Balance      string `json:"balance"`
 }
 
+type ListAssetGroupBalanceInfo struct {
+	GroupKey string `json:"group_key"`
+	Balance  string `json:"balance"`
+}
+
 func ProcessListBalancesResponse(response *taprpc.ListBalancesResponse) *[]ListAssetBalanceInfo {
 	var listAssetBalanceInfos []ListAssetBalanceInfo
 	for _, balance := range response.AssetBalances {
@@ -445,12 +449,31 @@ func ProcessListBalancesResponse(response *taprpc.ListBalancesResponse) *[]ListA
 	return &listAssetBalanceInfos
 }
 
+func ProcessListBalancesByGroupKeyResponse(response *taprpc.ListBalancesResponse) *[]ListAssetGroupBalanceInfo {
+	var listAssetBalanceInfos []ListAssetGroupBalanceInfo
+	for _, balance := range response.AssetGroupBalances {
+		listAssetBalanceInfos = append(listAssetBalanceInfos, ListAssetGroupBalanceInfo{
+			GroupKey: hex.EncodeToString(balance.GroupKey),
+			Balance:  strconv.FormatUint(balance.Balance, 10),
+		})
+	}
+	return &listAssetBalanceInfos
+}
+
 func ListBalances() string {
 	response, err := listBalances(false, nil, nil)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListBalancesResponse(response))
+}
+
+func ListBalancesByGroupKey() string {
+	response, err := listBalances(true, nil, nil)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", ProcessListBalancesByGroupKeyResponse(response))
 }
 
 func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAssetResponse, error) {
@@ -518,4 +541,137 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 		return MakeJsonErrorResult(SUCCESS, "", result)
 	}
 	return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+}
+
+type ListAssetsResponse struct {
+	Version          string                            `json:"version"`
+	AssetGenesis     ListAssetsResponseAssetGenesis    `json:"asset_genesis"`
+	Amount           int                               `json:"amount"`
+	LockTime         int32                             `json:"lock_time"`
+	RelativeLockTime int32                             `json:"relative_lock_time"`
+	ScriptVersion    int32                             `json:"script_version"`
+	ScriptKey        string                            `json:"script_key"`
+	ScriptKeyIsLocal bool                              `json:"script_key_is_local"`
+	ChainAnchor      ListAssetsResponseChainAnchor     `json:"chain_anchor"`
+	PrevWitnesses    []ListAssetsResponsePrevWitnesses `json:"prev_witnesses"`
+	AssetGroup       ListAssetsResponseAssetGroup      `json:"asset_group"`
+	IsSpent          bool                              `json:"is_spent"`
+	LeaseOwner       string                            `json:"lease_owner"`
+	LeaseExpiry      int                               `json:"lease_expiry"`
+	IsBurn           bool                              `json:"is_burn"`
+}
+
+type ListAssetsResponseAssetGenesis struct {
+	GenesisPoint string `json:"genesis_point"`
+	Name         string `json:"name"`
+	MetaHash     string `json:"meta_hash"`
+	AssetID      string `json:"asset_id"`
+	AssetType    string `json:"asset_type"`
+	OutputIndex  int    `json:"output_index"`
+	Version      int    `json:"version"`
+}
+
+type ListAssetsResponseChainAnchor struct {
+	AnchorTx         string `json:"anchor_tx"`
+	AnchorBlockHash  string `json:"anchor_block_hash"`
+	AnchorOutpoint   string `json:"anchor_outpoint"`
+	InternalKey      string `json:"internal_key"`
+	MerkleRoot       string `json:"merkle_root"`
+	TapscriptSibling string `json:"tapscript_sibling"`
+	BlockHeight      int    `json:"block_height"`
+}
+
+type ListAssetsResponsePrevWitnesses struct {
+	PrevID    ListAssetsResponsePrevWitnessesPrevID `json:"prev_id"`
+	TxWitness []string                              `json:"tx_witness"`
+	//SplitCommitment *SplitCommitment `protobuf:"bytes,3,opt,name=split_commitment,json=splitCommitment,proto3" json:"split_commitment,omitempty"`
+}
+
+type ListAssetsResponsePrevWitnessesPrevID struct {
+	AnchorPoint string `json:"anchor_point"`
+	AssetID     string `json:"asset_id"`
+	ScriptKey   string `json:"script_key"`
+	Amount      int    `json:"amount"`
+}
+
+type ListAssetsResponseAssetGroup struct {
+	RawGroupKey     string `json:"raw_group_key"`
+	TweakedGroupKey string `json:"tweaked_group_key"`
+	AssetWitness    string `json:"asset_witness"`
+}
+
+func ListAssetsProcessed(withWitness, includeSpent, includeLeased bool) (*[]ListAssetsResponse, error) {
+	var listAssetsResponse []ListAssetsResponse
+	response, err := listAssets(withWitness, includeSpent, includeLeased)
+	if err != nil {
+		return nil, err
+	}
+	for _, asset := range response.Assets {
+		var listAssetsResponsePrevWitnesses []ListAssetsResponsePrevWitnesses
+		for _, witness := range asset.PrevWitnesses {
+			var txWitness []string
+			for _, txWit := range witness.TxWitness {
+				txWitness = append(txWitness, hex.EncodeToString(txWit))
+			}
+			listAssetsResponsePrevWitnesses = append(listAssetsResponsePrevWitnesses, ListAssetsResponsePrevWitnesses{
+				PrevID: ListAssetsResponsePrevWitnessesPrevID{
+					AnchorPoint: witness.PrevId.AnchorPoint,
+					AssetID:     hex.EncodeToString(witness.PrevId.AssetId),
+					ScriptKey:   hex.EncodeToString(witness.PrevId.ScriptKey),
+					Amount:      int(witness.PrevId.Amount),
+				},
+				TxWitness: txWitness,
+			})
+		}
+		var listAssetsResponseAssetGroup ListAssetsResponseAssetGroup
+		if asset.AssetGroup != nil {
+			listAssetsResponseAssetGroup = ListAssetsResponseAssetGroup{
+				RawGroupKey:     hex.EncodeToString(asset.AssetGroup.RawGroupKey),
+				TweakedGroupKey: hex.EncodeToString(asset.AssetGroup.TweakedGroupKey),
+				AssetWitness:    hex.EncodeToString(asset.AssetGroup.AssetWitness),
+			}
+		}
+		listAssetsResponse = append(listAssetsResponse, ListAssetsResponse{
+			Version: asset.Version.String(),
+			AssetGenesis: ListAssetsResponseAssetGenesis{
+				GenesisPoint: asset.AssetGenesis.GenesisPoint,
+				Name:         asset.AssetGenesis.Name,
+				MetaHash:     hex.EncodeToString(asset.AssetGenesis.MetaHash),
+				AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
+				AssetType:    asset.AssetGenesis.AssetType.String(),
+				OutputIndex:  int(asset.AssetGenesis.OutputIndex),
+				Version:      int(asset.AssetGenesis.Version),
+			},
+			Amount:           int(asset.Amount),
+			LockTime:         asset.LockTime,
+			RelativeLockTime: asset.RelativeLockTime,
+			ScriptVersion:    asset.ScriptVersion,
+			ScriptKey:        hex.EncodeToString(asset.ScriptKey),
+			ScriptKeyIsLocal: asset.ScriptKeyIsLocal,
+			ChainAnchor: ListAssetsResponseChainAnchor{
+				AnchorTx:         hex.EncodeToString(asset.ChainAnchor.AnchorTx),
+				AnchorBlockHash:  asset.ChainAnchor.AnchorBlockHash,
+				AnchorOutpoint:   asset.ChainAnchor.AnchorOutpoint,
+				InternalKey:      hex.EncodeToString(asset.ChainAnchor.InternalKey),
+				MerkleRoot:       hex.EncodeToString(asset.ChainAnchor.MerkleRoot),
+				TapscriptSibling: hex.EncodeToString(asset.ChainAnchor.TapscriptSibling),
+				BlockHeight:      int(asset.ChainAnchor.BlockHeight),
+			},
+			PrevWitnesses: listAssetsResponsePrevWitnesses,
+			AssetGroup:    listAssetsResponseAssetGroup,
+			IsSpent:       asset.IsSpent,
+			LeaseOwner:    hex.EncodeToString(asset.LeaseOwner),
+			LeaseExpiry:   int(asset.LeaseExpiry),
+			IsBurn:        asset.IsBurn,
+		})
+	}
+	return &listAssetsResponse, nil
+}
+
+func ListAssetsAll() string {
+	response, err := ListAssetsProcessed(true, true, false)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }

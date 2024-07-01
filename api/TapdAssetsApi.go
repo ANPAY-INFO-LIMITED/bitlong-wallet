@@ -1245,6 +1245,10 @@ func ListAssetAndGetResponse() (*taprpc.ListAssetResponse, error) {
 	return listAssets(false, true, false)
 }
 
+func ListAssetAndGetResponseByFlags(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAssetResponse, error) {
+	return listAssets(withWitness, includeSpent, includeLeased)
+}
+
 //@dev
 
 func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
