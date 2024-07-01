@@ -127,6 +127,22 @@ func ListTransfers() (*taprpc.ListTransfersResponse, error) {
 	return response, err
 }
 
+func ListGroups() (*taprpc.ListGroupsResponse, error) {
+	client, clearUp, err := getTaprootAssetsClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+
+	request := &taprpc.ListGroupsRequest{}
+	response, err := client.ListGroups(context.Background(), request)
+	if err != nil {
+		fmt.Printf("%s taprpc ListGroups Error: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}
+
 func DecodeProof(proof []byte, depth uint32, withMetaReveal bool, withPrevWitnesses bool) (*taprpc.DecodeProofResponse, error) {
 	request := &taprpc.DecodeProofRequest{
 		RawProof:          proof,
