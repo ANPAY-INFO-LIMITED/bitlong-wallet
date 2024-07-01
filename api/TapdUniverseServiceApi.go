@@ -123,36 +123,37 @@ func GetAssetInfo(id string) string {
 	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
 	assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
 	assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
-	assetIsGroup := false
-	if proof.DecodedProof.Asset.AssetGroup != nil {
-		assetIsGroup = true
-	}
 	amount := proof.DecodedProof.Asset.Amount
 	assetName := proof.DecodedProof.Asset.AssetGenesis.Name
 
 	var newMeta Meta
 	newMeta.FetchAssetMeta(false, id)
+	groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
 
 	var assetInfo = struct {
-		AssetId      string `json:"assetId"`
-		Name         string `json:"name"`
-		Point        string `json:"point"`
-		AssetType    string `json:"assetType"`
-		AssetIsGroup bool   `json:"assetIsGroup"`
-		Amount       uint64 `json:"amount"`
-		Meta         string `json:"meta"`
-		CreateHeight int64  `json:"createHeight"`
-		CreateTime   int64  `json:"createTime"`
+		AssetId      string  `json:"asset_Id"`
+		Name         string  `json:"name"`
+		Point        string  `json:"point"`
+		AssetType    string  `json:"assetType"`
+		GroupName    *string `json:"group_name"`
+		GroupKey     *string `json:"group_key"`
+		Amount       uint64  `json:"amount"`
+		Meta         *string `json:"meta"`
+		CreateHeight int64   `json:"create_height"`
+		CreateTime   int64   `json:"create_time"`
+		Universe     string  `json:"universe"`
 	}{
 		AssetId:      assetId,
 		Name:         assetName,
 		Point:        assetPoint,
 		AssetType:    assetType,
-		AssetIsGroup: assetIsGroup,
+		GroupName:    &newMeta.GroupName,
+		GroupKey:     &groupKey,
 		Amount:       amount,
-		Meta:         newMeta.Description,
+		Meta:         &newMeta.Description,
 		CreateHeight: int64(createHeight),
 		CreateTime:   createTime,
+		Universe:     "localhost",
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
