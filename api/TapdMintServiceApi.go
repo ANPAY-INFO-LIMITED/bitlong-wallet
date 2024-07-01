@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
@@ -70,14 +71,6 @@ func ListBatches() string {
 //	MintAsset will attempt to mint the set of assets (async by default to ensure proper batching) specified in the request.
 //	The pending batch is returned that shows the other pending assets that are part of the next batch.
 //	This call will block until the operation succeeds (asset is staged in the batch) or fails.
-//	@param name
-//	@param assetMetaData
-//	@param amount
-//	@return bool
-//func MintAsset(name string, assetMetaData string, amount int) string {
-//	return mintAsset(false, false, name, assetMetaData, false, amount, false, false, "", "", false)
-//}
-
 func MintAsset(name string, assetTypeIsCollectible bool, assetMetaData *Meta, amount int, newGroupedAsset bool) string {
 	Metastr := assetMetaData.ToJsonStr()
 	return mintAsset(false, assetTypeIsCollectible, name, Metastr, false, amount, newGroupedAsset, false, "", "", false)
@@ -289,8 +282,10 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 	} else {
 		_assetMetaType = taprpc.AssetMetaType_META_TYPE_OPAQUE
 	}
-	_groupKeyByteSlices := []byte(groupKey)
-
+	_groupKeyByteSlices, err := hex.DecodeString(groupKey)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
 	request := &mintrpc.MintAssetRequest{
 		Asset: &mintrpc.MintAsset{
 			AssetVersion: _assetVersion,
