@@ -39,8 +39,8 @@ type TransitionParams struct {
 // the proof for. This method returns both the encoded full provenance (proof
 // chain) and the added latest proof.
 func AppendTransition(blob Blob, params *TransitionParams,
-	headerVerifier HeaderVerifier, merkleVerifier MerkleVerifier,
-	groupVerifier GroupVerifier) (Blob, *Proof, error) {
+	headerVerifier HeaderVerifier, groupVerifier GroupVerifier) (Blob,
+	*Proof, error) {
 
 	// Decode the proof blob into a proper file structure first.
 	f := NewEmptyFile(V0)
@@ -78,8 +78,7 @@ func AppendTransition(blob Blob, params *TransitionParams,
 	if err := f.AppendProof(*newProof); err != nil {
 		return nil, nil, fmt.Errorf("error appending proof: %w", err)
 	}
-	_, err = f.Verify(ctx, headerVerifier, merkleVerifier, groupVerifier)
-	if err != nil {
+	if _, err := f.Verify(ctx, headerVerifier, groupVerifier); err != nil {
 		return nil, nil, fmt.Errorf("error verifying proof: %w", err)
 	}
 
@@ -167,13 +166,7 @@ func CreateTransitionProof(prevOut wire.OutPoint,
 		}
 
 		// Make sure the committed asset matches the root asset exactly.
-		// We allow the TxWitness to mismatch for assets with version 1
-		// as they would not include the witness when the proof is
-		// created.
-		if !committedRoot.DeepEqualAllowSegWitIgnoreTxWitness(
-			rootAsset,
-		) {
-
+		if !committedRoot.DeepEqual(rootAsset) {
 			return nil, fmt.Errorf("root asset mismatch")
 		}
 

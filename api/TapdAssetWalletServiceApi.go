@@ -152,48 +152,48 @@ func ProveAssetOwnership(assetId, scriptKey string) bool {
 //	@Description:QueryInternalKey returns the key descriptor for the given internal key.
 //	@param internalKey
 //	@return string
-func QueryInternalKey(internalKey string) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := assetwalletrpc.NewAssetWalletClient(conn)
-	_internalKeyByteSlice, _ := hex.DecodeString(internalKey)
-
-	request := &assetwalletrpc.QueryInternalKeyRequest{
-		InternalKey: _internalKeyByteSlice,
-	}
-	response, err := client.QueryInternalKey(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s assetwalletrpc QueryInternalKey Error: %v\n", GetTimeNow(), err)
-		return ""
-	}
-	return response.String()
-}
+//func QueryInternalKey(internalKey string) string {
+//	conn, clearUp, err := connect.GetConnection("tapd", false)
+//	if err != nil {
+//		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+//	}
+//	defer clearUp()
+//	client := assetwalletrpc.NewAssetWalletClient(conn)
+//	_internalKeyByteSlice, _ := hex.DecodeString(internalKey)
+//
+//	request := &assetwalletrpc.QueryInternalKeyRequest{
+//		InternalKey: _internalKeyByteSlice,
+//	}
+//	response, err := client.QueryInternalKey(context.Background(), request)
+//	if err != nil {
+//		fmt.Printf("%s assetwalletrpc QueryInternalKey Error: %v\n", GetTimeNow(), err)
+//		return ""
+//	}
+//	return response.String()
+//}
 
 // QueryScriptKey
 //
 //	@Description:QueryScriptKey returns the full script key descriptor for the given tweaked script key.
 //	@return string
-func QueryScriptKey(tweakedScriptKey string) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := assetwalletrpc.NewAssetWalletClient(conn)
-	_tweakedScriptKeyByteSlice, _ := hex.DecodeString(tweakedScriptKey)
-	request := &assetwalletrpc.QueryScriptKeyRequest{
-		TweakedScriptKey: _tweakedScriptKeyByteSlice,
-	}
-	response, err := client.QueryScriptKey(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s assetwalletrpc QueryScriptKey Error: %v\n", GetTimeNow(), err)
-		return ""
-	}
-	return response.String()
-}
+//func QueryScriptKey(tweakedScriptKey string) string {
+//	conn, clearUp, err := connect.GetConnection("tapd", false)
+//	if err != nil {
+//		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+//	}
+//	defer clearUp()
+//	client := assetwalletrpc.NewAssetWalletClient(conn)
+//	_tweakedScriptKeyByteSlice, _ := hex.DecodeString(tweakedScriptKey)
+//	request := &assetwalletrpc.QueryScriptKeyRequest{
+//		TweakedScriptKey: _tweakedScriptKeyByteSlice,
+//	}
+//	response, err := client.QueryScriptKey(context.Background(), request)
+//	if err != nil {
+//		fmt.Printf("%s assetwalletrpc QueryScriptKey Error: %v\n", GetTimeNow(), err)
+//		return ""
+//	}
+//	return response.String()
+//}
 
 // RemoveUTXOLease
 //

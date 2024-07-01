@@ -95,14 +95,14 @@ func CopyAll[T Copyable[T]](xs []T) []T {
 }
 
 // CopyableErr is a generic interface for a type that's able to return a deep copy
-// of itself. This is identical to Copyable, but should be used in cases where
+// of itself. This is identical to Copyable, but shuold be used in cases where
 // the copy method can return an error.
 type CopyableErr[T any] interface {
 	Copy() (T, error)
 }
 
 // CopyAllErr creates a new slice where each item of the slice is a deep copy of
-// the elements of the input slice. This is identical to CopyAll, but should be
+// the elements of the input slice. This is identical to CopyAll, but shuold be
 // used in cases where the copy method can return an error.
 func CopyAllErr[T CopyableErr[T]](xs []T) ([]T, error) {
 	var err error
@@ -152,6 +152,12 @@ func Any[T any](xs []T, pred func(T) bool) bool {
 	}
 
 	return false
+}
+
+// None returns true if the passed predicate returns false for all items in the
+// slice.
+func None[T any](xs []T, pred func(T) bool) bool {
+	return !Any(xs, pred)
 }
 
 // AnyMapItem returns true if the passed predicate returns true for any item in
@@ -215,21 +221,4 @@ func First[T any](xs []*T, pred func(*T) bool) (*T, error) {
 	}
 
 	return nil, fmt.Errorf("no item found")
-}
-
-// Last returns the last item in the slice that matches the predicate, or an
-// error if none matches.
-func Last[T any](xs []*T, pred func(*T) bool) (*T, error) {
-	var matches []*T
-	for i := range xs {
-		if pred(xs[i]) {
-			matches = append(matches, xs[i])
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("no item found")
-	}
-
-	return matches[len(matches)-1], nil
 }

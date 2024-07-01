@@ -82,24 +82,14 @@ func AddGroupAsset(name string, assetTypeIsCollectible bool, assetMetaData *Meta
 
 }
 
-type Asset struct {
-	Meta *Meta `json:"meta"`
-}
-
 type Meta struct {
 	Acronym     string `json:"acronym,omitempty"`
 	Description string `json:"description,omitempty"`
-	Image_Data  string `json:"image_data,omitempty"`
+	ImageData   string `json:"image_data,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Email       string `json:"email,omitempty"`
+	GroupName   string `json:"groupName,omitempty"`
 }
-
-const (
-	OPEN_IMAGE_FILE_ERROR  = "OPEN_IMAGE_FILE_ERROR"
-	WRITE_IMAGE_FILE_ERROR = "WRITE_IMAGE_FILE_ERROR"
-	DATA_ILLEGAL           = "DATA_ILLEGAL "
-	DATA_NOT_IMAGE         = "DATA_NOT_IMAGE"
-)
 
 func NewMeta(description string) *Meta {
 	meta := Meta{
@@ -113,7 +103,7 @@ func (m *Meta) LoadImageByByte(image []byte) (bool, error) {
 		return false, fmt.Errorf("image data is nil")
 	}
 	imageStr := dataurl.EncodeBytes(image)
-	m.Image_Data = imageStr
+	m.ImageData = imageStr
 	return true, nil
 }
 
@@ -125,7 +115,7 @@ func (m *Meta) LoadImage(file string) (bool, error) {
 			return false, err
 		}
 		imageStr := dataurl.EncodeBytes(image)
-		m.Image_Data = imageStr
+		m.ImageData = imageStr
 	}
 	return true, nil
 }
@@ -155,10 +145,10 @@ func (m *Meta) GetMetaFromStr(metaStr string) {
 }
 
 func (m *Meta) SaveImage(dir string, name string) bool {
-	if m.Image_Data == "" {
+	if m.ImageData == "" {
 		return false
 	}
-	dataUrl, err := dataurl.DecodeString(m.Image_Data)
+	dataUrl, err := dataurl.DecodeString(m.ImageData)
 	if err != nil {
 		return false
 	}
@@ -190,10 +180,10 @@ func (m *Meta) SaveImage(dir string, name string) bool {
 }
 
 func (m *Meta) GetImage() []byte {
-	if m.Image_Data == "" {
+	if m.ImageData == "" {
 		return nil
 	}
-	dataUrl, err := dataurl.DecodeString(m.Image_Data)
+	dataUrl, err := dataurl.DecodeString(m.ImageData)
 	if err != nil {
 		return nil
 	}
@@ -278,7 +268,7 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 	_assetMetaDataByteSlice := []byte(assetMetaData)
 	var _assetMetaType taprpc.AssetMetaType
 	if AssetMetaTypeIsJsonNotOpaque {
-		_assetMetaType = taprpc.AssetMetaType_META_TYPE_JSON
+		//_assetMetaType = taprpc.AssetMetaType_META_TYPE_JSON
 	} else {
 		_assetMetaType = taprpc.AssetMetaType_META_TYPE_OPAQUE
 	}

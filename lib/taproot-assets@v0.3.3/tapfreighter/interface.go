@@ -41,19 +41,6 @@ type CommitmentConstraints struct {
 	MinAmt uint64
 }
 
-// String returns the string representation of the commitment constraints.
-func (c *CommitmentConstraints) String() string {
-	var groupKeyBytes, assetIDBytes []byte
-	if c.GroupKey != nil {
-		groupKeyBytes = c.GroupKey.SerializeCompressed()
-	}
-	if c.AssetID != nil {
-		assetIDBytes = c.AssetID[:]
-	}
-	return fmt.Sprintf("group_key=%x, asset_id=%x, min_amt=%d",
-		groupKeyBytes, assetIDBytes, c.MinAmt)
-}
-
 // AnchoredCommitment is the response to satisfying the set of
 // CommitmentConstraints. This includes the asset itself, and also information
 // needed to locate the asset on-chain and also prove its existence.
@@ -251,12 +238,7 @@ type OutboundParcel struct {
 
 	// PassiveAssets is the set of passive assets that are re-anchored
 	// during the parcel confirmation process.
-	PassiveAssets []*tappsbt.VPacket
-
-	// PassiveAssetsAnchor is the anchor point for the passive assets. This
-	// might be a distinct anchor from any active transfer in case the
-	// active transfers don't create any change going back to us.
-	PassiveAssetsAnchor *Anchor
+	PassiveAssets []*PassiveAssetReAnchor
 
 	// Inputs represents the list of previous assets that were spent with
 	// this transfer.
@@ -290,6 +272,37 @@ type AssetConfirmEvent struct {
 	// PassiveAssetProofFiles is the set of passive asset proof files that
 	// are re-anchored during the parcel confirmation process.
 	PassiveAssetProofFiles map[asset.ID][]*proof.AnnotatedProof
+}
+
+// PassiveAssetReAnchor includes the information needed to re-anchor a passive
+// asset during asset send delivery confirmation.
+type PassiveAssetReAnchor struct {
+	// VPacket is a virtual packet which describes the virtual transaction
+	// which is used in re-anchoring the passive asset.
+	VPacket *tappsbt.VPacket
+
+	// GenesisID is the genesis ID of the passive asset.
+	GenesisID asset.ID
+
+	// PrevAnchorPoint is the previous anchor point of the passive asset
+	// before re-anchoring. This field is used to identify the correct asset
+	// to update.
+	PrevAnchorPoint wire.OutPoint
+
+	// ScriptKey is the previous script key of the passive asset before
+	// re-anchoring. This field is used to identify the correct asset to
+	// update.
+	ScriptKey asset.ScriptKey
+
+	// AssetVersion is the version of this passive asset. We make this
+	// explicit as the asset may have been upgraded during the re-anchor.
+	AssetVersion asset.Version
+
+	// NewProof is the proof set of the re-anchored passive asset.
+	NewProof *proof.Proof
+
+	// NewWitnessData is the new witness set for this asset.
+	NewWitnessData []asset.Witness
 }
 
 // ExportLog is used to track the state of outbound Taproot Asset parcels

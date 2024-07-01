@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -21,7 +20,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/assetwalletrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/rfqrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
@@ -94,7 +92,6 @@ type tapdHarness struct {
 	taprpc.TaprootAssetsClient
 	assetwalletrpc.AssetWalletClient
 	mintrpc.MintClient
-	rfqrpc.RfqClient
 	universerpc.UniverseClient
 	tapdevrpc.TapDevClient
 }
@@ -117,10 +114,6 @@ type harnessOpts struct {
 	// fedSyncTickerInterval is the interval at which the federation envoy
 	// sync ticker will fire.
 	fedSyncTickerInterval *time.Duration
-
-	// sqliteDatabaseFilePath is the path to the SQLite database file to
-	// use.
-	sqliteDatabaseFilePath *string
 }
 
 type harnessOption func(*harnessOpts)
@@ -203,11 +196,6 @@ func newTapdHarness(t *testing.T, ht *harnessTest, cfg tapdConfig,
 	// be queryable by other tapd nodes. This applies to federation syncing
 	// as well as RPC insert and query.
 	tapCfg.Universe.PublicAccess = true
-
-	// Set the SQLite database file path if it was specified.
-	if opts.sqliteDatabaseFilePath != nil {
-		tapCfg.Sqlite.DatabaseFileName = *opts.sqliteDatabaseFilePath
-	}
 
 	// Pass through the address asset syncer disable flag. If the option
 	// was not set, this will be false, which is the default.
@@ -297,7 +285,7 @@ func (hs *tapdHarness) start(expectErrExit bool) error {
 		hs.clientCfg, cfgLogger, hs.ht.interceptor, mainErrChan,
 	)
 	if err != nil {
-		return fmt.Errorf("could not create tapd server: %w", err)
+		return fmt.Errorf("could not create tapd server: %v", err)
 	}
 
 	hs.wg.Add(1)
@@ -308,30 +296,21 @@ func (hs *tapdHarness) start(expectErrExit bool) error {
 		}
 	}()
 
-	// Let's wait until the RPC server is actually listening before we
-	// connect our client to it.
-	listenerAddr := hs.clientCfg.RpcConf.RawRPCListeners[0]
-	err = wait.NoError(func() error {
-		_, err := net.Dial("tcp", listenerAddr)
-		return err
-	}, defaultTimeout)
-	if err != nil {
-		return fmt.Errorf("error waiting for server to start: %w", err)
-	}
+	time.Sleep(1 * time.Second)
 
 	// Create our client to interact with the tapd RPC server directly.
+	listenerAddr := hs.clientCfg.RpcConf.RawRPCListeners[0]
 	rpcConn, err := dialServer(
 		listenerAddr, hs.clientCfg.RpcConf.TLSCertPath,
 		hs.clientCfg.RpcConf.MacaroonPath,
 	)
 	if err != nil {
-		return fmt.Errorf("could not connect to %v: %w",
+		return fmt.Errorf("could not connect to %v: %v",
 			listenerAddr, err)
 	}
 	hs.TaprootAssetsClient = taprpc.NewTaprootAssetsClient(rpcConn)
 	hs.AssetWalletClient = assetwalletrpc.NewAssetWalletClient(rpcConn)
 	hs.MintClient = mintrpc.NewMintClient(rpcConn)
-	hs.RfqClient = rfqrpc.NewRfqClient(rpcConn)
 	hs.UniverseClient = universerpc.NewUniverseClient(rpcConn)
 	hs.TapDevClient = tapdevrpc.NewTapDevClient(rpcConn)
 
@@ -455,7 +434,7 @@ func defaultDialOptions(serverCertPath, macaroonPath string) ([]grpc.DialOption,
 	if macaroonPath != "" {
 		macaroonOptions, err := readMacaroon(macaroonPath)
 		if err != nil {
-			return nil, fmt.Errorf("unable to load macaroon %s: %w",
+			return nil, fmt.Errorf("unable to load macaroon %s: %v",
 				macaroonPath, err)
 		}
 		baseOpts = append(baseOpts, macaroonOptions)
@@ -470,18 +449,18 @@ func readMacaroon(macaroonPath string) (grpc.DialOption, error) {
 	// Load the specified macaroon file.
 	macBytes, err := os.ReadFile(macaroonPath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read macaroon path : %w", err)
+		return nil, fmt.Errorf("unable to read macaroon path : %v", err)
 	}
 
 	mac := &macaroon.Macaroon{}
 	if err = mac.UnmarshalBinary(macBytes); err != nil {
-		return nil, fmt.Errorf("unable to decode macaroon: %w", err)
+		return nil, fmt.Errorf("unable to decode macaroon: %v", err)
 	}
 
 	// Now we append the macaroon credentials to the dial options.
 	cred, err := macaroons.NewMacaroonCredential(mac)
 	if err != nil {
-		return nil, fmt.Errorf("error creating mac cred: %w", err)
+		return nil, fmt.Errorf("error creating mac cred: %v", err)
 	}
 	return grpc.WithPerRPCCredentials(cred), nil
 }

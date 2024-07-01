@@ -375,23 +375,6 @@ func TapStopDaemon() bool {
 	return true
 }
 
-func decodeProof(proof []byte, depth uint32, withMetaReveal bool, withPrevWitnesses bool) (*taprpc.DecodeProofResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := taprpc.NewTaprootAssetsClient(conn)
-	request := &taprpc.DecodeProofRequest{
-		RawProof:          proof,
-		ProofAtDepth:      depth,
-		WithMetaReveal:    withMetaReveal,
-		WithPrevWitnesses: withPrevWitnesses,
-	}
-	response, err := client.DecodeProof(context.Background(), request)
-	return response, err
-}
-
 func fetchAssetMeta(isHash bool, data string) (*taprpc.AssetMeta, error) {
 	conn, clearUp, err := connect.GetConnection("tapd", false)
 	if err != nil {

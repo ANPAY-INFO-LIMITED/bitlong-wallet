@@ -60,10 +60,6 @@ var (
 	// the local database.
 	ErrScriptKeyNotFound = errors.New("script key not found")
 
-	// ErrInternalKeyNotFound is returned when an internal key is not found
-	// in the local database.
-	ErrInternalKeyNotFound = errors.New("internal key not found")
-
 	// ErrUnknownVersion is returned when encountering an address with an
 	// unrecognised version number.
 	ErrUnknownVersion = errors.New("address: unknown version number")
@@ -196,9 +192,9 @@ func New(version Version, genesis asset.Genesis, groupKey *btcec.PublicKey,
 	// We can only use a tapscript sibling that is not a Taproot Asset
 	// commitment.
 	if tapscriptSibling != nil {
-		if _, err := tapscriptSibling.TapHash(); err != nil {
+		if err := tapscriptSibling.VerifyNoCommitment(); err != nil {
 			return nil, errors.New("address: tapscript sibling " +
-				"is invalid")
+				"is a Taproot Asset commitment")
 		}
 	}
 
@@ -450,7 +446,7 @@ func DecodeAddress(addr string, net *ChainParams) (*Tap, error) {
 	// The HRP is everything before the found '1'.
 	hrp := prefix[:len(prefix)-1]
 
-	// Ensure that the hrp we decoded matches the network we're trying to
+	// Ensure that the hrp we deocded matches the network we're trying to
 	// use the address on.
 	if !IsForNet(hrp, net) {
 		return nil, ErrMismatchedHRP

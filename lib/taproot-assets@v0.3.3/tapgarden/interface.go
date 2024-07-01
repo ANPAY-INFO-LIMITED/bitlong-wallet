@@ -13,7 +13,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnwallet"
@@ -45,7 +44,7 @@ type Planter interface {
 
 	// FinalizeBatch signals that the asset minter should finalize
 	// the current batch, if one exists.
-	FinalizeBatch(params FinalizeParams) (*MintingBatch, error)
+	FinalizeBatch(feeRate *chainfee.SatPerKWeight) (*MintingBatch, error)
 
 	// CancelBatch signals that the asset minter should cancel the
 	// current batch, if one exists.
@@ -170,8 +169,6 @@ func NewBatchState(state uint8) (BatchState, error) {
 // the process of seeding, planting, and finally maturing taproot assets that are
 // a part of the batch.
 type MintingStore interface {
-	asset.TapscriptTreeManager
-
 	// CommitMintingBatch commits a new minting batch to disk, identified
 	// by its batch key.
 	CommitMintingBatch(ctx context.Context, newBatch *MintingBatch) error
@@ -207,8 +204,7 @@ type MintingStore interface {
 	// NOTE: The BatchState should transition to BatchStateCommitted upon a
 	// successful call.
 	AddSproutsToBatch(ctx context.Context, batchKey *btcec.PublicKey,
-		genesisPacket *tapsend.FundedPsbt,
-		assets *commitment.TapCommitment) error
+		genesisPacket *FundedPsbt, assets *commitment.TapCommitment) error
 
 	// CommitSignedGenesisTx adds a fully signed genesis transaction to the
 	// batch, along with the Taproot Asset script root, which is the
@@ -218,8 +214,8 @@ type MintingStore interface {
 	// NOTE: The BatchState should transition to the BatchStateBroadcast
 	// state upon a successful call.
 	CommitSignedGenesisTx(ctx context.Context, batchKey *btcec.PublicKey,
-		genesisTx *tapsend.FundedPsbt, anchorOutputIndex uint32,
-		merkleRoot, tapTreeRoot, tapSibling []byte) error
+		genesisTx *FundedPsbt, anchorOutputIndex uint32,
+		tapRoot []byte) error
 
 	// MarkBatchConfirmed marks the batch as confirmed on chain. The passed
 	// block location information determines where exactly in the chain the
@@ -240,14 +236,6 @@ type MintingStore interface {
 	// key, including the genesis information used to create the group.
 	FetchGroupByGroupKey(ctx context.Context,
 		groupKey *btcec.PublicKey) (*asset.AssetGroup, error)
-
-	// CommitBatchTapSibling adds a tapscript sibling to the batch,
-	// specified by the sibling root hash.
-	//
-	// NOTE: The tapscript tree that defines the batch sibling must already
-	// be committed to disk.
-	CommitBatchTapSibling(ctx context.Context, batchKey *btcec.PublicKey,
-		rootHash *chainhash.Hash) error
 }
 
 // ChainBridge is our bridge to the target chain. It's used to get confirmation
@@ -292,13 +280,32 @@ type ChainBridge interface {
 		confTarget uint32) (chainfee.SatPerKWeight, error)
 }
 
+// FundedPsbt represents a fully funded PSBT transaction.
+type FundedPsbt struct {
+	// Pkt is the PSBT packet itself.
+	Pkt *psbt.Packet
+
+	// ChangeOutputIndex denotes which output in the PSBT packet is the
+	// change output. We use this to figure out which output will store our
+	// Taproot Asset commitment (the non-change output).
+	ChangeOutputIndex int32
+
+	// ChainFees is the amount in sats paid in on-chain fees for this
+	// transaction.
+	ChainFees int64
+
+	// LockedUTXOs is the set of UTXOs that were locked to create the PSBT
+	// packet.
+	LockedUTXOs []wire.OutPoint
+}
+
 // WalletAnchor is the main wallet interface used to managed PSBT packets, and
 // import public keys into the wallet.
 type WalletAnchor interface {
 	// FundPsbt attaches enough inputs to the target PSBT packet for it to
 	// be valid.
 	FundPsbt(ctx context.Context, packet *psbt.Packet, minConfs uint32,
-		feeRate chainfee.SatPerKWeight) (*tapsend.FundedPsbt, error)
+		feeRate chainfee.SatPerKWeight) (FundedPsbt, error)
 
 	// SignAndFinalizePsbt fully signs and finalizes the target PSBT
 	// packet.

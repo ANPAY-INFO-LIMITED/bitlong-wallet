@@ -3,8 +3,6 @@ package test
 import (
 	"bytes"
 	"encoding/hex"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,11 +11,9 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc/signrpc"
@@ -99,14 +95,6 @@ func SchnorrKey(t testing.TB, pubKey *btcec.PublicKey) *btcec.PublicKey {
 	key, err := schnorr.ParsePubKey(schnorr.SerializePubKey(pubKey))
 	require.NoError(t, err)
 	return key
-}
-
-func SchnorrKeysEqual(t testing.TB, a, b *btcec.PublicKey) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-
-	return SchnorrKey(t, a).IsEqual(SchnorrKey(t, b))
 }
 
 func RandPubKey(t testing.TB) *btcec.PublicKey {
@@ -358,22 +346,6 @@ func RandTxWitnesses(t testing.TB) wire.TxWitness {
 	return w
 }
 
-func RandTapLeaf(customScriptLen *int) txscript.TapLeaf {
-	scriptLen := 500
-
-	// Ensure that we never have an empty script.
-	randScriptLen := RandIntn(scriptLen)
-	if randScriptLen == 0 {
-		randScriptLen = 1
-	}
-
-	if customScriptLen != nil {
-		randScriptLen = *customScriptLen
-	}
-
-	return txscript.NewBaseTapLeaf(RandBytes(randScriptLen))
-}
-
 // ScriptHashLock returns a simple bitcoin script that locks the funds to a hash
 // lock of the given preimage.
 func ScriptHashLock(t *testing.T, preimage []byte) txscript.TapLeaf {
@@ -396,96 +368,4 @@ func ScriptSchnorrSig(t *testing.T, pubKey *btcec.PublicKey) txscript.TapLeaf {
 	script2, err := builder.Script()
 	require.NoError(t, err)
 	return txscript.NewBaseTapLeaf(script2)
-}
-
-// ReadTestDataFile reads a file from the testdata directory and returns its
-// content as a string.
-func ReadTestDataFile(t *testing.T, fileName string) string {
-	path := filepath.Join("testdata", fileName)
-	fileBytes, err := os.ReadFile(path)
-	require.NoError(t, err)
-
-	return string(fileBytes)
-}
-
-// BuildTapscriptTree builds a Tapscript tree with two leaves, a hash lock
-// script and a signature verification script.
-func BuildTapscriptTreeNoReveal(t *testing.T,
-	internalKey *btcec.PublicKey) txscript.TapBranch {
-
-	hashLockWitness := []byte("foobar")
-	hashLockLeaf := ScriptHashLock(t, hashLockWitness)
-	sigLeaf := ScriptSchnorrSig(t, internalKey)
-
-	tree := txscript.AssembleTaprootScriptTree(hashLockLeaf, sigLeaf)
-	return txscript.NewTapBranch(
-		tree.RootNode.Left(), tree.RootNode.Right(),
-	)
-}
-
-// BuildTapscriptTree builds a Tapscript tree with two leaves, a hash lock
-// script and a signature verification script. It also returns the data needed
-// to satisfy one of the two leaves.
-func BuildTapscriptTree(t *testing.T, useHashLock, valid bool,
-	internalKey *btcec.PublicKey) (*txscript.TapLeaf, *waddrmgr.Tapscript,
-	*psbt.TaprootTapLeafScript, []byte, []byte) {
-
-	// Let's create a taproot asset script now. This is a hash lock with a
-	// simple preimage of "foobar".
-	hashLockWitness := []byte("foobar")
-	invalidHashLockWitness := []byte("not-foobar")
-	hashLockLeaf := ScriptHashLock(t, hashLockWitness)
-
-	// Let's add a second script output as well to test the partial reveal.
-	sigLeaf := ScriptSchnorrSig(t, internalKey)
-	invalidSigWitness := make([]byte, 64)
-
-	var (
-		usedLeaf      *txscript.TapLeaf
-		testTapScript *waddrmgr.Tapscript
-		scriptWitness []byte
-	)
-
-	if useHashLock {
-		usedLeaf = &hashLockLeaf
-		inclusionProof := sigLeaf.TapHash()
-		testTapScript = input.TapscriptPartialReveal(
-			internalKey, hashLockLeaf, inclusionProof[:],
-		)
-		scriptWitness = hashLockWitness
-
-		if !valid {
-			scriptWitness = invalidHashLockWitness
-		}
-	} else {
-		usedLeaf = &sigLeaf
-		inclusionProof := hashLockLeaf.TapHash()
-		testTapScript = input.TapscriptPartialReveal(
-			internalKey, sigLeaf, inclusionProof[:],
-		)
-
-		// If we leave the scriptWitness nil, the genTaprootScriptSpend
-		// function will automatically create a signature for us.
-		// We only need to create a witness if we want an invalid
-		// signature.
-		if !valid {
-			scriptWitness = invalidSigWitness
-		}
-	}
-
-	// Compute the final tapscript root and leaf script needed to create a
-	// key that includes the above tapscript tree.
-	tapTweak := testTapScript.ControlBlock.RootHash(
-		testTapScript.RevealedScript,
-	)
-	controlBlockBytes, err := testTapScript.ControlBlock.ToBytes()
-	require.NoError(t, err)
-
-	tapLeaf := &psbt.TaprootTapLeafScript{
-		ControlBlock: controlBlockBytes,
-		Script:       usedLeaf.Script,
-		LeafVersion:  usedLeaf.LeafVersion,
-	}
-
-	return usedLeaf, testTapScript, tapLeaf, tapTweak, scriptWitness
 }

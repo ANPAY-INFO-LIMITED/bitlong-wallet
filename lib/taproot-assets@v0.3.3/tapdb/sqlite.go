@@ -36,16 +36,6 @@ const (
 	defaultConnMaxLifetime = 10 * time.Minute
 )
 
-var (
-	// sqliteSchemaReplacements is a map of schema strings that need to be
-	// replaced for sqlite. This is needed because sqlite doesn't directly
-	// support the BIGINT type for primary keys, so we need to replace it
-	// with INTEGER.
-	sqliteSchemaReplacements = map[string]string{
-		"BIGINT PRIMARY KEY": "INTEGER PRIMARY KEY",
-	}
-)
-
 // SqliteConfig holds all the config arguments needed to interact with our
 // sqlite DB.
 type SqliteConfig struct {
@@ -128,41 +118,41 @@ func NewSqliteStore(cfg *SqliteConfig) (*SqliteStore, error) {
 	db.SetMaxIdleConns(defaultMaxConns)
 	db.SetConnMaxLifetime(defaultConnMaxLifetime)
 
+	if !cfg.SkipMigrations {
+		// Now that the database is open, populate the database with
+		// our set of schemas based on our embedded in-memory file
+		// system.
+		//
+		// First, we'll need to open up a new migration instance for
+		// our current target database: sqlite.
+		driver, err := sqlite_migrate.WithInstance(
+			db, &sqlite_migrate.Config{},
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		sqliteFS := newReplacerFS(sqlSchemas, map[string]string{
+			"BIGINT PRIMARY KEY": "INTEGER PRIMARY KEY",
+		})
+
+		err = applyMigrations(
+			sqliteFS, driver, "sqlc/migrations", "sqlc",
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	queries := sqlc.NewSqlite(db)
-	s := &SqliteStore{
+
+	return &SqliteStore{
 		cfg: cfg,
 		BaseDB: &BaseDB{
 			DB:      db,
 			Queries: queries,
 		},
-	}
-
-	// Now that the database is open, populate the database with our set of
-	// schemas based on our embedded in-memory file system.
-	if !cfg.SkipMigrations {
-		if err := s.ExecuteMigrations(TargetLatest); err != nil {
-			return nil, fmt.Errorf("error executing migrations: "+
-				"%w", err)
-		}
-	}
-
-	return s, nil
-}
-
-// ExecuteMigrations runs migrations for the sqlite database, depending on the
-// target given, either all migrations or up to a given version.
-func (s *SqliteStore) ExecuteMigrations(target MigrationTarget) error {
-	driver, err := sqlite_migrate.WithInstance(
-		s.DB, &sqlite_migrate.Config{},
-	)
-	if err != nil {
-		return fmt.Errorf("error creating sqlite migration: %w", err)
-	}
-
-	sqliteFS := newReplacerFS(sqlSchemas, sqliteSchemaReplacements)
-	return applyMigrations(
-		sqliteFS, driver, "sqlc/migrations", "sqlite", target,
-	)
+	}, nil
 }
 
 // NewTestSqliteDB is a helper function that creates an SQLite database for
@@ -170,50 +160,15 @@ func (s *SqliteStore) ExecuteMigrations(target MigrationTarget) error {
 func NewTestSqliteDB(t *testing.T) *SqliteStore {
 	t.Helper()
 
-	// TODO(roasbeef): if we pass :memory: for the file name, then we get
-	// an in mem version to speed up tests
-	dbPath := filepath.Join(t.TempDir(), "tmp.db")
-	t.Logf("Creating new SQLite DB handle for testing: %s", dbPath)
-
-	return NewTestSqliteDbHandleFromPath(t, dbPath)
-}
-
-// NewTestSqliteDbHandleFromPath is a helper function that creates a SQLite
-// database handle given a database file path.
-func NewTestSqliteDbHandleFromPath(t *testing.T, dbPath string) *SqliteStore {
-	t.Helper()
-
-	sqlDB, err := NewSqliteStore(&SqliteConfig{
-		DatabaseFileName: dbPath,
-		SkipMigrations:   false,
-	})
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		require.NoError(t, sqlDB.DB.Close())
-	})
-
-	return sqlDB
-}
-
-// NewTestSqliteDBWithVersion is a helper function that creates an SQLite
-// database for testing and migrates it to the given version.
-func NewTestSqliteDBWithVersion(t *testing.T, version uint) *SqliteStore {
-	t.Helper()
-
-	t.Logf("Creating new SQLite DB for testing, migrating to version %d",
-		version)
-
-	// TODO(roasbeef): if we pass :memory: for the file name, then we get
-	// an in mem version to speed up tests
 	dbFileName := filepath.Join(t.TempDir(), "tmp.db")
+	t.Logf("Creating new SQLite DB for testing: %s", dbFileName)
+
+	// TODO(roasbeef): if we pass :memory: for the file name, then we get
+	// an in mem version to speed up tests
 	sqlDB, err := NewSqliteStore(&SqliteConfig{
 		DatabaseFileName: dbFileName,
-		SkipMigrations:   true,
+		SkipMigrations:   false,
 	})
-	require.NoError(t, err)
-
-	err = sqlDB.ExecuteMigrations(TargetVersion(version))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

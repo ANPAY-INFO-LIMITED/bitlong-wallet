@@ -19,7 +19,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/tapgarden"
 	"github.com/lightninglabs/taproot-assets/tappsbt"
 	"github.com/lightninglabs/taproot-assets/tapscript"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -328,22 +327,15 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 	passiveAssetProofFiles := make(
 		[]*proof.AnnotatedProof, 0, len(sendPkg.PassiveAssets),
 	)
-	passiveAssetProofSuffixes := make(
+	passiveAssetRawProofs := make(
 		[]*proof.Proof, 0, len(sendPkg.PassiveAssets),
 	)
-	for idx := range sendPkg.PassiveAssets {
-		passiveOut := sendPkg.PassiveAssets[idx].Outputs[0]
-
-		inputs := fn.Map(
-			sendPkg.PassiveAssets[idx].Inputs,
-			func(in *tappsbt.VInput) asset.PrevID {
-				return in.PrevID
-			},
-		)
-
-		newAnnotatedProofFile, err := p.updateAssetProofFile(
-			ctx, inputs, passiveOut.ProofSuffix,
-			passiveOut.Asset.ScriptKey, confEvent,
+	for _, passiveAsset := range sendPkg.PassiveAssets {
+		newAnnotatedProofFile, rawProof, err := p.updateAssetProofFile(
+			ctx, passiveAsset.GenesisID,
+			passiveAsset.ScriptKey.PubKey,
+			&passiveAsset.PrevAnchorPoint, confEvent,
+			passiveAsset.NewProof,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to generate an updated "+
@@ -353,16 +345,14 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 		passiveAssetProofFiles = append(
 			passiveAssetProofFiles, newAnnotatedProofFile,
 		)
-		passiveAssetProofSuffixes = append(
-			passiveAssetProofSuffixes, passiveOut.ProofSuffix,
-		)
+		passiveAssetRawProofs = append(passiveAssetRawProofs, rawProof)
 	}
 
 	log.Infof("Importing %d passive asset proofs into local Proof "+
 		"Archive", len(passiveAssetProofFiles))
 	err := p.cfg.AssetProofs.ImportProofs(
-		ctx, headerVerifier, proof.DefaultMerkleVerifier,
-		p.cfg.GroupVerifier, false, passiveAssetProofFiles...,
+		ctx, headerVerifier, p.cfg.GroupVerifier, false,
+		passiveAssetProofFiles...,
 	)
 	if err != nil {
 		return fmt.Errorf("error importing passive proof: %w", err)
@@ -372,9 +362,9 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 	// notice if the anchor transaction is re-organized out of the chain, we
 	// give the proof to the re-org watcher and replace the updated proof in
 	// the local proof archive if a re-org happens.
-	if len(passiveAssetProofSuffixes) > 0 {
+	if len(passiveAssetRawProofs) > 0 {
 		if err := p.cfg.ProofWatcher.WatchProofs(
-			passiveAssetProofSuffixes,
+			passiveAssetRawProofs,
 			p.cfg.ProofWatcher.DefaultUpdateCallback(),
 		); err != nil {
 			return fmt.Errorf("error watching proof: %w", err)
@@ -397,29 +387,83 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 		map[asset.SerializedKey]*proof.AnnotatedProof,
 		len(parcel.Outputs),
 	)
+	firstInput := parcel.Inputs[0]
 	for idx := range parcel.Outputs {
 		out := parcel.Outputs[idx]
 
-		parsedSuffix := &proof.Proof{}
-		err := parsedSuffix.Decode(bytes.NewReader(out.ProofSuffix))
+		// For outputs without assets (=anchor for passive assets), we
+		// don't need to store explicit proofs, they were created and
+		// imported above.
+		if out.Type == tappsbt.TypePassiveAssetsOnly {
+			continue
+		}
+
+		// First, we'll decode the outputs' proof suffix.
+		var proofSuffix proof.Proof
+		err := proofSuffix.Decode(bytes.NewReader(out.ProofSuffix))
 		if err != nil {
 			return fmt.Errorf("error decoding proof suffix %d: %w",
 				idx, err)
 		}
 
-		inputs := fn.Map(
-			parcel.Inputs, func(in TransferInput) asset.PrevID {
-				return in.PrevID
-			},
-		)
-		outputProof, err := p.updateAssetProofFile(
-			ctx, inputs, parsedSuffix, out.ScriptKey, confEvent,
-		)
+		// The suffix doesn't contain any information about the
+		// confirmed block yet, so we'll add that now.
+		err = proofSuffix.UpdateTransitionProof(&proof.BaseProofParams{
+			Block:       confEvent.Block,
+			BlockHeight: confEvent.BlockHeight,
+			Tx:          confEvent.Tx,
+			TxIndex:     int(confEvent.TxIndex),
+		})
 		if err != nil {
-			return fmt.Errorf("failed to generate an updated "+
-				"proof file for output %d: %w", idx, err)
+			return fmt.Errorf("error updating transition proof "+
+				"%d: %w", idx, err)
 		}
 
+		// The suffix is complete, so we need to fetch the input proof
+		// in order to append the suffix to it.
+		inputProofFile, err := p.fetchInputProof(ctx, firstInput)
+		if err != nil {
+			return fmt.Errorf("error fetching input proof: %w", err)
+		}
+
+		// Are there more inputs? Then this is a merge, and we need to
+		// add those additional files to the suffix as well.
+		for idx := 1; idx < len(parcel.Inputs); idx++ {
+			additionalInputProofFile, err := p.fetchInputProof(
+				ctx, parcel.Inputs[idx],
+			)
+			if err != nil {
+				return fmt.Errorf("error fetching input "+
+					"proof %d: %w", idx, err)
+			}
+
+			proofSuffix.AdditionalInputs = append(
+				proofSuffix.AdditionalInputs,
+				*additionalInputProofFile,
+			)
+		}
+
+		// With the proof suffix updated, we can append the proof, then
+		// encode it to get the final proof file.
+		var outputProofBuf bytes.Buffer
+		if err := inputProofFile.AppendProof(proofSuffix); err != nil {
+			return fmt.Errorf("error appending proof: %w", err)
+		}
+		if err := inputProofFile.Encode(&outputProofBuf); err != nil {
+			return fmt.Errorf("error encoding proof: %w", err)
+		}
+
+		// Now we just need to identify the new proof correctly before
+		// adding it to the proof archive.
+		outputProofLocator := proof.Locator{
+			AssetID:   &firstInput.ID,
+			ScriptKey: *out.ScriptKey.PubKey,
+			OutPoint:  fn.Ptr(proofSuffix.OutPoint()),
+		}
+		outputProof := &proof.AnnotatedProof{
+			Locator: outputProofLocator,
+			Blob:    outputProofBuf.Bytes(),
+		}
 		serializedScriptKey := asset.ToSerialized(out.ScriptKey.PubKey)
 		sendPkg.FinalProofs[serializedScriptKey] = outputProof
 
@@ -427,14 +471,15 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 		log.Infof("Importing proof for output %d into local Proof "+
 			"Archive", idx)
 		err = p.cfg.AssetProofs.ImportProofs(
-			ctx, headerVerifier, proof.DefaultMerkleVerifier,
-			p.cfg.GroupVerifier, false, outputProof,
+			ctx, headerVerifier, p.cfg.GroupVerifier, false,
+			outputProof,
 		)
 		if err != nil {
 			return fmt.Errorf("error importing proof: %w", err)
 		}
 
-		log.Debugf("Updated proofs for output %d", idx)
+		log.Debugf("Updated proofs for output %d (new_len=%d)",
+			idx, inputProofFile.NumProofs())
 
 		// The proof is created after a single confirmation. To make
 		// sure we notice if the anchor transaction is re-organized out
@@ -446,7 +491,7 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 		// proof is necessary anyway.
 		if out.ScriptKey.TweakedScriptKey != nil && out.ScriptKeyLocal {
 			err := p.cfg.ProofWatcher.WatchProofs(
-				[]*proof.Proof{parsedSuffix},
+				[]*proof.Proof{&proofSuffix},
 				p.cfg.ProofWatcher.DefaultUpdateCallback(),
 			)
 			if err != nil {
@@ -462,7 +507,7 @@ func (p *ChainPorter) storeProofs(sendPkg *sendPackage) error {
 
 // fetchInputProof fetches a proof for the given input from the proof archive.
 func (p *ChainPorter) fetchInputProof(ctx context.Context,
-	input asset.PrevID) (*proof.File, error) {
+	input TransferInput) (*proof.File, error) {
 
 	scriptKey, err := btcec.ParsePubKey(input.ScriptKey[:])
 	if err != nil {
@@ -488,72 +533,65 @@ func (p *ChainPorter) fetchInputProof(ctx context.Context,
 	return inputProofFile, nil
 }
 
-// updateAssetProofFile retrieves and updates the proof file for the given
-// virtual packet output.
-func (p *ChainPorter) updateAssetProofFile(ctx context.Context,
-	inputs []asset.PrevID, proofSuffix *proof.Proof,
-	newScriptKey asset.ScriptKey,
-	confEvent *chainntnfs.TxConfirmation) (*proof.AnnotatedProof, error) {
+// updateAssetProofFile retrieves and updates the proof file for the given asset
+// ID and script key with the new proof.
+func (p *ChainPorter) updateAssetProofFile(ctx context.Context, assetID asset.ID,
+	scriptKeyPub *btcec.PublicKey, oldOutPoint *wire.OutPoint,
+	confEvent *chainntnfs.TxConfirmation,
+	newProof *proof.Proof) (*proof.AnnotatedProof, *proof.Proof, error) {
 
-	// The suffix doesn't contain any information about the confirmed block
-	// yet, so we'll add that now.
-	err := proofSuffix.UpdateTransitionProof(&proof.BaseProofParams{
+	// Retrieve current proof file.
+	locator := proof.Locator{
+		AssetID:   &assetID,
+		ScriptKey: *scriptKeyPub,
+		OutPoint:  oldOutPoint,
+	}
+	currentProofFileBlob, err := p.cfg.AssetProofs.FetchProof(ctx, locator)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error fetching current proof: %w",
+			err)
+	}
+	currentProofFile := proof.NewEmptyFile(proof.V0)
+	err = currentProofFile.Decode(bytes.NewReader(currentProofFileBlob))
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding proof file: %w",
+			err)
+	}
+
+	// Now that we have the current proof file, we'll update the new proof
+	// with chain tx confirmation data and then append it to the proof file.
+	err = newProof.UpdateTransitionProof(&proof.BaseProofParams{
 		Block:       confEvent.Block,
 		BlockHeight: confEvent.BlockHeight,
 		Tx:          confEvent.Tx,
 		TxIndex:     int(confEvent.TxIndex),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error updating transition proof: %w",
+		return nil, nil, fmt.Errorf("error updating new proof with "+
+			"chain transaction confirmation data: %w", err)
+	}
+
+	// With the new proof updated, we can append the proof to the
+	// current proof file.
+	if err := currentProofFile.AppendProof(*newProof); err != nil {
+		return nil, nil, fmt.Errorf("error appending proof suffix: %w",
 			err)
 	}
-
-	// The suffix is complete, so we need to fetch the input proof in order
-	// to append the suffix to it.
-	firstInput := inputs[0]
-	inputProofFile, err := p.fetchInputProof(ctx, firstInput)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching input proof: %w", err)
+	var newProofFileBuffer bytes.Buffer
+	if err := currentProofFile.Encode(&newProofFileBuffer); err != nil {
+		return nil, nil, fmt.Errorf("error encoding proof file: %w",
+			err)
+	}
+	newAnnotatedProofFile := &proof.AnnotatedProof{
+		Locator: proof.Locator{
+			AssetID:   &assetID,
+			ScriptKey: *newProof.Asset.ScriptKey.PubKey,
+			OutPoint:  fn.Ptr(newProof.OutPoint()),
+		},
+		Blob: newProofFileBuffer.Bytes(),
 	}
 
-	// Are there more inputs? Then this is a merge, and we need to add those
-	// additional files to the suffix as well.
-	for idx := 1; idx < len(inputs); idx++ {
-		additionalInputProofFile, err := p.fetchInputProof(
-			ctx, inputs[idx],
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching input proof "+
-				"%d: %w", idx, err)
-		}
-
-		proofSuffix.AdditionalInputs = append(
-			proofSuffix.AdditionalInputs, *additionalInputProofFile,
-		)
-	}
-
-	// With the proof suffix updated, we can append the proof, then encode
-	// it to get the final proof file.
-	if err := inputProofFile.AppendProof(*proofSuffix); err != nil {
-		return nil, fmt.Errorf("error appending proof: %w", err)
-	}
-	var outputProofBuf bytes.Buffer
-	if err := inputProofFile.Encode(&outputProofBuf); err != nil {
-		return nil, fmt.Errorf("error encoding proof: %w", err)
-	}
-
-	// Now we just need to identify the new proof correctly before adding it
-	// to the proof archive.
-	outputProofLocator := proof.Locator{
-		AssetID:   &firstInput.ID,
-		ScriptKey: *newScriptKey.PubKey,
-		OutPoint:  fn.Ptr(proofSuffix.OutPoint()),
-	}
-
-	return &proof.AnnotatedProof{
-		Locator: outputProofLocator,
-		Blob:    outputProofBuf.Bytes(),
-	}, nil
+	return newAnnotatedProofFile, newProof, nil
 }
 
 // transferReceiverProof retrieves the sender and receiver proofs from the
@@ -596,17 +634,6 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 
 			log.Debugf("Not transferring proof for burn script "+
 				"key %x", key.SerializeCompressed())
-			return nil
-		}
-
-		// We can only deliver proofs for outputs that have a proof
-		// courier address. If an output doesn't have one, we assume it
-		// is an interactive send where the recipient is already aware
-		// of the proof or learns of it through another channel.
-		if len(out.ProofCourierAddr) == 0 {
-			log.Debugf("Not transferring proof for output with "+
-				"script key %x as it has no proof courier "+
-				"address", key.SerializeCompressed())
 			return nil
 		}
 
@@ -661,6 +688,10 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 
 		// Deliver proof to proof courier service.
 		err = courier.DeliverProof(ctx, receiverProof)
+		if err != nil {
+			return fmt.Errorf("failed to deliver proof via "+
+				"courier service: %w", err)
+		}
 
 		// If the proof courier returned a backoff error, then
 		// we'll just return nil here so that we can retry
@@ -670,8 +701,7 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("failed to deliver proof via "+
-				"courier service: %w", err)
+			return fmt.Errorf("error delivering proof: %w", err)
 		}
 
 		return nil
@@ -683,13 +713,11 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 	// Load passive asset proof files from archive.
 	passiveAssetProofFiles := map[asset.ID][]*proof.AnnotatedProof{}
 	for idx := range pkg.OutboundPkg.PassiveAssets {
-		passivePkt := pkg.OutboundPkg.PassiveAssets[idx]
-		passiveOut := passivePkt.Outputs[0]
-
+		passiveAsset := pkg.OutboundPkg.PassiveAssets[idx]
 		proofLocator := proof.Locator{
-			AssetID:   fn.Ptr(passiveOut.Asset.ID()),
-			ScriptKey: *passiveOut.ScriptKey.PubKey,
-			OutPoint:  fn.Ptr(passiveOut.ProofSuffix.OutPoint()),
+			AssetID:   &passiveAsset.GenesisID,
+			ScriptKey: *passiveAsset.ScriptKey.PubKey,
+			OutPoint:  fn.Ptr(passiveAsset.NewProof.OutPoint()),
 		}
 		proofFileBlob, err := p.cfg.AssetProofs.FetchProof(
 			ctx, proofLocator,
@@ -699,8 +727,8 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 				"proof file: %w", err)
 		}
 
-		passiveAssetProofFiles[passiveOut.Asset.ID()] = append(
-			passiveAssetProofFiles[passiveOut.Asset.ID()],
+		passiveAssetProofFiles[passiveAsset.GenesisID] = append(
+			passiveAssetProofFiles[passiveAsset.GenesisID],
 			&proof.AnnotatedProof{
 				Locator: proofLocator,
 				Blob:    proofFileBlob,
@@ -724,10 +752,21 @@ func (p *ChainPorter) transferReceiverProof(pkg *sendPackage) error {
 	}
 
 	// If we have a non-interactive proof, then we'll launch several
-	// goroutines to deliver the proof(s) to the receiver(s).
-	err = fn.ParSlice(ctx, pkg.OutboundPkg.Outputs, deliver)
-	if err != nil {
-		return fmt.Errorf("error delivering proof(s): %w", err)
+	// goroutines to deliver the proof(s) to the receiver(s). Since a
+	// pre-signed parcel (a parcel that uses the RPC driven vPSBT flow)
+	// doesn't have proof courier URLs (they aren't part of the vPSBT), the
+	// proofs must always be delivered in an interactive manner from sender
+	// to receiver, and we don't even need to attempt to use a proof
+	// courier.
+	_, isPreSigned := pkg.Parcel.(*PreSignedParcel)
+	if !isPreSigned {
+		ctx, cancel := p.WithCtxQuitNoTimeout()
+		defer cancel()
+
+		err := fn.ParSlice(ctx, pkg.OutboundPkg.Outputs, deliver)
+		if err != nil {
+			return fmt.Errorf("error delivering proof(s): %w", err)
+		}
 	}
 
 	pkg.SendState = SendStateComplete
@@ -791,11 +830,8 @@ func (p *ChainPorter) importLocalAddresses(ctx context.Context,
 func createDummyOutput() *wire.TxOut {
 	// The dummy PkScript is the same size as an encoded P2TR output.
 	newOutput := wire.TxOut{
-		Value: int64(tapsend.DummyAmtSats),
-		PkScript: append(
-			[]byte{txscript.OP_1, txscript.OP_DATA_32},
-			make([]byte, 32)...,
-		),
+		Value:    int64(tapscript.DummyAmtSats),
+		PkScript: make([]byte, 34),
 	}
 	return &newOutput
 }
@@ -824,9 +860,10 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 			return nil, fmt.Errorf("unable to cast parcel to " +
 				"address parcel")
 		}
-		fundSendRes, err := p.cfg.AssetWallet.FundAddressSend(
-			ctx, addrParcel.destAddrs...,
-		)
+		fundSendRes, outputIdxToAddr, err :=
+			p.cfg.AssetWallet.FundAddressSend(
+				ctx, addrParcel.destAddrs...,
+			)
 		if err != nil {
 			return nil, fmt.Errorf("unable to fund address send: "+
 				"%w", err)
@@ -834,6 +871,7 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 
 		currentPkg.VirtualPacket = fundSendRes.VPacket
 		currentPkg.InputCommitments = fundSendRes.InputCommitments
+		currentPkg.OutputIdxToAddr = outputIdxToAddr
 
 		currentPkg.SendState = SendStateVirtualSign
 
@@ -885,7 +923,7 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 
 		default:
 			feeRate, err = p.cfg.ChainBridge.EstimateFee(
-				ctx, tapsend.SendConfTarget,
+				ctx, tapscript.SendConfTarget,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to estimate "+
@@ -909,28 +947,27 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 		// Gather passive assets virtual packets and sign them.
 		wallet := p.cfg.AssetWallet
 
-		currentPkg.PassiveAssets, err = wallet.CreatePassiveAssets(
-			ctx, []*tappsbt.VPacket{vPacket},
-			currentPkg.InputCommitments,
+		currentPkg.PassiveAssets, err = wallet.SignPassiveAssets(
+			vPacket, currentPkg.InputCommitments,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create passive "+
-				"assets: %w", err)
-		}
-
-		log.Debugf("Signing %d passive assets",
-			len(currentPkg.PassiveAssets))
-		err = wallet.SignPassiveAssets(currentPkg.PassiveAssets)
 		if err != nil {
 			return nil, fmt.Errorf("unable to sign passive "+
 				"assets: %w", err)
+		}
+
+		var passiveVPackets []*tappsbt.VPacket
+		for _, passiveAsset := range currentPkg.PassiveAssets {
+			passiveVPackets = append(
+				passiveVPackets, passiveAsset.VPacket,
+			)
 		}
 
 		anchorTx, err := wallet.AnchorVirtualTransactions(
 			ctx, &AnchorVTxnsParams{
 				FeeRate:            feeRate,
 				VPkts:              []*tappsbt.VPacket{vPacket},
-				PassiveAssetsVPkts: currentPkg.PassiveAssets,
+				InputCommitments:   currentPkg.InputCommitments,
+				PassiveAssetsVPkts: passiveVPackets,
 			},
 		)
 		if err != nil {
@@ -959,30 +996,30 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 		currentHeight, err := p.cfg.ChainBridge.CurrentHeight(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get current height: "+
-				"%w", err)
-		}
-
-		// We now need to find out if this is a transfer to ourselves
-		// (e.g. a change output) or an outbound transfer. A key being
-		// local means the lnd node connected to this daemon knows how
-		// to derive the key.
-		isLocalKey := func(key asset.ScriptKey) bool {
-			return key.TweakedScriptKey != nil &&
-				p.cfg.KeyRing.IsLocalKey(ctx, key.RawKey)
+				"%v", err)
 		}
 
 		// We need to prepare the parcel for storage.
-		parcel, err := ConvertToTransfer(
-			currentHeight, []*tappsbt.VPacket{
-				currentPkg.VirtualPacket,
-			}, currentPkg.AnchorTx, currentPkg.PassiveAssets,
-			isLocalKey,
-		)
+		parcel, err := currentPkg.prepareForStorage(currentHeight)
 		if err != nil {
 			return nil, fmt.Errorf("unable to prepare parcel for "+
 				"storage: %w", err)
 		}
 		currentPkg.OutboundPkg = parcel
+
+		// We now need to find out if this is a transfer to ourselves
+		// (e.g. a change output) or an outbound transfer. A key being
+		// local means the lnd node connected to this daemon knows how
+		// to derive the key.
+		for idx := range parcel.Outputs {
+			out := &parcel.Outputs[idx]
+			key := out.ScriptKey
+			if key.TweakedScriptKey != nil &&
+				p.cfg.KeyRing.IsLocalKey(ctx, key.RawKey) {
+
+				out.ScriptKeyLocal = true
+			}
+		}
 
 		// Don't allow shutdown while we're attempting to store proofs.
 		ctx, cancel = p.CtxBlocking()
@@ -996,7 +1033,7 @@ func (p *ChainPorter) stateStep(currentPkg sendPackage) (*sendPackage, error) {
 		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to write send pkg to "+
-				"disk: %w", err)
+				"disk: %v", err)
 		}
 
 		// We've logged the state transition to disk, so now we can

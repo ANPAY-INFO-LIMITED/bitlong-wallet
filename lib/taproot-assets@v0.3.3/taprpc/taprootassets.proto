@@ -152,12 +152,6 @@ enum AssetMetaType {
     should be interpreted as opaque blobs.
     */
     META_TYPE_OPAQUE = 0;
-
-    /*
-    JSON is used for asset meta blobs that are to be interpreted as valid JSON
-    strings.
-    */
-    META_TYPE_JSON = 1;
 }
 
 message AssetMeta {
@@ -466,10 +460,6 @@ message ListBalancesResponse {
 }
 
 message ListTransfersRequest {
-    // anchor_txid specifies the hexadecimal encoded txid string of the anchor
-    // transaction for which to retrieve transfers. An empty value indicates
-    // that this parameter should be disregarded in transfer selection.
-    string anchor_txid = 1;
 }
 
 message ListTransfersResponse {
@@ -539,11 +529,24 @@ enum OutputType {
     // output. In either case, the asset of this output has a tx witness.
     OUTPUT_TYPE_SPLIT_ROOT = 1;
 
-    reserved 2;
+    // OUTPUT_TYPE_PASSIVE_ASSETS_ONLY indicates that this output only carries
+    // passive assets and therefore the asset in this output is nil. The passive
+    // assets themselves are signed in their own virtual transactions and
+    // are not present in this packet.
+    OUTPUT_TYPE_PASSIVE_ASSETS_ONLY = 2;
 
-    reserved 3;
+    // OUTPUT_TYPE_PASSIVE_SPLIT_ROOT is a split root output that carries the
+    // change from a split or a tombstone from a non-interactive full value send
+    // output, as well as passive assets.
+    OUTPUT_TYPE_PASSIVE_SPLIT_ROOT = 3;
 
-    reserved 4;
+    // OUTPUT_TYPE_SIMPLE_PASSIVE_ASSETS is a plain full-value interactive send
+    // output that also carries passive assets. This is a special case where we
+    // send the full value of a single asset in a commitment to a new script
+    // key, but also carry passive assets in the same output. This is useful for
+    // key rotation (send-to-self) scenarios or asset burns where we burn the
+    // full supply of a single asset within a commitment.
+    OUTPUT_TYPE_SIMPLE_PASSIVE_ASSETS = 4;
 }
 
 message TransferOutput {
@@ -740,26 +743,6 @@ message KeyDescriptor {
     The key locator that identifies which key to use for signing.
     */
     KeyLocator key_loc = 2;
-}
-
-message TapscriptFullTree {
-    /*
-    The complete, ordered list of all tap leaves of the tree.
-    */
-    repeated TapLeaf all_leaves = 1;
-}
-
-message TapLeaf {
-    // The script of the tap leaf.
-    bytes script = 2;
-}
-
-message TapBranch {
-    // The TapHash of the left child of the root hash of a Tapscript tree.
-    bytes left_taphash = 1;
-
-    // The TapHash of the right child of the root hash of a Tapscript tree.
-    bytes right_taphash = 2;
 }
 
 message DecodeAddrRequest {

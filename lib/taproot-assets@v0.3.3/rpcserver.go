@@ -18,7 +18,6 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 	proxy "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -29,8 +28,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/mssmt"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/rfq"
-	"github.com/lightninglabs/taproot-assets/rfqmsg"
 	"github.com/lightninglabs/taproot-assets/rpcperms"
 	"github.com/lightninglabs/taproot-assets/tapfreighter"
 	"github.com/lightninglabs/taproot-assets/tapgarden"
@@ -38,18 +35,14 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	wrpc "github.com/lightninglabs/taproot-assets/taprpc/assetwalletrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/rfqrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightninglabs/taproot-assets/tapscript"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"github.com/lightningnetwork/lnd/build"
 	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
-	"github.com/lightningnetwork/lnd/lnwire"
-	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/lightningnetwork/lnd/signal"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
@@ -111,7 +104,6 @@ type rpcServer struct {
 	taprpc.UnimplementedTaprootAssetsServer
 	wrpc.UnimplementedAssetWalletServer
 	mintrpc.UnimplementedMintServer
-	rfqrpc.UnimplementedRfqServer
 	unirpc.UnimplementedUniverseServer
 	tapdevrpc.UnimplementedTapDevServer
 
@@ -184,7 +176,6 @@ func (r *rpcServer) RegisterWithGrpcServer(grpcServer *grpc.Server) error {
 	taprpc.RegisterTaprootAssetsServer(grpcServer, r)
 	wrpc.RegisterAssetWalletServer(grpcServer, r)
 	mintrpc.RegisterMintServer(grpcServer, r)
-	rfqrpc.RegisterRfqServer(grpcServer, r)
 	unirpc.RegisterUniverseServer(grpcServer, r)
 	tapdevrpc.RegisterGrpcServer(grpcServer, r)
 	return nil
@@ -464,7 +455,7 @@ func (r *rpcServer) MintAsset(ctx context.Context,
 		// If the asset meta field was specified, then the data inside
 		// must be valid. Let's check that now.
 		if err := seedling.Meta.Validate(); err != nil {
-			return nil, fmt.Errorf("invalid asset meta: %w", err)
+			return nil, err
 		}
 	}
 
@@ -498,24 +489,26 @@ func (r *rpcServer) MintAsset(ctx context.Context,
 	}
 }
 
-// checkFeeRateSanity ensures that the provided fee rate, in sat/kw, is above
-// the same minimum fee used as a floor in the fee estimator.
+// checkFeeRateSanity ensures that the provided fee rate is above the same
+// minimum fee used as a floor in the fee estimator.
 func checkFeeRateSanity(rpcFeeRate uint32) (*chainfee.SatPerKWeight, error) {
-	feeFloor := uint32(chainfee.FeePerKwFloor)
+	var feeRate *chainfee.SatPerKWeight
 	switch {
 	// No manual fee rate was set, which is the default.
 	case rpcFeeRate == 0:
-		return nil, nil
 
 	// A manual fee was set but is below a reasonable floor.
-	case rpcFeeRate < feeFloor:
-		return nil, fmt.Errorf("manual fee rate below floor: "+
-			"(fee_rate=%d, floor=%d sat/kw)", rpcFeeRate, feeFloor)
+	case rpcFeeRate < uint32(chainfee.FeePerKwFloor):
+		return nil, fmt.Errorf("manual fee rate %d below floor of %d",
+			rpcFeeRate, uint32(chainfee.FeePerKwFloor))
 
-	// Set the fee rate for this transaction.
 	default:
-		return fn.Ptr(chainfee.SatPerKWeight(rpcFeeRate)), nil
+		// Set the fee rate for this transaction.
+		manualFeeRate := chainfee.SatPerKWeight(rpcFeeRate)
+		feeRate = &manualFeeRate
 	}
+
+	return feeRate, nil
 }
 
 // FinalizeBatch attempts to finalize the current pending batch.
@@ -523,44 +516,12 @@ func (r *rpcServer) FinalizeBatch(_ context.Context,
 	req *mintrpc.FinalizeBatchRequest) (*mintrpc.FinalizeBatchResponse,
 	error) {
 
-	var batchSibling *asset.TapscriptTreeNodes
-
 	feeRate, err := checkFeeRateSanity(req.FeeRate)
 	if err != nil {
 		return nil, err
 	}
-	feeRateOpt := fn.MaybeSome(feeRate)
 
-	batchTapscriptTree := req.GetFullTree()
-	batchTapBranch := req.GetBranch()
-
-	switch {
-	case batchTapscriptTree != nil && batchTapBranch != nil:
-		return nil, fmt.Errorf("cannot specify both tapscript tree " +
-			"and tapscript tree branches")
-
-	case batchTapscriptTree != nil:
-		batchSibling, err = marshalTapscriptFullTree(batchTapscriptTree)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tapscript tree: %w",
-				err)
-		}
-
-	case batchTapBranch != nil:
-		batchSibling, err = marshalTapscriptBranch(batchTapBranch)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tapscript branch: %w",
-				err)
-		}
-	}
-	tapTreeOpt := fn.MaybeSome(batchSibling)
-
-	batch, err := r.cfg.AssetMinter.FinalizeBatch(
-		tapgarden.FinalizeParams{
-			FeeRate:        feeRateOpt,
-			SiblingTapTree: tapTreeOpt,
-		},
-	)
+	batch, err := r.cfg.AssetMinter.FinalizeBatch(feeRate)
 	if err != nil {
 		return nil, fmt.Errorf("unable to finalize batch: %w", err)
 	}
@@ -720,7 +681,8 @@ func (r *rpcServer) checkBalanceOverflow(ctx context.Context,
 func (r *rpcServer) ListAssets(ctx context.Context,
 	req *taprpc.ListAssetRequest) (*taprpc.ListAssetResponse, error) {
 
-	if req.IncludeSpent && req.IncludeLeased {
+	switch {
+	case req.IncludeSpent && req.IncludeLeased:
 		return nil, fmt.Errorf("cannot specify both include_spent " +
 			"and include_leased")
 	}
@@ -817,7 +779,7 @@ func (r *rpcServer) listBalancesByAsset(ctx context.Context,
 
 		resp.AssetBalances[assetIDStr] = &taprpc.AssetBalance{
 			AssetGenesis: &taprpc.GenesisInfo{
-				Version:      balance.Version,
+				Version:      int32(balance.Version),
 				GenesisPoint: balance.GenesisPoint.String(),
 				AssetType:    taprpc.AssetType(balance.Type),
 				Name:         balance.Tag,
@@ -998,7 +960,7 @@ func (r *rpcServer) ListBalances(ctx context.Context,
 			groupKey, err = btcec.ParsePubKey(req.GroupKeyFilter)
 			if err != nil {
 				return nil, fmt.Errorf("invalid group key "+
-					"filter: %w", err)
+					"filter: %v", err)
 			}
 		}
 
@@ -1009,26 +971,12 @@ func (r *rpcServer) ListBalances(ctx context.Context,
 	}
 }
 
-// ListTransfers lists all asset transfers managed by this daemon.
+// ListTransfers lists all asset transfers managed by this deamon.
 func (r *rpcServer) ListTransfers(ctx context.Context,
-	req *taprpc.ListTransfersRequest) (*taprpc.ListTransfersResponse,
+	_ *taprpc.ListTransfersRequest) (*taprpc.ListTransfersResponse,
 	error) {
 
-	// Unmarshal the anchor tx hash if one was provided.
-	var (
-		anchorTxHash *chainhash.Hash
-		err          error
-	)
-
-	if len(req.AnchorTxid) != 0 {
-		anchorTxHash, err = chainhash.NewHashFromStr(req.AnchorTxid)
-		if err != nil {
-			return nil, fmt.Errorf("invalid anchor tx hash: %w",
-				err)
-		}
-	}
-
-	parcels, err := r.cfg.AssetStore.QueryParcels(ctx, anchorTxHash, false)
+	parcels, err := r.cfg.AssetStore.QueryParcels(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query parcels: %w", err)
 	}
@@ -1100,6 +1048,8 @@ func (r *rpcServer) QueryAddrs(ctx context.Context,
 func (r *rpcServer) NewAddr(ctx context.Context,
 	req *taprpc.NewAddrRequest) (*taprpc.Addr, error) {
 
+	var err error
+
 	// Parse the proof courier address if one was provided, otherwise use
 	// the default specified in the config.
 	courierAddr := r.cfg.DefaultProofCourierAddr
@@ -1131,13 +1081,12 @@ func (r *rpcServer) NewAddr(ctx context.Context,
 	rpcsLog.Infof("[NewAddr]: making new addr: asset_id=%x, amt=%v",
 		assetID[:], req.Amt)
 
-	err := r.checkBalanceOverflow(ctx, &assetID, nil, req.Amt)
+	err = r.checkBalanceOverflow(ctx, &assetID, nil, req.Amt)
 	if err != nil {
 		return nil, err
 	}
 
-	// Was there a tapscript sibling preimage specified? If so, decode it
-	// and check that it is not a Taproot Asset Commitment.
+	// Was there a tapscript sibling preimage specified?
 	tapscriptSibling, _, err := commitment.MaybeDecodeTapscriptPreimage(
 		req.TapscriptSibling,
 	)
@@ -1263,9 +1212,7 @@ func (r *rpcServer) VerifyProof(ctx context.Context,
 
 	headerVerifier := tapgarden.GenHeaderVerifier(ctx, r.cfg.ChainBridge)
 	groupVerifier := tapgarden.GenGroupVerifier(ctx, r.cfg.MintingStore)
-	_, err = proofFile.Verify(
-		ctx, headerVerifier, proof.DefaultMerkleVerifier, groupVerifier,
-	)
+	_, err = proofFile.Verify(ctx, headerVerifier, groupVerifier)
 	if err != nil {
 		// We don't want to fail the RPC request because of a proof
 		// verification error, but we do want to log it for easier
@@ -1420,7 +1367,7 @@ func (r *rpcServer) marshalProof(ctx context.Context, p *proof.Proof,
 	var exclusionProofs [][]byte
 	for _, exclusionProof := range p.ExclusionProofs {
 		var exclusionProofBuf bytes.Buffer
-		err = exclusionProof.Encode(&exclusionProofBuf)
+		err := exclusionProof.Encode(&exclusionProofBuf)
 		if err != nil {
 			return nil, fmt.Errorf("unable to encode exclusion "+
 				"proofs: %w", err)
@@ -1432,7 +1379,7 @@ func (r *rpcServer) marshalProof(ctx context.Context, p *proof.Proof,
 
 	var splitRootProofBuf bytes.Buffer
 	if splitRootProof != nil {
-		err = splitRootProof.Encode(&splitRootProofBuf)
+		err := splitRootProof.Encode(&splitRootProofBuf)
 		if err != nil {
 			return nil, fmt.Errorf("unable to encode split root "+
 				"proof: %w", err)
@@ -1454,31 +1401,21 @@ func (r *rpcServer) marshalProof(ctx context.Context, p *proof.Proof,
 	}
 
 	if withMetaReveal {
-		switch {
-		case p.MetaReveal != nil:
-			rpcMeta = &taprpc.AssetMeta{
-				Data: p.MetaReveal.Data,
-				Type: taprpc.AssetMetaType(
-					p.MetaReveal.Type,
-				),
-				MetaHash: fn.ByteSlice(p.MetaReveal.MetaHash()),
-			}
-
-		case len(rpcAsset.AssetGenesis.MetaHash) == 0:
+		metaHash := rpcAsset.AssetGenesis.MetaHash
+		if len(metaHash) == 0 {
 			return nil, fmt.Errorf("asset does not contain meta " +
 				"data")
+		}
 
-		default:
-			metaHash := rpcAsset.AssetGenesis.MetaHash
-			req := &taprpc.FetchAssetMetaRequest{
+		rpcMeta, err = r.FetchAssetMeta(
+			ctx, &taprpc.FetchAssetMetaRequest{
 				Asset: &taprpc.FetchAssetMetaRequest_MetaHash{
 					MetaHash: metaHash,
 				},
-			}
-			rpcMeta, err = r.FetchAssetMeta(ctx, req)
-			if err != nil {
-				return nil, err
-			}
+			},
+		)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -1605,8 +1542,8 @@ func (r *rpcServer) ImportProof(ctx context.Context,
 	// Now that we know the proof file is at least present, we'll attempt
 	// to import it into the main archive.
 	err = r.cfg.ProofArchive.ImportProofs(
-		ctx, headerVerifier, proof.DefaultMerkleVerifier, groupVerifier,
-		false, &proof.AnnotatedProof{
+		ctx, headerVerifier, groupVerifier, false,
+		&proof.AnnotatedProof{
 			Locator: proof.Locator{
 				AssetID:   fn.Ptr(lastProof.Asset.ID()),
 				ScriptKey: *lastProof.Asset.ScriptKey.PubKey,
@@ -1718,7 +1655,7 @@ func (r *rpcServer) FundVirtualPsbt(ctx context.Context,
 		// Extract the recipient information from the packet. This
 		// basically assembles the asset ID we want to send to and the
 		// sum of all output amounts.
-		desc, err := tapsend.DescribeRecipients(
+		desc, err := tapscript.DescribeRecipients(
 			ctx, vPkt, r.cfg.TapAddrBook,
 		)
 		if err != nil {
@@ -1762,7 +1699,9 @@ func (r *rpcServer) FundVirtualPsbt(ctx context.Context,
 			return nil, fmt.Errorf("no recipients specified")
 		}
 
-		fundedVPkt, err = r.cfg.AssetWallet.FundAddressSend(ctx, addr)
+		fundedVPkt, _, err = r.cfg.AssetWallet.FundAddressSend(
+			ctx, addr,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error funding address send: "+
 				"%w", err)
@@ -1786,7 +1725,7 @@ func (r *rpcServer) FundVirtualPsbt(ctx context.Context,
 
 // SignVirtualPsbt signs the inputs of a virtual transaction and prepares the
 // commitments of the inputs and outputs.
-func (r *rpcServer) SignVirtualPsbt(ctx context.Context,
+func (r *rpcServer) SignVirtualPsbt(_ context.Context,
 	req *wrpc.SignVirtualPsbtRequest) (*wrpc.SignVirtualPsbtResponse,
 	error) {
 
@@ -1799,43 +1738,6 @@ func (r *rpcServer) SignVirtualPsbt(ctx context.Context,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error decoding packet: %w", err)
-	}
-
-	// Make sure the input keys are known.
-	for _, input := range vPkt.Inputs {
-		// If we have all the derivation information, we don't need to
-		// do anything.
-		if len(input.Bip32Derivation) > 0 &&
-			len(input.TaprootBip32Derivation) > 0 {
-
-			continue
-		}
-
-		scriptKey := input.Asset().ScriptKey
-
-		// If the full tweaked script key isn't set on the asset, we
-		// need to look it up in the local database, to make sure we'll
-		// be able to sign for it.
-		if scriptKey.TweakedScriptKey == nil {
-			tweakedScriptKey, err := r.cfg.AssetWallet.FetchScriptKey(
-				ctx, scriptKey.PubKey,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("error fetching "+
-					"script key: %w", err)
-			}
-
-			scriptKey.TweakedScriptKey = tweakedScriptKey
-		}
-
-		derivation, trDerivation := tappsbt.Bip32DerivationFromKeyDesc(
-			scriptKey.TweakedScriptKey.RawKey,
-			r.cfg.ChainParams.HDCoinType,
-		)
-		input.Bip32Derivation = []*psbt.Bip32Derivation{derivation}
-		input.TaprootBip32Derivation = []*psbt.TaprootBip32Derivation{
-			trDerivation,
-		}
 	}
 
 	signedInputs, err := r.cfg.AssetWallet.SignVirtualPacket(vPkt)
@@ -1878,28 +1780,30 @@ func (r *rpcServer) AnchorVirtualPsbts(ctx context.Context,
 		return nil, fmt.Errorf("error decoding packet: %w", err)
 	}
 
-	// Query the asset store to gather tap commitments for all inputs.
-	inputCommitments := make(tappsbt.InputCommitments, len(vPacket.Inputs))
-	for idx := range vPacket.Inputs {
-		input := vPacket.Inputs[idx]
-
-		inputAsset := input.Asset()
-		prevID := input.PrevID
-
-		inputCommitment, err := r.cfg.AssetStore.FetchCommitment(
-			ctx, inputAsset.ID(), prevID.OutPoint,
-			inputAsset.GroupKey, &inputAsset.ScriptKey, true,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching input "+
-				"commitment: %w", err)
-		}
-
-		inputCommitments[prevID] = inputCommitment.Commitment
+	if len(vPacket.Inputs) != 1 {
+		return nil, fmt.Errorf("only one input is currently supported")
 	}
 
+	inputAsset := vPacket.Inputs[0].Asset()
+	prevID := vPacket.Inputs[0].PrevID
+	inputCommitment, err := r.cfg.AssetStore.FetchCommitment(
+		ctx, inputAsset.ID(), prevID.OutPoint, inputAsset.GroupKey,
+		&inputAsset.ScriptKey, true,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching input commitment: %w",
+			err)
+	}
+
+	rpcsLog.Debugf("Selected commitment for anchor point %v, requesting "+
+		"delivery", inputCommitment.AnchorPoint)
+
 	resp, err := r.cfg.ChainPorter.RequestShipment(
-		tapfreighter.NewPreSignedParcel(vPacket, inputCommitments),
+		tapfreighter.NewPreSignedParcel(
+			vPacket, tappsbt.InputCommitments{
+				0: inputCommitment.Commitment,
+			},
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error requesting delivery: %w", err)
@@ -1968,149 +1872,6 @@ func (r *rpcServer) NextScriptKey(ctx context.Context,
 
 	return &wrpc.NextScriptKeyResponse{
 		ScriptKey: marshalScriptKey(scriptKey),
-	}, nil
-}
-
-// QueryInternalKey returns the key descriptor for the given internal key.
-func (r *rpcServer) QueryInternalKey(ctx context.Context,
-	req *wrpc.QueryInternalKeyRequest) (*wrpc.QueryInternalKeyResponse,
-	error) {
-
-	var (
-		internalKey *btcec.PublicKey
-		keyLocator  keychain.KeyLocator
-		err         error
-	)
-
-	// We allow the user to specify the key either in the 33-byte compressed
-	// format or the 32-byte x-only format.
-	switch {
-	case len(req.InternalKey) == 33:
-		internalKey, err = btcec.ParsePubKey(req.InternalKey)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing internal key: %w",
-				err)
-		}
-
-		// If the full 33-byte key was specified, we expect the user to
-		// already know the parity byte, so we only try once.
-		keyLocator, err = r.cfg.AssetWallet.FetchInternalKeyLocator(
-			ctx, internalKey,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching internal key: "+
-				"%w", err)
-		}
-
-	case len(req.InternalKey) == 32:
-		internalKey, err = schnorr.ParsePubKey(req.InternalKey)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing internal key: %w",
-				err)
-		}
-
-		keyLocator, err = r.cfg.AssetWallet.FetchInternalKeyLocator(
-			ctx, internalKey,
-		)
-
-		switch {
-		// If the key can't be found with the even parity, we'll try
-		// the odd parity.
-		case errors.Is(err, address.ErrInternalKeyNotFound):
-			internalKey = tapscript.FlipParity(internalKey)
-
-			keyLocator, err = r.cfg.AssetWallet.FetchInternalKeyLocator(
-				ctx, internalKey,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("error fetching "+
-					"internal key: %w", err)
-			}
-
-		// For any other error from above, we'll return it to the user.
-		case err != nil:
-			return nil, fmt.Errorf("error fetching internal key: "+
-				"%w", err)
-		}
-
-	default:
-		return nil, fmt.Errorf("invalid internal key length")
-	}
-
-	return &wrpc.QueryInternalKeyResponse{
-		InternalKey: marshalKeyDescriptor(keychain.KeyDescriptor{
-			PubKey:     internalKey,
-			KeyLocator: keyLocator,
-		}),
-	}, nil
-}
-
-// QueryScriptKey returns the full script key descriptor for the given tweaked
-// script key.
-func (r *rpcServer) QueryScriptKey(ctx context.Context,
-	req *wrpc.QueryScriptKeyRequest) (*wrpc.QueryScriptKeyResponse, error) {
-
-	var (
-		scriptKey  *btcec.PublicKey
-		tweakedKey *asset.TweakedScriptKey
-		err        error
-	)
-
-	// We allow the user to specify the key either in the 33-byte compressed
-	// format or the 32-byte x-only format.
-	switch {
-	case len(req.TweakedScriptKey) == 33:
-		scriptKey, err = btcec.ParsePubKey(req.TweakedScriptKey)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing script key: %w",
-				err)
-		}
-
-		tweakedKey, err = r.cfg.AssetWallet.FetchScriptKey(
-			ctx, scriptKey,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching script key: %w",
-				err)
-		}
-
-	case len(req.TweakedScriptKey) == 32:
-		scriptKey, err = schnorr.ParsePubKey(req.TweakedScriptKey)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing script key: %w",
-				err)
-		}
-
-		tweakedKey, err = r.cfg.AssetWallet.FetchScriptKey(
-			ctx, scriptKey,
-		)
-
-		// If the key can't be found with the even parity, we'll try
-		// the odd parity.
-		if errors.Is(err, address.ErrScriptKeyNotFound) {
-			scriptKey = tapscript.FlipParity(scriptKey)
-
-			tweakedKey, err = r.cfg.AssetWallet.FetchScriptKey(
-				ctx, scriptKey,
-			)
-		}
-
-		// Return either the original error or the error from the re-try
-		// with odd parity.
-		if err != nil {
-			return nil, fmt.Errorf("error fetching script key: %w",
-				err)
-		}
-
-	default:
-		return nil, fmt.Errorf("invalid script key length")
-	}
-
-	return &wrpc.QueryScriptKeyResponse{
-		ScriptKey: marshalScriptKey(asset.ScriptKey{
-			PubKey:           scriptKey,
-			TweakedScriptKey: tweakedKey,
-		}),
 	}, nil
 }
 
@@ -2335,8 +2096,6 @@ func (r *rpcServer) SendAsset(_ context.Context,
 func (r *rpcServer) BurnAsset(ctx context.Context,
 	in *taprpc.BurnAssetRequest) (*taprpc.BurnAssetResponse, error) {
 
-	rpcsLog.Debug("Executing asset burn")
-
 	var assetID asset.ID
 	switch {
 	case len(in.GetAssetId()) > 0:
@@ -2366,31 +2125,12 @@ func (r *rpcServer) BurnAsset(ctx context.Context,
 
 	var groupKey *btcec.PublicKey
 	assetGroup, err := r.cfg.TapAddrBook.QueryAssetGroup(ctx, assetID)
-	switch {
-	case err == nil && assetGroup.GroupKey != nil:
-		// We found the asset group, so we can use the group key to
-		// burn the asset.
+	if err == nil && assetGroup.GroupKey != nil {
 		groupKey = &assetGroup.GroupPubKey
-	case errors.Is(err, address.ErrAssetGroupUnknown):
-		// We don't know the asset group, so we'll try to burn the
-		// asset using the asset ID only.
-		rpcsLog.Debug("Asset group key not found, asset may not be " +
-			"part of a group")
-	case err != nil:
-		return nil, fmt.Errorf("error querying asset group: %w", err)
 	}
-
-	var serializedGroupKey []byte
-	if groupKey != nil {
-		serializedGroupKey = groupKey.SerializeCompressed()
-	}
-
-	rpcsLog.Infof("Burning asset (asset_id=%x, group_key=%x, "+
-		"burn_amount=%d)", assetID[:], serializedGroupKey,
-		in.AmountToBurn)
 
 	fundResp, err := r.cfg.AssetWallet.FundBurn(
-		ctx, &tapsend.FundingDescriptor{
+		ctx, &tapscript.FundingDescriptor{
 			ID:       assetID,
 			GroupKey: groupKey,
 			Amount:   in.AmountToBurn,
@@ -2536,6 +2276,15 @@ func marshalOutputType(outputType tappsbt.VOutputType) (taprpc.OutputType,
 	case tappsbt.TypeSplitRoot:
 		return taprpc.OutputType_OUTPUT_TYPE_SPLIT_ROOT, nil
 
+	case tappsbt.TypePassiveAssetsOnly:
+		return taprpc.OutputType_OUTPUT_TYPE_PASSIVE_ASSETS_ONLY, nil
+
+	case tappsbt.TypePassiveSplitRoot:
+		return taprpc.OutputType_OUTPUT_TYPE_PASSIVE_SPLIT_ROOT, nil
+
+	case tappsbt.TypeSimplePassiveAssets:
+		return taprpc.OutputType_OUTPUT_TYPE_SIMPLE_PASSIVE_ASSETS, nil
+
 	default:
 		return 0, fmt.Errorf("unknown output type: %d", outputType)
 	}
@@ -2557,7 +2306,7 @@ func (r *rpcServer) SubscribeSendAssetEventNtfns(
 		eventSubscriber, false, false,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to register chain porter event "+
+		return fmt.Errorf("failed to register chain porter event"+
 			"notifications subscription: %w", err)
 	}
 
@@ -2949,29 +2698,6 @@ func marshalBatchState(batch *tapgarden.MintingBatch) (mintrpc.BatchState,
 	}
 }
 
-func marshalTapscriptFullTree(tree *taprpc.TapscriptFullTree) (
-	*asset.TapscriptTreeNodes, error) {
-
-	rpcLeaves := tree.GetAllLeaves()
-	leaves := fn.Map(rpcLeaves, func(l *taprpc.TapLeaf) txscript.TapLeaf {
-		return txscript.NewBaseTapLeaf(l.Script)
-	})
-
-	return asset.TapTreeNodesFromLeaves(leaves)
-}
-
-func marshalTapscriptBranch(branch *taprpc.TapBranch) (*asset.TapscriptTreeNodes,
-	error) {
-
-	branchData := [][]byte{branch.LeftTaphash, branch.RightTaphash}
-	tapBranch, err := asset.DecodeTapBranchNodes(branchData)
-	if err != nil {
-		return nil, err
-	}
-
-	return fn.Ptr(asset.FromBranch(*tapBranch)), nil
-}
-
 // UnmarshalScriptKey parses the RPC script key into the native counterpart.
 func UnmarshalScriptKey(rpcKey *taprpc.ScriptKey) (*asset.ScriptKey, error) {
 	var (
@@ -3246,59 +2972,6 @@ func marshalUniverseRoot(node universe.Root) (*unirpc.UniverseRoot, error) {
 	}, nil
 }
 
-// MultiverseRoot returns the root of the multiverse tree. This is useful to
-// determine the equality of two multiverse trees, since the root can directly
-// be compared to another multiverse root to find out if a sync is required.
-func (r *rpcServer) MultiverseRoot(ctx context.Context,
-	req *unirpc.MultiverseRootRequest) (*unirpc.MultiverseRootResponse,
-	error) {
-
-	proofType, err := UnmarshalUniProofType(req.ProofType)
-	if err != nil {
-		return nil, fmt.Errorf("invalid proof type: %w", err)
-	}
-
-	if proofType == universe.ProofTypeUnspecified {
-		return nil, fmt.Errorf("proof type must be specified")
-	}
-
-	filterByIDs := make([]universe.Identifier, len(req.SpecificIds))
-	for idx, rpcID := range req.SpecificIds {
-		filterByIDs[idx], err = UnmarshalUniID(rpcID)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse universe id: "+
-				"%w", err)
-		}
-
-		// Allow the RPC user to not specify the proof type for each ID
-		// individually since the outer one is mandatory.
-		if filterByIDs[idx].ProofType == universe.ProofTypeUnspecified {
-			filterByIDs[idx].ProofType = proofType
-		}
-
-		if filterByIDs[idx].ProofType != proofType {
-			return nil, fmt.Errorf("proof type mismatch in ID "+
-				"%d: %v != %v", idx, filterByIDs[idx].ProofType,
-				proofType)
-		}
-	}
-
-	rootNode, err := r.cfg.UniverseArchive.MultiverseRoot(
-		ctx, proofType, filterByIDs,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("unable to fetch multiverse root: %w",
-			err)
-	}
-
-	var resp unirpc.MultiverseRootResponse
-	rootNode.WhenSome(func(node universe.MultiverseRoot) {
-		resp.MultiverseRoot = marshalMssmtNode(node)
-	})
-
-	return &resp, nil
-}
-
 // AssetRoots queries for the known Universe roots associated with each known
 // asset. These roots represent the supply/audit state for each known asset.
 func (r *rpcServer) AssetRoots(ctx context.Context,
@@ -3498,7 +3171,7 @@ func (r *rpcServer) QueryAssetRoots(ctx context.Context,
 
 	// Check the rate limiter to see if we need to wait at all. If not then
 	// this'll be a noop.
-	if err = r.proofQueryRateLimiter.Wait(ctx); err != nil {
+	if err := r.proofQueryRateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -3551,7 +3224,7 @@ func (r *rpcServer) QueryAssetRoots(ctx context.Context,
 			foundGroupKey.SerializeCompressed(),
 			groupedAssetID.String())
 
-		assetRoots, err = r.queryAssetProofRoots(ctx, groupUniID)
+		assetRoots, err := r.queryAssetProofRoots(ctx, groupUniID)
 		if err != nil {
 			return nil, err
 		}
@@ -3631,7 +3304,7 @@ func (r *rpcServer) DeleteAssetRoot(ctx context.Context,
 	// issuance and transfer roots.
 	if universeID.ProofType == universe.ProofTypeUnspecified {
 		universeID.ProofType = universe.ProofTypeIssuance
-		_, err = r.cfg.UniverseArchive.DeleteRoot(ctx, universeID)
+		_, err := r.cfg.UniverseArchive.DeleteRoot(ctx, universeID)
 		if err != nil {
 			return nil, err
 		}
@@ -3685,7 +3358,7 @@ func (r *rpcServer) AssetLeafKeys(ctx context.Context,
 		return nil, err
 	}
 
-	// If the proof type wasn't specified, then we'll return an error as we
+	// If the proof type wasn't speciifed, then we'll return an error as we
 	// don't know which keys to actually fetch.
 	if universeID.ProofType == universe.ProofTypeUnspecified {
 		return nil, fmt.Errorf("proof type must be specified")
@@ -3697,7 +3370,7 @@ func (r *rpcServer) AssetLeafKeys(ctx context.Context,
 
 	// Check the rate limiter to see if we need to wait at all. If not then
 	// this'll be a noop.
-	if err = r.proofQueryRateLimiter.Wait(ctx); err != nil {
+	if err := r.proofQueryRateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -3762,7 +3435,7 @@ func (r *rpcServer) AssetLeaves(ctx context.Context,
 
 	// Check the rate limiter to see if we need to wait at all. If not then
 	// this'll be a noop.
-	if err = r.proofQueryRateLimiter.Wait(ctx); err != nil {
+	if err := r.proofQueryRateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -3788,32 +3461,35 @@ func (r *rpcServer) AssetLeaves(ctx context.Context,
 
 // unmarshalLeafKey un-marshals a leaf key from the RPC form.
 func unmarshalLeafKey(key *unirpc.AssetKey) (universe.LeafKey, error) {
-	var leafKey universe.LeafKey
+	var (
+		leafKey universe.LeafKey
+		err     error
+	)
 
 	switch {
 	case key.GetScriptKeyBytes() != nil:
-		scriptKey, err := parseUserKey(key.GetScriptKeyBytes())
+		pubKey, err := parseUserKey(key.GetScriptKeyBytes())
 		if err != nil {
 			return leafKey, err
 		}
 
 		leafKey.ScriptKey = &asset.ScriptKey{
-			PubKey: scriptKey,
+			PubKey: pubKey,
 		}
 
 	case key.GetScriptKeyStr() != "":
-		scriptKeyBytes, err := hex.DecodeString(key.GetScriptKeyStr())
-		if err != nil {
+		scriptKeyBytes, sErr := hex.DecodeString(key.GetScriptKeyStr())
+		if sErr != nil {
 			return leafKey, err
 		}
 
-		scriptKey, err := parseUserKey(scriptKeyBytes)
+		pubKey, err := parseUserKey(scriptKeyBytes)
 		if err != nil {
 			return leafKey, err
 		}
 
 		leafKey.ScriptKey = &asset.ScriptKey{
-			PubKey: scriptKey,
+			PubKey: pubKey,
 		}
 	default:
 		// TODO(roasbeef): can actually allow not to be, then would
@@ -3846,7 +3522,7 @@ func unmarshalLeafKey(key *unirpc.AssetKey) (universe.LeafKey, error) {
 		}
 
 	default:
-		return leafKey, fmt.Errorf("outpoint not set")
+		return leafKey, fmt.Errorf("outpoint not set: %v", err)
 	}
 
 	return leafKey, nil
@@ -3929,7 +3605,7 @@ func (r *rpcServer) QueryProof(ctx context.Context,
 	}
 
 	rpcsLog.Tracef("[QueryProof]: fetching proof at (universeID=%v, "+
-		"leafKey=%x)", universeID.StringForLog(), leafKey.UniverseKey())
+		"leafKey=%x)", universeID, leafKey.UniverseKey())
 
 	// Retrieve proof export config for the given universe.
 	syncConfigs, err := r.cfg.UniverseFederation.QuerySyncConfigs(ctx)
@@ -3973,7 +3649,7 @@ func (r *rpcServer) QueryProof(ctx context.Context,
 
 	// Check the rate limiter to see if we need to wait at all. If not then
 	// this'll be a noop.
-	if err = r.proofQueryRateLimiter.Wait(ctx); err != nil {
+	if err := r.proofQueryRateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -3993,8 +3669,7 @@ func (r *rpcServer) QueryProof(ctx context.Context,
 
 			rpcsLog.Debugf("[QueryProof]: error querying for "+
 				"proof at (universeID=%v, leafKey=%x)",
-				universeID.StringForLog(),
-				leafKey.UniverseKey())
+				universeID, leafKey.UniverseKey())
 			return nil, err
 		}
 
@@ -4010,13 +3685,12 @@ func (r *rpcServer) QueryProof(ctx context.Context,
 
 	// TODO(roasbeef): query may return multiple proofs, if allow key to
 	// not be fully specified
-	firstProof := proofs[0]
+	proof := proofs[0]
 
 	rpcsLog.Tracef("[QueryProof]: found proof at (universeID=%v, "+
-		"leafKey=%x)", universeID.StringForLog(),
-		leafKey.UniverseKey())
+		"leafKey=%x)", universeID, leafKey.UniverseKey())
 
-	return r.marshalUniverseProofLeaf(ctx, req, firstProof)
+	return r.marshalUniverseProofLeaf(ctx, req, proof)
 }
 
 // unmarshalAssetLeaf unmarshals an asset leaf from the RPC form.
@@ -4100,7 +3774,7 @@ func (r *rpcServer) InsertProof(ctx context.Context,
 
 	// Check the rate limiter to see if we need to wait at all. If not then
 	// this'll be a noop.
-	if err = r.proofQueryRateLimiter.Wait(ctx); err != nil {
+	if err := r.proofQueryRateLimiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -4510,7 +4184,7 @@ func (r *rpcServer) ProveAssetOwnership(ctx context.Context,
 	headerVerifier := tapgarden.GenHeaderVerifier(ctx, r.cfg.ChainBridge)
 	groupVerifier := tapgarden.GenGroupVerifier(ctx, r.cfg.MintingStore)
 	lastSnapshot, err := proofFile.Verify(
-		ctx, headerVerifier, proof.DefaultMerkleVerifier, groupVerifier,
+		ctx, headerVerifier, groupVerifier,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("cannot verify proof: %w", err)
@@ -4567,10 +4241,7 @@ func (r *rpcServer) VerifyAssetOwnership(ctx context.Context,
 
 	headerVerifier := tapgarden.GenHeaderVerifier(ctx, r.cfg.ChainBridge)
 	groupVerifier := tapgarden.GenGroupVerifier(ctx, r.cfg.MintingStore)
-	_, err = p.Verify(
-		ctx, nil, headerVerifier, proof.DefaultMerkleVerifier,
-		groupVerifier,
-	)
+	_, err = p.Verify(ctx, nil, headerVerifier, groupVerifier)
 	if err != nil {
 		return nil, fmt.Errorf("error verifying proof: %w", err)
 	}
@@ -4808,315 +4479,4 @@ func MarshalAssetFedSyncCfg(
 		AllowSyncInsert: config.AllowSyncInsert,
 		AllowSyncExport: config.AllowSyncExport,
 	}, nil
-}
-
-// unmarshalAssetSpecifier unmarshals an asset specifier from the RPC form.
-func unmarshalAssetSpecifier(req *rfqrpc.AssetSpecifier) (*asset.ID,
-	*btcec.PublicKey, error) {
-
-	// Attempt to decode the asset specifier from the RPC request. In cases
-	// where both the asset ID and asset group key are provided, we will
-	// give precedence to the asset ID due to its higher level of
-	// specificity.
-	var (
-		assetID *asset.ID
-
-		groupKeyBytes []byte
-		groupKey      *btcec.PublicKey
-
-		err error
-	)
-
-	switch {
-	// Parse the asset ID if it's set.
-	case len(req.GetAssetId()) > 0:
-		var assetIdBytes [32]byte
-		copy(assetIdBytes[:], req.GetAssetId())
-		id := asset.ID(assetIdBytes)
-		assetID = &id
-
-	case len(req.GetAssetIdStr()) > 0:
-		assetIDBytes, err := hex.DecodeString(req.GetAssetIdStr())
-		if err != nil {
-			return nil, nil, fmt.Errorf("error decoding asset "+
-				"ID: %w", err)
-		}
-
-		var id asset.ID
-		copy(id[:], assetIDBytes)
-		assetID = &id
-
-	// Parse the group key if it's set.
-	case len(req.GetGroupKey()) > 0:
-		groupKeyBytes = req.GetGroupKey()
-		groupKey, err = btcec.ParsePubKey(groupKeyBytes)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error parsing group "+
-				"key: %w", err)
-		}
-
-	case len(req.GetGroupKeyStr()) > 0:
-		groupKeyBytes, err := hex.DecodeString(
-			req.GetGroupKeyStr(),
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error decoding group "+
-				"key: %w", err)
-		}
-
-		groupKey, err = btcec.ParsePubKey(groupKeyBytes)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error parsing group "+
-				"key: %w", err)
-		}
-
-	default:
-		// At this point, we know that neither the asset ID nor the
-		// group key are specified. Return an error.
-		return nil, nil, fmt.Errorf("either asset ID or asset group " +
-			"key must be specified")
-	}
-
-	return assetID, groupKey, nil
-}
-
-// unmarshalAssetBuyOrder unmarshals an asset buy order from the RPC form.
-func unmarshalAssetBuyOrder(
-	req *rfqrpc.AddAssetBuyOrderRequest) (*rfq.BuyOrder, error) {
-
-	assetId, assetGroupKey, err := unmarshalAssetSpecifier(
-		req.AssetSpecifier,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling asset specifier: "+
-			"%w", err)
-	}
-
-	// Unmarshal the peer if specified.
-	var peer *route.Vertex
-	if len(req.PeerPubKey) > 0 {
-		pv, err := route.NewVertexFromBytes(req.PeerPubKey)
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling peer "+
-				"route vertex: %w", err)
-		}
-
-		peer = &pv
-	}
-
-	return &rfq.BuyOrder{
-		AssetID:        assetId,
-		AssetGroupKey:  assetGroupKey,
-		MinAssetAmount: req.MinAssetAmount,
-		MaxBid:         lnwire.MilliSatoshi(req.MaxBid),
-		Expiry:         req.Expiry,
-		Peer:           peer,
-	}, nil
-}
-
-// AddAssetBuyOrder upserts a new buy order for the given asset into the RFQ
-// manager. If the order already exists for the given asset, it will be updated.
-func (r *rpcServer) AddAssetBuyOrder(_ context.Context,
-	req *rfqrpc.AddAssetBuyOrderRequest) (*rfqrpc.AddAssetBuyOrderResponse,
-	error) {
-
-	// Unmarshal the buy order from the RPC form.
-	buyOrder, err := unmarshalAssetBuyOrder(req)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling buy order: %w", err)
-	}
-
-	var peer string
-	if buyOrder.Peer != nil {
-		peer = buyOrder.Peer.String()
-	}
-	rpcsLog.Debugf("[AddAssetBuyOrder]: upserting buy order "+
-		"(dest_peer=%s)", peer)
-
-	// Upsert the buy order into the RFQ manager.
-	err = r.cfg.RfqManager.UpsertAssetBuyOrder(*buyOrder)
-	if err != nil {
-		return nil, fmt.Errorf("error upserting buy order into RFQ "+
-			"manager: %w", err)
-	}
-
-	return &rfqrpc.AddAssetBuyOrderResponse{}, nil
-}
-
-// AddAssetSellOffer upserts a new sell offer for the given asset into the
-// RFQ manager. If the offer already exists for the given asset, it will be
-// updated.
-func (r *rpcServer) AddAssetSellOffer(_ context.Context,
-	req *rfqrpc.AddAssetSellOfferRequest) (*rfqrpc.AddAssetSellOfferResponse,
-	error) {
-
-	// Unmarshal the sell offer from the RPC form.
-	assetID, assetGroupKey, err := unmarshalAssetSpecifier(
-		req.AssetSpecifier,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling asset specifier: "+
-			"%w", err)
-	}
-
-	sellOffer := &rfq.SellOffer{
-		AssetID:       assetID,
-		AssetGroupKey: assetGroupKey,
-		MaxUnits:      req.MaxUnits,
-	}
-
-	rpcsLog.Debugf("[AddAssetSellOffer]: upserting sell offer "+
-		"(sell_offer=%v)", sellOffer)
-
-	// Upsert the sell offer into the RFQ manager.
-	err = r.cfg.RfqManager.UpsertAssetSellOffer(*sellOffer)
-	if err != nil {
-		return nil, fmt.Errorf("error upserting sell offer into RFQ "+
-			"manager: %w", err)
-	}
-
-	return &rfqrpc.AddAssetSellOfferResponse{}, nil
-}
-
-// marshalAcceptedQuotes marshals a map of accepted quotes into the RPC form.
-func marshalAcceptedQuotes(
-	acceptedQuotes map[rfq.SerialisedScid]rfqmsg.BuyAccept) []*rfqrpc.AcceptedQuote {
-
-	// Marshal the accepted quotes into the RPC form.
-	rpcQuotes := make([]*rfqrpc.AcceptedQuote, 0, len(acceptedQuotes))
-	for scid, quote := range acceptedQuotes {
-		rpcQuote := &rfqrpc.AcceptedQuote{
-			Peer:        quote.Peer.String(),
-			Id:          quote.ID[:],
-			Scid:        uint64(scid),
-			AssetAmount: quote.AssetAmount,
-			AskPrice:    uint64(quote.AskPrice),
-			Expiry:      quote.Expiry,
-		}
-		rpcQuotes = append(rpcQuotes, rpcQuote)
-	}
-
-	return rpcQuotes
-}
-
-// QueryRfqAcceptedQuotes queries for accepted quotes from the RFQ system.
-func (r *rpcServer) QueryRfqAcceptedQuotes(_ context.Context,
-	_ *rfqrpc.QueryRfqAcceptedQuotesRequest) (
-	*rfqrpc.QueryRfqAcceptedQuotesResponse, error) {
-
-	// Query the RFQ manager for accepted quotes.
-	acceptedQuotes := r.cfg.RfqManager.QueryAcceptedQuotes()
-
-	rpcQuotes := marshalAcceptedQuotes(acceptedQuotes)
-
-	return &rfqrpc.QueryRfqAcceptedQuotesResponse{
-		AcceptedQuotes: rpcQuotes,
-	}, nil
-}
-
-// marshallRfqEvent marshals an RFQ event into the RPC form.
-func marshallRfqEvent(eventInterface fn.Event) (*rfqrpc.RfqEvent, error) {
-	timestamp := eventInterface.Timestamp().UTC().Unix()
-
-	switch event := eventInterface.(type) {
-	case *rfq.IncomingAcceptQuoteEvent:
-		acceptedQuote := &rfqrpc.AcceptedQuote{
-			Peer:        event.Peer.String(),
-			Id:          event.ID[:],
-			Scid:        uint64(event.ShortChannelId()),
-			AssetAmount: event.AssetAmount,
-			AskPrice:    uint64(event.AskPrice),
-			Expiry:      event.Expiry,
-		}
-
-		eventRpc := &rfqrpc.RfqEvent_IncomingAcceptQuote{
-			IncomingAcceptQuote: &rfqrpc.IncomingAcceptQuoteEvent{
-				Timestamp:     uint64(timestamp),
-				AcceptedQuote: acceptedQuote,
-			},
-		}
-		return &rfqrpc.RfqEvent{
-			Event: eventRpc,
-		}, nil
-
-	case *rfq.AcceptHtlcEvent:
-		eventRpc := &rfqrpc.RfqEvent_AcceptHtlc{
-			AcceptHtlc: &rfqrpc.AcceptHtlcEvent{
-				Timestamp: uint64(timestamp),
-				Scid:      uint64(event.ChannelRemit.Scid),
-			},
-		}
-		return &rfqrpc.RfqEvent{
-			Event: eventRpc,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unknown RFQ event type: %T",
-			eventInterface)
-	}
-}
-
-// SubscribeRfqEventNtfns subscribes to RFQ event notifications.
-func (r *rpcServer) SubscribeRfqEventNtfns(
-	_ *rfqrpc.SubscribeRfqEventNtfnsRequest,
-	ntfnStream rfqrpc.Rfq_SubscribeRfqEventNtfnsServer) error {
-
-	// Create a new event subscriber and pass a copy to the RFQ manager.
-	// We will then read events from the subscriber.
-	eventSubscriber := fn.NewEventReceiver[fn.Event](fn.DefaultQueueSize)
-	defer eventSubscriber.Stop()
-
-	// Register the subscriber with the ChainPorter.
-	err := r.cfg.RfqManager.RegisterSubscriber(
-		eventSubscriber, false, 0,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to register RFQ manager event "+
-			"notifications subscription: %w", err)
-	}
-
-	for {
-		select {
-		// Handle new events from the subscriber.
-		case event := <-eventSubscriber.NewItemCreated.ChanOut():
-			// Marshal the event into its RPC form.
-			rpcEvent, err := marshallRfqEvent(event)
-			if err != nil {
-				return fmt.Errorf("failed to marshall RFQ "+
-					"event into RPC form: %w", err)
-			}
-
-			err = ntfnStream.Send(rpcEvent)
-			if err != nil {
-				return err
-			}
-
-		// Handle the case where the RPC stream is closed by the client.
-		case <-ntfnStream.Context().Done():
-			// Remove the subscriber from the RFQ manager.
-			err := r.cfg.RfqManager.RemoveSubscriber(
-				eventSubscriber,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to remove RFQ "+
-					"manager event notifications "+
-					"subscription: %w", err)
-			}
-
-			// Don't return an error if a normal context
-			// cancellation has occurred.
-			isCanceledContext := errors.Is(
-				ntfnStream.Context().Err(), context.Canceled,
-			)
-			if isCanceledContext {
-				return nil
-			}
-
-			return ntfnStream.Context().Err()
-
-		// Handle the case where the RPC server is shutting down.
-		case <-r.quit:
-			return nil
-		}
-	}
 }

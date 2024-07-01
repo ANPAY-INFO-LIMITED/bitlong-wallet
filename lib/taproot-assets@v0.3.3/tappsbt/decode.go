@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -16,7 +15,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/address"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
-	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightningnetwork/lnd/tlv"
 )
 
@@ -170,7 +168,7 @@ func (i *VInput) decode(pIn psbt.PInput) error {
 		decoder: assetDecoder(&i.asset),
 	}, {
 		key:     PsbtKeyTypeInputTapAssetProof,
-		decoder: proofDecoder(&i.Proof),
+		decoder: tlvDecoder(&i.proof, tlv.DVarBytes),
 	}}
 
 	for idx := range mapping {
@@ -280,18 +278,10 @@ func (o *VOutput) decode(pOut psbt.POutput, txOut *wire.TxOut) error {
 			),
 		},
 		{
-			key: PsbtKeyTypeOutputTapAssetVersion,
+			key: PsbtKeyTypeOutputAssetVersion,
 			decoder: tlvDecoder(
 				&o.AssetVersion, vOutputAssetVersionDecoder,
 			),
-		},
-		{
-			key:     PsbtKeyTypeOutputTapProofDeliveryAddress,
-			decoder: urlDecoder(&o.ProofDeliveryAddress),
-		},
-		{
-			key:     PsbtKeyTypeOutputTapAssetProofSuffix,
-			decoder: proofDecoder(&o.ProofSuffix),
 		},
 	}
 
@@ -319,7 +309,7 @@ func (o *VOutput) decode(pOut psbt.POutput, txOut *wire.TxOut) error {
 	return nil
 }
 
-// tlvDecoder returns a function that decodes the given byte slice using the
+// tlvDecoder returns a function that encodes the given byte slice using the
 // given TLV tlvDecoder.
 func tlvDecoder(val any, dec tlv.Decoder) decoderFunc {
 	return func(_, byteVal []byte) error {
@@ -333,20 +323,6 @@ func tlvDecoder(val any, dec tlv.Decoder) decoderFunc {
 		}
 
 		return nil
-	}
-}
-
-// proofDecoder returns a decoder function that can handle nil proofs.
-func proofDecoder(p **proof.Proof) decoderFunc {
-	return func(key, byteVal []byte) error {
-		if len(byteVal) == 0 {
-			return nil
-		}
-
-		if *p == nil {
-			*p = &proof.Proof{}
-		}
-		return (*p).Decode(bytes.NewReader(byteVal))
 	}
 }
 
@@ -452,7 +428,7 @@ func findCustomFieldsByKeyPrefix(customFields []*customPsbtField,
 		}
 	}
 
-	return nil, fmt.Errorf("%w: key %x not found in list of unknowns",
+	return nil, fmt.Errorf("%w: key %x not found in list of unkonwns",
 		ErrKeyNotFound, keyPrefix)
 }
 
@@ -486,18 +462,4 @@ func vOutputAssetVersionDecoder(r io.Reader, val any, buf *[8]byte,
 		return nil
 	}
 	return tlv.NewTypeForDecodingErr(val, "VOutputAssetVersion", 8, l)
-}
-
-// urlDecoder returns a decoder function that can handle nil URLs.
-func urlDecoder(u **url.URL) decoderFunc {
-	return func(key, byteVal []byte) error {
-		if len(byteVal) == 0 {
-			return nil
-		}
-
-		if *u == nil {
-			*u = &url.URL{}
-		}
-		return tlvDecoder(*u, address.UrlDecoder)(key, byteVal)
-	}
 }

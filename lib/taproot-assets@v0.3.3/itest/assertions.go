@@ -12,23 +12,18 @@ import (
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/asset"
-	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
-	wrpc "github.com/lightninglabs/taproot-assets/taprpc/assetwalletrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
 	"github.com/lightningnetwork/lnd/lntest/wait"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 )
@@ -38,16 +33,6 @@ var (
 	statusConfirmed = taprpc.AddrEventStatus_ADDR_EVENT_STATUS_TRANSACTION_CONFIRMED
 	statusCompleted = taprpc.AddrEventStatus_ADDR_EVENT_STATUS_COMPLETED
 )
-
-// tapClient is an interface that covers all currently available RPC interfaces
-// a client should implement.
-type tapClient interface {
-	taprpc.TaprootAssetsClient
-	wrpc.AssetWalletClient
-	tapdevrpc.TapDevClient
-	mintrpc.MintClient
-	unirpc.UniverseClient
-}
 
 // AssetCheck is a function type that checks an RPC asset's property.
 type AssetCheck func(a *taprpc.Asset) error
@@ -87,7 +72,7 @@ func AssetAnchorCheck(txid, blockHash chainhash.Hash) AssetCheck {
 		out, err :=
 			wire.NewOutPointFromString(a.ChainAnchor.AnchorOutpoint)
 		if err != nil {
-			return fmt.Errorf("unable to parse outpoint: %w", err)
+			return fmt.Errorf("unable to parse outpoint: %v", err)
 		}
 
 		anchorTxid := out.Hash.String()
@@ -232,75 +217,6 @@ func AssertTxInBlock(t *testing.T, block *wire.MsgBlock,
 	require.Fail(t, "tx was not included in block")
 
 	return nil
-}
-
-// AssertTransferFeeRate checks that fee paid for the TX anchoring an asset
-// transfer is close to the expected fee for that TX, at a given fee rate.
-func AssertTransferFeeRate(t *testing.T, minerClient *rpcclient.Client,
-	transferResp *taprpc.SendAssetResponse, inputAmt int64,
-	feeRate chainfee.SatPerKWeight, roundFee bool) {
-
-	txid, err := chainhash.NewHash(transferResp.Transfer.AnchorTxHash)
-	require.NoError(t, err)
-
-	AssertFeeRate(t, minerClient, inputAmt, txid, feeRate, roundFee)
-}
-
-// AssertFeeRate checks that the fee paid for a given TX is close to the
-// expected fee for the same TX, at a given fee rate.
-func AssertFeeRate(t *testing.T, minerClient *rpcclient.Client, inputAmt int64,
-	txid *chainhash.Hash, feeRate chainfee.SatPerKWeight, roundFee bool) {
-
-	var (
-		outputValue                 float64
-		expectedFee, maxOverpayment btcutil.Amount
-		maxVsizeDifference          = int64(2)
-	)
-
-	verboseTx, err := minerClient.GetRawTransactionVerbose(txid)
-	require.NoError(t, err)
-
-	vsize := verboseTx.Vsize
-	for _, vout := range verboseTx.Vout {
-		outputValue += vout.Value
-	}
-
-	t.Logf("TX vsize of %d bytes", vsize)
-
-	btcOutputValue, err := btcutil.NewAmount(outputValue)
-	require.NoError(t, err)
-
-	actualFee := inputAmt - int64(btcOutputValue)
-
-	switch {
-	case roundFee:
-		// Replicate the rounding performed when calling `FundPsbt`.
-		feeSatPerVbyte := uint64(feeRate.FeePerKVByte()) / 1000
-		roundedFeeRate := chainfee.SatPerKVByte(
-			feeSatPerVbyte * 1000,
-		).FeePerKWeight()
-
-		expectedFee = roundedFeeRate.FeePerKVByte().
-			FeeForVSize(int64(vsize))
-		maxOverpayment = roundedFeeRate.FeePerKVByte().
-			FeeForVSize(maxVsizeDifference)
-
-	default:
-		expectedFee = feeRate.FeePerKVByte().
-			FeeForVSize(int64(vsize))
-		maxOverpayment = feeRate.FeePerKVByte().
-			FeeForVSize(maxVsizeDifference)
-	}
-
-	// The actual fee may be higher than the expected fee after
-	// confirmation, as the freighter makes a worst-case estimate of the TX
-	// vsize. The gap between these two fees should still be small.
-	require.GreaterOrEqual(t, actualFee, int64(expectedFee))
-
-	overpaidFee := actualFee - int64(expectedFee)
-	require.LessOrEqual(t, overpaidFee, int64(maxOverpayment))
-
-	t.Logf("Correct fee of %d sats", actualFee)
 }
 
 // WaitForBatchState polls until the planter has reached the desired state with
@@ -598,10 +514,7 @@ func VerifyProofBlob(t *testing.T, tapClient taprpc.TaprootAssetsClient,
 		return nil
 	}
 
-	snapshot, err := f.Verify(
-		ctxt, headerVerifier, proof.DefaultMerkleVerifier,
-		groupVerifier,
-	)
+	snapshot, err := f.Verify(ctxt, headerVerifier, groupVerifier)
 	require.NoError(t, err)
 
 	return f, snapshot
@@ -609,7 +522,7 @@ func VerifyProofBlob(t *testing.T, tapClient taprpc.TaprootAssetsClient,
 
 // AssertAddrCreated makes sure an address was created correctly for the given
 // asset.
-func AssertAddrCreated(t *testing.T, client tapClient,
+func AssertAddrCreated(t *testing.T, client taprpc.TaprootAssetsClient,
 	expected *taprpc.Asset, actual *taprpc.Addr) {
 
 	// Was the address created correctly?
@@ -647,43 +560,6 @@ func AssertAddrCreated(t *testing.T, client tapClient,
 
 	// Does the address in the list contain all information we expect?
 	AssertAddr(t, expected, rpcAddr)
-
-	// We also make sure we can query the script and internal keys of the
-	// address correctly.
-	scriptKeyResp, err := client.QueryScriptKey(
-		ctxt, &wrpc.QueryScriptKeyRequest{
-			TweakedScriptKey: actual.ScriptKey,
-		},
-	)
-	require.NoError(t, err)
-	require.NotNil(t, scriptKeyResp.ScriptKey)
-	require.NotNil(t, scriptKeyResp.ScriptKey.KeyDesc)
-	require.NotNil(t, scriptKeyResp.ScriptKey.KeyDesc.KeyLoc)
-	require.EqualValues(
-		t, asset.TaprootAssetsKeyFamily,
-		scriptKeyResp.ScriptKey.KeyDesc.KeyLoc.KeyFamily,
-	)
-	require.NotEqual(
-		t, scriptKeyResp.ScriptKey.PubKey,
-		scriptKeyResp.ScriptKey.KeyDesc.RawKeyBytes,
-	)
-
-	internalKeyResp, err := client.QueryInternalKey(
-		ctxt, &wrpc.QueryInternalKeyRequest{
-			InternalKey: actual.InternalKey,
-		},
-	)
-	require.NoError(t, err)
-	require.NotNil(t, internalKeyResp.InternalKey)
-	require.NotNil(t, internalKeyResp.InternalKey.KeyLoc)
-	require.EqualValues(
-		t, asset.TaprootAssetsKeyFamily,
-		internalKeyResp.InternalKey.KeyLoc.KeyFamily,
-	)
-	require.Equal(
-		t, actual.InternalKey,
-		internalKeyResp.InternalKey.RawKeyBytes,
-	)
 }
 
 // AssertAddrEvent makes sure the given address was detected by the given
@@ -692,19 +568,8 @@ func AssertAddrEvent(t *testing.T, client taprpc.TaprootAssetsClient,
 	addr *taprpc.Addr, numEvents int,
 	expectedStatus taprpc.AddrEventStatus) {
 
-	AssertAddrEventCustomTimeout(
-		t, client, addr, numEvents, expectedStatus, defaultWaitTimeout,
-	)
-}
-
-// AssertAddrEventCustomTimeout makes sure the given address was detected by
-// the given daemon within the given timeout.
-func AssertAddrEventCustomTimeout(t *testing.T,
-	client taprpc.TaprootAssetsClient, addr *taprpc.Addr, numEvents int,
-	expectedStatus taprpc.AddrEventStatus, timeout time.Duration) {
-
 	ctxb := context.Background()
-	ctxt, cancel := context.WithTimeout(ctxb, timeout)
+	ctxt, cancel := context.WithTimeout(ctxb, defaultWaitTimeout)
 	defer cancel()
 
 	err := wait.NoError(func() error {
@@ -732,7 +597,7 @@ func AssertAddrEventCustomTimeout(t *testing.T,
 		t.Logf("Got address event %s", eventJSON)
 
 		return nil
-	}, timeout)
+	}, defaultWaitTimeout)
 	require.NoError(t, err)
 }
 
@@ -775,16 +640,16 @@ func ConfirmAndAssertOutboundTransfer(t *testing.T,
 	expectedAmounts []uint64, currentTransferIdx,
 	numTransfers int) *wire.MsgBlock {
 
-	return ConfirmAndAssertOutboundTransferWithOutputs(
+	return ConfirmAndAssetOutboundTransferWithOutputs(
 		t, minerClient, sender, sendResp, assetID, expectedAmounts,
 		currentTransferIdx, numTransfers, 2,
 	)
 }
 
-// ConfirmAndAssertOutboundTransferWithOutputs makes sure the given outbound
+// ConfirmAndAssetOutboundTransferWithOutputs makes sure the given outbound
 // transfer has the correct state and number of outputs before confirming it and
 // then asserting the confirmed state with the node.
-func ConfirmAndAssertOutboundTransferWithOutputs(t *testing.T,
+func ConfirmAndAssetOutboundTransferWithOutputs(t *testing.T,
 	minerClient *rpcclient.Client, sender TapdClient,
 	sendResp *taprpc.SendAssetResponse, assetID []byte,
 	expectedAmounts []uint64, currentTransferIdx,
@@ -815,7 +680,6 @@ func AssertAssetOutboundTransferWithOutputs(t *testing.T,
 	outpoints := make(map[string]struct{})
 	scripts := make(map[string]struct{})
 	for _, o := range outputs {
-		// Ensure that each transfer output script key is unique.
 		_, ok := scripts[string(o.ScriptKey)]
 		require.False(t, ok)
 
@@ -914,8 +778,11 @@ func AssertAddr(t *testing.T, expected *taprpc.Asset, actual *taprpc.Addr) {
 	if expected.AssetGroup == nil {
 		require.Nil(t, actual.GroupKey)
 	} else {
+		// TODO(guggero): Address 33-byte vs. 32-byte issue in encoded
+		// address vs. database.
 		require.Equal(
-			t, expected.AssetGroup.TweakedGroupKey, actual.GroupKey,
+			t, expected.AssetGroup.TweakedGroupKey[1:],
+			actual.GroupKey[1:],
 		)
 	}
 
@@ -924,7 +791,7 @@ func AssertAddr(t *testing.T, expected *taprpc.Asset, actual *taprpc.Addr) {
 	require.NotEqual(t, expected.ScriptKey, actual.ScriptKey)
 }
 
-// AssertAsset asserts that two taprpc.Asset objects are equal, ignoring
+// assertEqualAsset asserts that two taprpc.Asset objects are equal, ignoring
 // node-specific fields like if script keys are local, if the asset is spent,
 // or if the anchor information is populated.
 func AssertAsset(t *testing.T, expected, actual *taprpc.Asset) {
@@ -1200,34 +1067,6 @@ func AssertUniverseRootEquality(t *testing.T,
 	require.Equal(t, expectedEquality, AssertUniverseRootsEqual(
 		universeRootsAlice, universeRootsBob,
 	))
-}
-
-// AssertUniverseRootEqualityEventually checks that the universe roots returned
-// by two daemons are either equal eventually.
-func AssertUniverseRootEqualityEventually(t *testing.T,
-	clientA, clientB unirpc.UniverseClient) {
-
-	ctxb := context.Background()
-	ctxt, cancel := context.WithTimeout(ctxb, defaultWaitTimeout)
-	defer cancel()
-
-	err := wait.NoError(func() error {
-		rootRequest := &unirpc.AssetRootRequest{}
-		universeRootsAlice, err := clientA.AssetRoots(ctxt, rootRequest)
-		require.NoError(t, err)
-		universeRootsBob, err := clientB.AssetRoots(ctxt, rootRequest)
-		require.NoError(t, err)
-
-		if !AssertUniverseRootsEqual(
-			universeRootsAlice, universeRootsBob,
-		) {
-
-			return fmt.Errorf("roots not equal")
-		}
-
-		return nil
-	}, defaultWaitTimeout)
-	require.NoError(t, err)
 }
 
 // AssertUniverseRoot makes sure the given universe root exists with the given
@@ -1566,30 +1405,6 @@ func AssertAssetsMinted(t *testing.T,
 	return assetList
 }
 
-func AssertGenesisOutput(t *testing.T, output *taprpc.ManagedUtxo,
-	sibling commitment.TapscriptPreimage) {
-
-	// Fetch the encoded tapscript sibling from an anchored asset, and check
-	// it against the expected sibling.
-	require.True(t, len(output.Assets) > 1)
-	rpcSibling := output.Assets[0].ChainAnchor.TapscriptSibling
-	require.True(t, fn.All(output.Assets, func(a *taprpc.Asset) bool {
-		return bytes.Equal(a.ChainAnchor.TapscriptSibling, rpcSibling)
-	}))
-	encodedSibling, siblingHash, err := commitment.
-		MaybeEncodeTapscriptPreimage(&sibling)
-	require.NoError(t, err)
-	require.Equal(t, encodedSibling, rpcSibling)
-
-	// We should be able to recompute a merkle root from the tapscript
-	// sibling hash and the Taproot Asset Commitment root that matches what
-	// is stored in the managed output.
-	expectedMerkleRoot := asset.NewTapBranchHash(
-		(chainhash.Hash)(output.TaprootAssetRoot), *siblingHash,
-	)
-	require.Equal(t, expectedMerkleRoot[:], output.MerkleRoot)
-}
-
 func AssertAssetBalances(t *testing.T, client taprpc.TaprootAssetsClient,
 	simpleAssets, issuableAssets []*taprpc.Asset) {
 
@@ -1681,10 +1496,10 @@ func assertGroups(t *testing.T, client taprpc.TaprootAssetsClient,
 	require.NoError(t, err)
 
 	groupKeys := maps.Keys(assetGroups.Groups)
-	require.Len(t, groupKeys, 2)
+	require.Equal(t, 2, len(groupKeys))
 
 	groupedAssets := assetGroups.Groups[groupKeys[0]].Assets
-	require.Len(t, groupedAssets, 1)
+	require.Equal(t, 1, len(groupedAssets))
 	require.Equal(t, 1, len(assetGroups.Groups[groupKeys[1]].Assets))
 
 	groupedAssets = append(

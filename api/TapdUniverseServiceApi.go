@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/api/connect"
+	"github.com/wallet/api/rpcclient"
 	"github.com/wallet/base"
 )
 
@@ -102,52 +103,57 @@ func GetAssetInfo(id string) string {
 	if response.Leaves == nil {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
-	proof, err := decodeProof(response.Leaves[0].Proof, 0, true, false)
+
+	proof, err := rpcclient.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	block, err := GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
+	block, err := rpcclient.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
+
 	msgBlock := &wire.MsgBlock{}
 	blockReader := bytes.NewReader(block.RawBlock)
 	err = msgBlock.Deserialize(blockReader)
 	timeStamp := msgBlock.Header.Timestamp
 	createTime := timeStamp.Unix()
+	createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
 
 	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
 	assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
 	assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
-	assetIsGroup := false
-	if proof.DecodedProof.Asset.AssetGroup != nil {
-		assetIsGroup = true
-	}
 	amount := proof.DecodedProof.Asset.Amount
 	assetName := proof.DecodedProof.Asset.AssetGenesis.Name
 
 	var newMeta Meta
-	meta := proof.DecodedProof.MetaReveal.Data
-	newMeta.GetMetaFromStr(string(meta))
+	newMeta.FetchAssetMeta(false, id)
+	groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
 
 	var assetInfo = struct {
-		AssetId      string `json:"assetId"`
-		Name         string `json:"name"`
-		Point        string `json:"point"`
-		AssetType    string `json:"assetType"`
-		AssetIsGroup bool   `json:"assetIsGroup"`
-		Amount       uint64 `json:"amount"`
-		Meta         string `json:"meta"`
-		CreateTime   int64  `json:"createTime"`
+		AssetId      string  `json:"asset_Id"`
+		Name         string  `json:"name"`
+		Point        string  `json:"point"`
+		AssetType    string  `json:"assetType"`
+		GroupName    *string `json:"group_name"`
+		GroupKey     *string `json:"group_key"`
+		Amount       uint64  `json:"amount"`
+		Meta         *string `json:"meta"`
+		CreateHeight int64   `json:"create_height"`
+		CreateTime   int64   `json:"create_time"`
+		Universe     string  `json:"universe"`
 	}{
 		AssetId:      assetId,
 		Name:         assetName,
 		Point:        assetPoint,
 		AssetType:    assetType,
-		AssetIsGroup: assetIsGroup,
+		GroupName:    &newMeta.GroupName,
+		GroupKey:     &groupKey,
 		Amount:       amount,
-		Meta:         string(meta),
+		Meta:         &newMeta.Description,
+		CreateHeight: int64(createHeight),
 		CreateTime:   createTime,
+		Universe:     "localhost",
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }

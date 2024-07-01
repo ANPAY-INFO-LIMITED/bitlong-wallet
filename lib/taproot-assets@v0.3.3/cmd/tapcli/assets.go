@@ -2,17 +2,14 @@ package main
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 
 	taprootassets "github.com/lightninglabs/taproot-assets"
 	"github.com/lightninglabs/taproot-assets/tapcfg"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/urfave/cli"
 )
 
@@ -53,7 +50,7 @@ var (
 	groupByGroupName             = "by_group"
 	assetIDName                  = "asset_id"
 	shortResponseName            = "short"
-	feeRateName                  = "sat_per_vbyte"
+	feeRateName                  = "fee_rate"
 	assetAmountName              = "amount"
 	burnOverrideConfirmationName = "override_confirmation_destroy_assets"
 )
@@ -90,11 +87,9 @@ var mintAssetCommand = cli.Command{
 			Usage: "a path to a file on disk that should be read " +
 				"and used as the asset meta",
 		},
-		cli.StringFlag{
-			Name: assetMetaTypeName,
-			Usage: "the type of the meta data for the asset, must " +
-				"be either: opaque or json",
-			Value: "opaque",
+		cli.IntFlag{
+			Name:  assetMetaTypeName,
+			Usage: "the type of the meta data for the asset",
 		},
 		cli.BoolFlag{
 			Name: assetNewGroupedAssetName,
@@ -146,36 +141,6 @@ func parseAssetType(ctx *cli.Context) (taprpc.AssetType, error) {
 	}
 }
 
-func parseMetaType(metaType string,
-	metaBytes []byte) (taprpc.AssetMetaType, error) {
-
-	switch metaType {
-	case "opaque":
-		fallthrough
-	case "blob":
-		return taprpc.AssetMetaType_META_TYPE_OPAQUE, nil
-
-	case "json":
-		// If JSON is selected, the bytes must be valid.
-		if !json.Valid(metaBytes) {
-			return 0, fmt.Errorf("invalid JSON for meta: %s",
-				metaBytes)
-		}
-
-		return taprpc.AssetMetaType_META_TYPE_JSON, nil
-
-	// Otherwise, this is a custom meta type, we may not understand it, but
-	// we want to support specifying arbitrary meta types.
-	default:
-		intType, err := strconv.Atoi(metaType)
-		if err != nil {
-			return 0, fmt.Errorf("invalid meta type: %s", metaType)
-		}
-
-		return taprpc.AssetMetaType(intType), nil
-	}
-}
-
 func mintAsset(ctx *cli.Context) error {
 	switch {
 	case ctx.String(assetTagName) == "":
@@ -197,8 +162,6 @@ func mintAsset(ctx *cli.Context) error {
 		}
 	}
 
-	metaTypeStr := ctx.String(assetMetaTypeName)
-
 	// Both the meta bytes and the meta path can be set.
 	var assetMeta *taprpc.AssetMeta
 	switch {
@@ -210,11 +173,7 @@ func mintAsset(ctx *cli.Context) error {
 	case ctx.String(assetMetaBytesName) != "":
 		assetMeta = &taprpc.AssetMeta{
 			Data: []byte(ctx.String(assetMetaBytesName)),
-		}
-
-		assetMeta.Type, err = parseMetaType(metaTypeStr, assetMeta.Data)
-		if err != nil {
-			return fmt.Errorf("unable to parse meta type: %w", err)
+			Type: taprpc.AssetMetaType(ctx.Int(assetMetaTypeName)),
 		}
 
 	case ctx.String(assetMetaFilePathName) != "":
@@ -228,11 +187,7 @@ func mintAsset(ctx *cli.Context) error {
 
 		assetMeta = &taprpc.AssetMeta{
 			Data: metaFileBytes,
-		}
-
-		assetMeta.Type, err = parseMetaType(metaTypeStr, assetMeta.Data)
-		if err != nil {
-			return fmt.Errorf("unable to parse meta type: %w", err)
+			Type: taprpc.AssetMetaType(ctx.Int(assetMetaTypeName)),
 		}
 	}
 
@@ -306,7 +261,7 @@ var finalizeBatchCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: feeRateName,
-			Usage: "if set, the fee rate in sat/vB to use for " +
+			Usage: "if set, the fee rate in sat/kw to use for " +
 				"the minting transaction",
 		},
 	},
@@ -315,18 +270,9 @@ var finalizeBatchCommand = cli.Command{
 
 func parseFeeRate(ctx *cli.Context) (uint32, error) {
 	if ctx.IsSet(feeRateName) {
-		userFeeRate := ctx.Uint64(feeRateName)
-		if userFeeRate > math.MaxUint32 {
+		feeRate := ctx.Uint64(feeRateName)
+		if feeRate > math.MaxUint32 {
 			return 0, fmt.Errorf("fee rate exceeds 2^32")
-		}
-
-		// Convert from sat/vB to sat/kw. Round up to the fee floor if
-		// the specified feerate is too low.
-		feeRate := chainfee.SatPerKVByte(userFeeRate * 1000).
-			FeePerKWeight()
-
-		if feeRate < chainfee.FeePerKwFloor {
-			feeRate = chainfee.FeePerKwFloor
 		}
 
 		return uint32(feeRate), nil
@@ -585,7 +531,7 @@ var sendAssetsCommand = cli.Command{
 		},
 		cli.Uint64Flag{
 			Name: feeRateName,
-			Usage: "if set, the fee rate in sat/vB to use for " +
+			Usage: "if set, the fee rate in sat/kw to use for " +
 				"the anchor transaction",
 		},
 		// TODO(roasbeef): add arg for file name to write sender proof

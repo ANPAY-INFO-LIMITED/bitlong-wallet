@@ -108,14 +108,6 @@ var (
 			Entity: "assets",
 			Action: "write",
 		}},
-		"/assetwalletrpc.AssetWallet/QueryInternalKey": {{
-			Entity: "assets",
-			Action: "read",
-		}},
-		"/assetwalletrpc.AssetWallet/QueryScriptKey": {{
-			Entity: "assets",
-			Action: "read",
-		}},
 		"/assetwalletrpc.AssetWallet/ProveAssetOwnership": {{
 			Entity: "assets",
 			Action: "write",
@@ -142,10 +134,6 @@ var (
 		}},
 		"/mintrpc.Mint/ListBatches": {{
 			Entity: "mint",
-			Action: "read",
-		}},
-		"/universerpc.Universe/MultiverseRoot": {{
-			Entity: "universe",
 			Action: "read",
 		}},
 		"/universerpc.Universe/AssetRoots": {{
@@ -211,22 +199,6 @@ var (
 		"/universerpc.Universe/QueryFederationSyncConfig": {{
 			Entity: "universe",
 			Action: "read",
-		}},
-		"/rfqrpc.Rfq/AddAssetBuyOrder": {{
-			Entity: "rfq",
-			Action: "write",
-		}},
-		"/rfqrpc.Rfq/AddAssetSellOffer": {{
-			Entity: "rfq",
-			Action: "write",
-		}},
-		"/rfqrpc.Rfq/QueryRfqAcceptedQuotes": {{
-			Entity: "rfq",
-			Action: "read",
-		}},
-		"/rfqrpc.Rfq/SubscribeRfqEventNtfns": {{
-			Entity: "rfq",
-			Action: "write",
 		}},
 		"/tapdevrpc.TapDev/ImportProof": {{
 			Entity: "proofs",

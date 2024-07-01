@@ -6,13 +6,11 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/tapscript"
-	"github.com/lightninglabs/taproot-assets/tapsend"
 	"github.com/lightningnetwork/lnd/keychain"
 )
 
@@ -52,7 +50,7 @@ type MintingBatch struct {
 	//
 	// NOTE: This field is only set if the state is beyond
 	// BatchStateCommitted.
-	GenesisPacket *tapsend.FundedPsbt
+	GenesisPacket *FundedPsbt
 
 	// RootAssetCommitment is the root Taproot Asset commitment for all the
 	// assets contained in this batch.
@@ -68,10 +66,6 @@ type MintingBatch struct {
 	// mintingPubKey is the top-level Taproot output key that will be used
 	// to commit to the Taproot Asset commitment above.
 	mintingPubKey *btcec.PublicKey
-
-	// tapSibling is an optional root hash of a tapscript tree that will be
-	// used with the taprootAssetScriptRoot to construct the mintingPubKey.
-	tapSibling *chainhash.Hash
 
 	// taprootAssetScriptRoot is the root hash of the Taproot Asset
 	// commitment. If this is nil, then the mintingPubKey will be as well.
@@ -110,9 +104,7 @@ func (m *MintingBatch) validateGroupAnchor(s *Seedling) error {
 
 // MintingOutputKey derives the output key that once mined, will commit to the
 // Taproot asset root, thereby creating the set of included assets.
-func (m *MintingBatch) MintingOutputKey(sibling *commitment.TapscriptPreimage) (
-	*btcec.PublicKey, []byte, error) {
-
+func (m *MintingBatch) MintingOutputKey() (*btcec.PublicKey, []byte, error) {
 	if m.mintingPubKey != nil {
 		return m.mintingPubKey, m.taprootAssetScriptRoot, nil
 	}
@@ -121,21 +113,7 @@ func (m *MintingBatch) MintingOutputKey(sibling *commitment.TapscriptPreimage) (
 		return nil, nil, fmt.Errorf("no asset commitment present")
 	}
 
-	var (
-		siblingHash *chainhash.Hash
-		err         error
-	)
-
-	if sibling != nil {
-		siblingHash, err = sibling.TapHash()
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	taprootAssetScriptRoot := m.RootAssetCommitment.TapscriptRoot(
-		siblingHash,
-	)
+	taprootAssetScriptRoot := m.RootAssetCommitment.TapscriptRoot(nil)
 
 	m.taprootAssetScriptRoot = taprootAssetScriptRoot[:]
 	m.mintingPubKey = txscript.ComputeTaprootOutputKey(
@@ -147,10 +125,8 @@ func (m *MintingBatch) MintingOutputKey(sibling *commitment.TapscriptPreimage) (
 
 // genesisScript returns the script that should be placed in the minting output
 // within the genesis transaction.
-func (m *MintingBatch) genesisScript(sibling *commitment.TapscriptPreimage) (
-	[]byte, error) {
-
-	mintingOutputKey, _, err := m.MintingOutputKey(sibling)
+func (m *MintingBatch) genesisScript() ([]byte, error) {
+	mintingOutputKey, _, err := m.MintingOutputKey()
 	if err != nil {
 		return nil, err
 	}
@@ -172,19 +148,4 @@ func (m *MintingBatch) State() BatchState {
 // be a valid batch state.
 func (m *MintingBatch) UpdateState(state BatchState) {
 	m.batchState.Store(uint32(state))
-}
-
-// TapSibling returns the optional tapscript sibling for the batch, which is a
-// root hash of a tapscript tree.
-func (m *MintingBatch) TapSibling() []byte {
-	if m.tapSibling == nil {
-		return nil
-	}
-
-	return m.tapSibling.CloneBytes()
-}
-
-// UpdateTapSibling updates the optional tapscript sibling for the batch.
-func (m *MintingBatch) UpdateTapSibling(sibling *chainhash.Hash) {
-	m.tapSibling = sibling
 }

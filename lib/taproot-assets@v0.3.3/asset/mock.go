@@ -16,7 +16,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/internal/test"
 	"github.com/lightninglabs/taproot-assets/mssmt"
 	"github.com/lightningnetwork/lnd/input"
-	"github.com/lightningnetwork/lnd/keychain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,13 +50,10 @@ func RandGroupKeyWithSigner(t testing.TB, genesis Genesis,
 
 	genSigner := NewMockGenesisSigner(privateKey)
 	genBuilder := MockGroupTxBuilder{}
-	groupReq := GroupKeyRequest{
-		RawKey:    test.PubToKeyDesc(privateKey.PubKey()),
-		AnchorGen: genesis,
-		NewAsset:  newAsset,
-	}
-
-	groupKey, err := DeriveGroupKey(genSigner, &genBuilder, groupReq)
+	groupKey, err := DeriveGroupKey(
+		genSigner, &genBuilder, test.PubToKeyDesc(privateKey.PubKey()),
+		genesis, newAsset,
+	)
 	require.NoError(t, err)
 
 	return groupKey, privateKey.Serialize()
@@ -171,7 +167,7 @@ func virtualGenesisTx(newAsset *Asset) (*wire.MsgTx, error) {
 type MockGroupTxBuilder struct{}
 
 // BuildGenesisTx constructs a virtual transaction and prevOut that represent
-// the genesis state transition for a grouped asset. This output is used to
+// the genesis state transition for a grouped asset. This ouput is used to
 // create a group witness for the grouped asset.
 func (m *MockGroupTxBuilder) BuildGenesisTx(newAsset *Asset) (*wire.MsgTx,
 	*wire.TxOut, error) {
@@ -179,7 +175,7 @@ func (m *MockGroupTxBuilder) BuildGenesisTx(newAsset *Asset) (*wire.MsgTx,
 	// First, we check that the passed asset is a genesis grouped asset
 	// that has no group witness.
 	if !newAsset.NeedsGenesisWitnessForGroup() {
-		return nil, nil, fmt.Errorf("asset is not a genesis grouped " +
+		return nil, nil, fmt.Errorf("asset is not a genesis grouped" +
 			"asset")
 	}
 
@@ -270,8 +266,6 @@ func SignOutputRaw(priv *btcec.PrivateKey, tx *wire.MsgTx,
 			signDesc.Output.Value, signDesc.Output.PkScript,
 			leaf, signDesc.HashType, privKey,
 		)
-	default:
-		// A witness V0 sign method should never appear here.
 	}
 	if err != nil {
 		return nil, err
@@ -311,110 +305,6 @@ func SignVirtualTx(priv *btcec.PrivateKey, signDesc *lndclient.SignDescriptor,
 	return sig, nil
 }
 
-// AssetCustomGroupKey constructs a new asset group key and anchor asset from a
-// given asset genesis. The asset group key may also commit to a Tapscript tree
-// root. The tree used in that case includes a hash lock and signature lock.
-// The validity of that Tapscript tree is set by the caller.
-//
-// The following group key derivation methods are supported:
-//
-// BIP86: The group key commits to an empty tapscript tree. Assets can only be
-// added to the group with a valid signature from the tweaked group key.
-//
-// Key-spend: The group key commits to a tapscript tree root, but the witness
-// for the group anchor will be a signature using the tweaked group key. Assets
-// could later be added to the group with either a signature from the tweaked
-// group key or a valid witness for a script in the committed tapscript tree.
-//
-// Script-spend: The group key commits to a tapscript tree root, and the witness
-// for the group anchor is a valid script witness for a script in the tapscript
-// tree. Assets could later be added to the group with either a signature from
-// the tweaked group key or a valid witness for a script in the committed
-// tapscript tree.
-func AssetCustomGroupKey(t *testing.T, useHashLock, BIP86, keySpend,
-	validScriptWitness bool, gen Genesis) *Asset {
-
-	t.Helper()
-
-	// Sanity check the custom group key request. If both flags are false,
-	// the script-spend path will be used.
-	if BIP86 && keySpend {
-		require.Fail(t, "Cannot have both BIP 86 and key spend group "+
-			"key types")
-	}
-
-	var (
-		groupKey *GroupKey
-		err      error
-	)
-
-	genID := gen.ID()
-	scriptKey := RandScriptKey(t)
-	protoAsset := RandAssetWithValues(t, gen, nil, scriptKey)
-
-	groupPrivKey := test.RandPrivKey(t)
-	groupInternalKey := groupPrivKey.PubKey()
-	genSigner := NewMockGenesisSigner(groupPrivKey)
-	genBuilder := MockGroupTxBuilder{}
-
-	// Manually create and use the singly tweaked key here, to match the
-	// signing behavior later when using the signing descriptor.
-	groupSinglyTweakedKey := input.TweakPubKeyWithTweak(
-		groupInternalKey, genID[:],
-	)
-
-	// Populate the initial parameters for the group key request.
-	groupReq := GroupKeyRequest{
-		RawKey:    test.PubToKeyDesc(groupInternalKey),
-		AnchorGen: gen,
-		NewAsset:  protoAsset,
-	}
-
-	// Update the group key request and group key derivation arguments
-	// to match the requested group key type.
-	switch {
-	// Use an empty tapscript and script witness.
-	case BIP86:
-		groupKey, err = DeriveCustomGroupKey(
-			genSigner, &genBuilder, groupReq, nil, nil,
-		)
-
-	// Derive a tapscipt root using the default tapscript tree used for
-	// testing, but use a signature as a witness.
-	case keySpend:
-		treeRootChildren := test.BuildTapscriptTreeNoReveal(
-			t, groupSinglyTweakedKey,
-		)
-		treeTapHash := treeRootChildren.TapHash()
-
-		groupReq.TapscriptRoot = treeTapHash[:]
-		groupKey, err = DeriveCustomGroupKey(
-			genSigner, &genBuilder, groupReq, nil, nil,
-		)
-
-	// For a script spend, we derive a tapscript root, and create the needed
-	// tapscript and script witness.
-	default:
-		_, _, tapLeaf, tapRootHash, witness := test.BuildTapscriptTree(
-			t, useHashLock, validScriptWitness,
-			groupSinglyTweakedKey,
-		)
-
-		groupReq.TapscriptRoot = tapRootHash
-		groupKey, err = DeriveCustomGroupKey(
-			genSigner, &genBuilder, groupReq, tapLeaf, witness,
-		)
-	}
-
-	require.NoError(t, err)
-
-	return NewAssetNoErr(
-		t, gen, protoAsset.Amount, protoAsset.LockTime,
-		protoAsset.RelativeLockTime, scriptKey, groupKey,
-		WithAssetVersion(protoAsset.Version),
-	)
-}
-
 // RandScriptKey creates a random script key for testing.
 func RandScriptKey(t testing.TB) ScriptKey {
 	return NewScriptKey(test.RandPrivKey(t).PubKey())
@@ -433,16 +323,6 @@ func RandID(t testing.TB) ID {
 	return a
 }
 
-// RandAssetType creates a random asset type.
-func RandAssetType(t testing.TB) Type {
-	isCollectible := test.RandBool()
-	if isCollectible {
-		return Collectible
-	}
-
-	return Normal
-}
-
 // NewAssetNoErr creates an asset and fails the test if asset creation fails.
 func NewAssetNoErr(t testing.TB, gen Genesis, amt, locktime, relocktime uint64,
 	scriptKey ScriptKey, groupKey *GroupKey, opts ...NewAssetOpt) *Asset {
@@ -453,15 +333,6 @@ func NewAssetNoErr(t testing.TB, gen Genesis, amt, locktime, relocktime uint64,
 	require.NoError(t, err)
 
 	return a
-}
-
-func NewGroupKeyRequestNoErr(t testing.TB, internalKey keychain.KeyDescriptor,
-	gen Genesis, newAsset *Asset, scriptRoot []byte) *GroupKeyRequest {
-
-	req, err := NewGroupKeyRequest(internalKey, gen, newAsset, scriptRoot)
-	require.NoError(t, err)
-
-	return req
 }
 
 // RandAsset creates a random asset of the given type for testing.
@@ -504,10 +375,13 @@ func RandAssetWithValues(t testing.TB, genesis Genesis, groupKey *GroupKey,
 		assetVersion = V1
 	}
 
-	return NewAssetNoErr(
-		t, genesis, uint64(units), 0, 0, scriptKey, groupKey,
+	a, err := New(
+		genesis, uint64(units), 0, 0, scriptKey, groupKey,
 		WithAssetVersion(assetVersion),
 	)
+	require.NoError(t, err)
+
+	return a
 }
 
 type ValidTestCase struct {

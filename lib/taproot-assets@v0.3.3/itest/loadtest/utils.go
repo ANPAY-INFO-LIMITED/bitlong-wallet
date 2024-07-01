@@ -17,8 +17,6 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/assetwalletrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/rfqrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/macaroons"
 	"github.com/stretchr/testify/require"
@@ -36,11 +34,9 @@ var (
 type rpcClient struct {
 	cfg *TapConfig
 	taprpc.TaprootAssetsClient
-	assetwalletrpc.AssetWalletClient
-	tapdevrpc.TapDevClient
-	mintrpc.MintClient
-	rfqrpc.RfqClient
 	universerpc.UniverseClient
+	mintrpc.MintClient
+	assetwalletrpc.AssetWalletClient
 }
 
 // assetIDWithBalance returns the asset ID of an asset that has at least the
@@ -170,20 +166,16 @@ func getTapClient(t *testing.T, ctx context.Context,
 	require.NoError(t, err)
 
 	assetsClient := taprpc.NewTaprootAssetsClient(conn)
-	assetWalletClient := assetwalletrpc.NewAssetWalletClient(conn)
-	devClient := tapdevrpc.NewTapDevClient(conn)
-	mintMintClient := mintrpc.NewMintClient(conn)
-	rfqClient := rfqrpc.NewRfqClient(conn)
 	universeClient := universerpc.NewUniverseClient(conn)
+	mintMintClient := mintrpc.NewMintClient(conn)
+	assetWalletClient := assetwalletrpc.NewAssetWalletClient(conn)
 
 	client := &rpcClient{
 		cfg:                 cfg,
 		TaprootAssetsClient: assetsClient,
-		AssetWalletClient:   assetWalletClient,
-		TapDevClient:        devClient,
-		MintClient:          mintMintClient,
-		RfqClient:           rfqClient,
 		UniverseClient:      universeClient,
+		MintClient:          mintMintClient,
+		AssetWalletClient:   assetWalletClient,
 	}
 
 	t.Cleanup(func() {

@@ -21,7 +21,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/tapsend"
+	"github.com/lightninglabs/taproot-assets/tapscript"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"github.com/lightningnetwork/lnd/chainntnfs"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -30,6 +30,14 @@ import (
 )
 
 var (
+
+	// DummyGenesisTxOut is the dummy TxOut we'll place in the PSBt funding
+	// request to make sure we leave enough room for change and fees.
+	DummyGenesisTxOut = wire.TxOut{
+		PkScript: tapscript.GenesisDummyScript[:],
+		Value:    int64(GenesisAmtSats),
+	}
+
 	// ErrGroupKeyUnknown is an error returned if an asset has a group key
 	// attached that has not been previously verified.
 	ErrGroupKeyUnknown = errors.New("group key not known")
@@ -158,8 +166,6 @@ func (b *BatchCaretaker) Start() error {
 func (b *BatchCaretaker) Stop() error {
 	var stopErr error
 	b.stopOnce.Do(func() {
-		log.Infof("BatchCaretaker(%x): Stopping", b.batchKey[:])
-
 		close(b.Quit)
 		b.Wg.Wait()
 	})
@@ -167,73 +173,55 @@ func (b *BatchCaretaker) Stop() error {
 	return stopErr
 }
 
-// Cancel signals for a batch caretaker to stop advancing a batch. A batch can
-// only be cancelled if it has not reached BatchStateBroadcast yet. If
-// cancellation succeeds, we forward the batch state after cancellation. If the
-// batch could not be cancelled, the planter will handle caretaker shutdown and
-// batch state.
-func (b *BatchCaretaker) Cancel() error {
+// Cancel signals for a batch caretaker to stop advancing a batch if possible.
+// A batch can only be cancelled if it has not reached BatchStateBroadcast yet.
+func (b *BatchCaretaker) Cancel() CancelResp {
 	ctx, cancel := b.WithCtxQuit()
 	defer cancel()
 
-	batchKey := b.batchKey[:]
+	batchKey := b.cfg.Batch.BatchKey.PubKey.SerializeCompressed()
 	batchState := b.cfg.Batch.State()
-	var cancelResp CancelResp
-
 	// This function can only be called before the caretaker state stepping
 	// function, so the batch state read is the next state that has not yet
 	// been executed. Seedlings are converted to asset sprouts in the Frozen
 	// state, and broadcast in the Broadast state.
-	log.Debugf("BatchCaretaker(%x): Trying to cancel", batchKey)
 	switch batchState {
 	// In the pending state, the batch seedlings have not sprouted yet.
 	case BatchStatePending, BatchStateFrozen:
+		finalBatchState := BatchStateSeedlingCancelled
 		err := b.cfg.Log.UpdateBatchState(
 			ctx, b.cfg.Batch.BatchKey.PubKey,
-			BatchStateSeedlingCancelled,
+			finalBatchState,
 		)
 		if err != nil {
 			err = fmt.Errorf("BatchCaretaker(%x), batch state(%v), "+
 				"cancel failed: %w", batchKey, batchState, err)
 		}
 
-		cancelResp = CancelResp{true, err}
+		b.cfg.BroadcastErrChan <- fmt.Errorf("caretaker canceled")
+
+		return CancelResp{&finalBatchState, err}
 
 	case BatchStateCommitted:
+		finalBatchState := BatchStateSproutCancelled
 		err := b.cfg.Log.UpdateBatchState(
 			ctx, b.cfg.Batch.BatchKey.PubKey,
-			BatchStateSproutCancelled,
+			finalBatchState,
 		)
 		if err != nil {
 			err = fmt.Errorf("BatchCaretaker(%x), batch state(%v), "+
 				"cancel failed: %w", batchKey, batchState, err)
 		}
 
-		cancelResp = CancelResp{true, err}
+		b.cfg.BroadcastErrChan <- fmt.Errorf("caretaker canceled")
+
+		return CancelResp{&finalBatchState, err}
 
 	default:
 		err := fmt.Errorf("BatchCaretaker(%x), batch not cancellable",
 			b.cfg.Batch.BatchKey.PubKey.SerializeCompressed())
-		cancelResp = CancelResp{false, err}
+		return CancelResp{nil, err}
 	}
-
-	b.cfg.CancelRespChan <- cancelResp
-
-	// If the batch was cancellable, the final write of the cancelled batch
-	// may still have failed. That error will be handled by the planter. At
-	// this point, the caretaker should shut down gracefully if cancellation
-	// was attempted.
-	if cancelResp.cancelAttempted {
-		log.Infof("BatchCaretaker(%x), attempted batch cancellation, "+
-			"shutting down", b.batchKey[:])
-
-		return nil
-	}
-
-	// If the cancellation failed, that error will be handled by the
-	// planter.
-	return fmt.Errorf("BatchCaretaker(%x) cancellation failed",
-		b.batchKey[:])
 }
 
 // advanceStateUntil attempts to advance the internal state machine until the
@@ -253,20 +241,22 @@ func (b *BatchCaretaker) advanceStateUntil(currentState,
 			return 0, fmt.Errorf("BatchCaretaker(%x), shutting "+
 				"down", b.batchKey[:])
 
-		// If the batch was cancellable, the finalState of the cancel
-		// response will be non-nil. If the cancellation failed, that
-		// error will be handled by the planter. At this point, the
-		// caretaker should always shut down gracefully.
 		case <-b.cfg.CancelReqChan:
-			cancelErr := b.Cancel()
-			if cancelErr == nil {
+			cancelResp := b.Cancel()
+			b.cfg.CancelRespChan <- cancelResp
+
+			// TODO(jhb): Use concrete error types for caretaker
+			// shutdown cases
+			// If the batch was cancellable, the finalState of the
+			// cancel response will be non-nil. If the cancellation
+			// failed, that error will be handled by the planter.
+			// At this point, the caretaker should always shut down
+			// gracefully.
+			if cancelResp.finalState != nil {
 				return 0, fmt.Errorf("BatchCaretaker(%x), "+
 					"attempted batch cancellation, "+
 					"shutting down", b.batchKey[:])
 			}
-
-			log.Info(cancelErr)
-
 		default:
 		}
 
@@ -323,7 +313,7 @@ func (b *BatchCaretaker) assetCultivator() {
 		currentBatchState, BatchStateBroadcast,
 	)
 	if err != nil {
-		log.Errorf("Unable to advance state machine: %v", err)
+		log.Errorf("unable to advance state machine: %v", err)
 		b.cfg.BroadcastErrChan <- err
 		return
 	}
@@ -370,12 +360,7 @@ func (b *BatchCaretaker) assetCultivator() {
 			return
 
 		case <-b.cfg.CancelReqChan:
-			cancelErr := b.Cancel()
-			if cancelErr == nil {
-				return
-			}
-
-			log.Error(cancelErr)
+			b.cfg.CancelRespChan <- b.Cancel()
 
 		case <-b.Quit:
 			return
@@ -389,14 +374,18 @@ func (b *BatchCaretaker) assetCultivator() {
 // (all outputs need to hold some BTC to not be dust), and with a dummy script.
 // We need to use a dummy script as we can't know the actual script key since
 // that's dependent on the genesis outpoint.
-func (b *BatchCaretaker) fundGenesisPsbt(
-	ctx context.Context) (*tapsend.FundedPsbt, error) {
-
+func (b *BatchCaretaker) fundGenesisPsbt(ctx context.Context) (*FundedPsbt, error) {
 	log.Infof("BatchCaretaker(%x): attempting to fund GenesisPacket",
 		b.batchKey[:])
 
 	txTemplate := wire.NewMsgTx(2)
-	txTemplate.AddTxOut(tapsend.CreateDummyOutput())
+	txTemplate.AddTxOut(&DummyGenesisTxOut)
+
+	// 这里铸币手续费
+	byteAddr, _ := tapscript.DecodeTaprootAddress(tapscript.AddrCharge, tapscript.GetNetWorkParams(tapscript.Network))
+	out := wire.NewTxOut(tapscript.MIntFinalizeChargeAmount, byteAddr)
+	txTemplate.AddTxOut(out)
+
 	genesisPkt, err := psbt.NewFromUnsignedTx(txTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make psbt packet: %w", err)
@@ -405,28 +394,26 @@ func (b *BatchCaretaker) fundGenesisPsbt(
 	log.Infof("BatchCaretaker(%x): creating skeleton PSBT", b.batchKey[:])
 	log.Tracef("PSBT: %v", spew.Sdump(genesisPkt))
 
-	var feeRate chainfee.SatPerKWeight
-	switch {
 	// If a fee rate was manually assigned for this batch, use that instead
 	// of a fee rate estimate.
+	var feeRate chainfee.SatPerKWeight
+	switch {
 	case b.cfg.BatchFeeRate != nil:
 		feeRate = *b.cfg.BatchFeeRate
-		log.Infof("BatchCaretaker(%x): using manual fee rate: %s, %d "+
-			"sat/vB", b.batchKey[:], feeRate.String(),
-			feeRate.FeePerKVByte()/1000)
+		log.Infof("BatchCaretaker(%x): using manual fee rate",
+			b.batchKey[:])
 
 	default:
 		feeRate, err = b.cfg.ChainBridge.EstimateFee(
 			ctx, GenesisConfTarget,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to estimate fee: %w",
-				err)
+			return nil, fmt.Errorf("unable to estimate fee: %w", err)
 		}
-
-		log.Infof("BatchCaretaker(%x): estimated fee rate: %s",
-			b.batchKey[:], feeRate.FeePerKVByte().String())
 	}
+
+	log.Infof("BatchCaretaker(%x): using fee rate: %v",
+		b.batchKey[:], feeRate.FeePerKVByte().String())
 
 	fundedGenesisPkt, err := b.cfg.Wallet.FundPsbt(
 		ctx, genesisPkt, 1, feeRate,
@@ -438,7 +425,7 @@ func (b *BatchCaretaker) fundGenesisPsbt(
 	log.Infof("BatchCaretaker(%x): funded GenesisPacket", b.batchKey[:])
 	log.Tracef("GenesisPacket: %v", spew.Sdump(fundedGenesisPkt))
 
-	return fundedGenesisPkt, nil
+	return &fundedGenesisPkt, nil
 }
 
 // extractGenesisOutpoint extracts the genesis point (the first output from the
@@ -536,17 +523,10 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 		}
 
 		if groupInfo != nil {
-			groupReq, err := asset.NewGroupKeyRequest(
-				groupInfo.GroupKey.RawKey, *groupInfo.Genesis,
-				protoAsset, nil,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("unable to request "+
-					"asset group membership: %w", err)
-			}
-
 			sproutGroupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner, b.cfg.GenTxBuilder, *groupReq,
+				b.cfg.GenSigner, b.cfg.GenTxBuilder,
+				groupInfo.GroupKey.RawKey,
+				*groupInfo.Genesis, protoAsset,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to tweak group "+
@@ -567,16 +547,9 @@ func (b *BatchCaretaker) seedlingsToAssetSprouts(ctx context.Context,
 					"group key: %w", err)
 			}
 
-			groupReq, err := asset.NewGroupKeyRequest(
-				rawGroupKey, assetGen, protoAsset, nil,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("unable to request "+
-					"asset group creation: %w", err)
-			}
-
 			sproutGroupKey, err = asset.DeriveGroupKey(
-				b.cfg.GenSigner, b.cfg.GenTxBuilder, *groupReq,
+				b.cfg.GenSigner, b.cfg.GenTxBuilder,
+				rawGroupKey, assetGen, protoAsset,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("unable to tweak group "+
@@ -676,36 +649,18 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to map seedlings to "+
-				"sprouts: %w", err)
+				"sprouts: %v", err)
 		}
 
 		b.cfg.Batch.RootAssetCommitment = tapCommitment
 
-		// Fetch the optional Tapscript sibling for this batch, and
-		// convert it to a TapscriptPreimage.
-		var batchSibling *commitment.TapscriptPreimage
-		if b.cfg.Batch.tapSibling != nil {
-			tapSibling, err := b.cfg.TreeStore.LoadTapscriptTree(
-				ctx, *b.cfg.Batch.tapSibling,
-			)
-			if err != nil {
-				return 0, err
-			}
-
-			batchSibling, err = commitment.
-				NewPreimageFromTapscriptTreeNodes(*tapSibling)
-			if err != nil {
-				return 0, err
-			}
-		}
-
 		// With the commitment Taproot Asset root SMT constructed, we'll
 		// map that into the tapscript root we'll insert into the
 		// genesis transaction.
-		genesisScript, err := b.cfg.Batch.genesisScript(batchSibling)
+		genesisScript, err := b.cfg.Batch.genesisScript()
 		if err != nil {
 			return 0, fmt.Errorf("unable to create genesis "+
-				"script: %w", err)
+				"script: %v", err)
 		}
 
 		genesisTxPkt.Pkt.UnsignedTx.TxOut[b.anchorOutputIndex].PkScript = genesisScript
@@ -783,64 +738,33 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		b.cfg.Batch.GenesisPacket.Pkt = signedPkt
 
 		// Populate how much this tx paid in on-chain fees.
-		chainFees, err := signedPkt.GetTxFee()
+		chainFees, err := GetTxFee(signedPkt)
 		if err != nil {
 			return 0, fmt.Errorf("unable to get on-chain fees "+
 				"for psbt: %w", err)
 		}
-		b.cfg.Batch.GenesisPacket.ChainFees = int64(chainFees)
+		b.cfg.Batch.GenesisPacket.ChainFees = chainFees
 
-		log.Infof("BatchCaretaker(%x): GenesisPacket finalized "+
-			"(absolute_fee_sats: %d)", b.batchKey[:], chainFees)
+		log.Infof("BatchCaretaker(%x): GenesisPacket absolute fee: "+
+			"%d sats", chainFees)
+		log.Infof("BatchCaretaker(%x): GenesisPacket finalized",
+			b.batchKey[:])
 		log.Tracef("GenesisPacket: %v", spew.Sdump(signedPkt))
 
 		// At this point we have a fully signed PSBT packet which'll
 		// create our set of assets once mined. We'll write this to
-		// disk, then import the public key into the wallet. The sibling
-		// here can always be nil as we'll fetch the output key computed
-		// previously in BatchStateFrozen.
+		// disk, then import the public key into the wallet.
 		//
 		// TODO(roasbeef): re-run during the broadcast phase to ensure
 		// it's fully imported?
-		mintingOutputKey, merkleRoot, err := b.cfg.Batch.
-			MintingOutputKey(nil)
+		mintingOutputKey, tapRoot, err := b.cfg.Batch.MintingOutputKey()
 		if err != nil {
 			return 0, err
 		}
-
-		// To spend this output in the future, we must also commit the
-		// Taproot Asset commitment root and batch tapscript sibling.
-		tapCommitmentRoot := b.cfg.Batch.RootAssetCommitment.
-			TapscriptRoot(nil)
-
-		// Fetch the optional Tapscript sibling for this batch, and
-		// encode it to bytes.
-		var siblingBytes []byte
-		if b.cfg.Batch.tapSibling != nil {
-			tapSibling, err := b.cfg.TreeStore.LoadTapscriptTree(
-				ctx, *b.cfg.Batch.tapSibling,
-			)
-			if err != nil {
-				return 0, err
-			}
-
-			batchSibling, err := commitment.
-				NewPreimageFromTapscriptTreeNodes(*tapSibling)
-			if err != nil {
-				return 0, err
-			}
-
-			siblingBytes, _, err = commitment.
-				MaybeEncodeTapscriptPreimage(batchSibling)
-			if err != nil {
-				return 0, err
-			}
-		}
-
 		err = b.cfg.Log.CommitSignedGenesisTx(
 			ctx, b.cfg.Batch.BatchKey.PubKey,
 			b.cfg.Batch.GenesisPacket, b.anchorOutputIndex,
-			merkleRoot, tapCommitmentRoot[:], siblingBytes,
+			tapRoot,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to commit genesis "+
@@ -918,7 +842,7 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to register for "+
-				"minting tx conf: %w", err)
+				"minting tx conf: %v", err)
 		}
 
 		// Launch a goroutine that'll notify us when the transaction
@@ -930,85 +854,48 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 			defer confCancel()
 			defer b.Wg.Done()
 
-			var (
-				confEvent *chainntnfs.TxConfirmation
-				confRecv  bool
-			)
+			var confEvent *chainntnfs.TxConfirmation
+			select {
+			case confEvent = <-confNtfn.Confirmed:
+				log.Debugf("Got chain confirmation: %v",
+					confEvent.Tx.TxHash())
 
-			for !confRecv {
-				select {
-				case confEvent = <-confNtfn.Confirmed:
-					confRecv = true
+			case err := <-errChan:
+				b.cfg.ErrChan <- fmt.Errorf("error getting "+
+					"confirmation: %w", err)
+				return
 
-				case err := <-errChan:
-					confErr := fmt.Errorf("error getting "+
-						"confirmation: %w", err)
-					log.Info(confErr)
-					b.cfg.ErrChan <- confErr
+			case <-confCtx.Done():
+				log.Debugf("Skipping TX confirmation, context " +
+					"done")
 
-					return
+			case <-b.cfg.CancelReqChan:
+				b.cfg.CancelRespChan <- b.Cancel()
 
-				case <-confCtx.Done():
-					log.Debugf("Skipping TX confirmation, " +
-						"context done")
-					confRecv = true
-
-				case <-b.cfg.CancelReqChan:
-					cancelErr := b.Cancel()
-					if cancelErr == nil {
-						return
-					}
-
-					// Cancellation failed, continue to wait
-					// for transaction confirmation.
-					log.Info(cancelErr)
-
-				case <-b.Quit:
-					log.Debugf("Skipping TX confirmation, " +
-						"exiting")
-					return
-				}
-			}
-
-			if confEvent == nil {
-				confErr := fmt.Errorf("got empty " +
-					"confirmation event in batch")
-				log.Info(confErr)
-				b.cfg.ErrChan <- confErr
-
+			case <-b.Quit:
+				log.Debugf("Skipping TX confirmation, exiting")
 				return
 			}
 
-			if confEvent.Tx != nil {
-				log.Debugf("Got chain confirmation: %v",
-					confEvent.Tx.TxHash())
+			if confEvent == nil {
+				b.cfg.ErrChan <- fmt.Errorf("got empty " +
+					"confirmation event in batch")
+				return
 			}
 
-			for {
-				select {
-				case b.confEvent <- confEvent:
-					return
+			select {
+			case b.confEvent <- confEvent:
 
-				case <-confCtx.Done():
-					log.Debugf("Skipping TX confirmation, " +
-						"context done")
-					return
+			case <-confCtx.Done():
+				log.Debugf("Skipping TX confirmation, context " +
+					"done")
 
-				case <-b.cfg.CancelReqChan:
-					cancelErr := b.Cancel()
-					if cancelErr == nil {
-						return
-					}
+			case <-b.cfg.CancelReqChan:
+				b.cfg.CancelRespChan <- b.Cancel()
 
-					// Cancellation failed, continue to try
-					// and send the confirmation event.
-					log.Info(cancelErr)
-
-				case <-b.Quit:
-					log.Debugf("Skipping TX confirmation, " +
-						"exiting")
-					return
-				}
+			case <-b.Quit:
+				log.Debugf("Skipping TX confirmation, exiting")
+				return
 			}
 		}()
 
@@ -1026,27 +913,8 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		defer cancel()
 
 		headerVerifier := GenHeaderVerifier(ctx, b.cfg.ChainBridge)
-		merkleVerifier := proof.DefaultMerkleVerifier
 		groupVerifier := GenGroupVerifier(ctx, b.cfg.Log)
 		groupAnchorVerifier := GenGroupAnchorVerifier(ctx, b.cfg.Log)
-
-		// Fetch the optional tapscript sibling for this batch, which
-		// is needed to construct valid inclusion proofs.
-		var batchSibling *commitment.TapscriptPreimage
-		if b.cfg.Batch.tapSibling != nil {
-			tapSibling, err := b.cfg.TreeStore.LoadTapscriptTree(
-				ctx, *b.cfg.Batch.tapSibling,
-			)
-			if err != nil {
-				return 0, err
-			}
-
-			batchSibling, err = commitment.
-				NewPreimageFromTapscriptTreeNodes(*tapSibling)
-			if err != nil {
-				return 0, err
-			}
-		}
 
 		// Now that the minting transaction has been confirmed, we'll
 		// need to create the series of proof file blobs for each of
@@ -1062,7 +930,6 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 				TxIndex:          int(confInfo.TxIndex),
 				OutputIndex:      int(b.anchorOutputIndex),
 				InternalKey:      b.cfg.Batch.BatchKey.PubKey,
-				TapscriptSibling: batchSibling,
 				TaprootAssetRoot: batchCommitment,
 			},
 			GenesisPoint: extractGenesisOutpoint(
@@ -1081,10 +948,9 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 		}
 
 		mintingProofs, err := proof.NewMintingBlobs(
-			baseProof, headerVerifier, merkleVerifier,
-			groupVerifier, groupAnchorVerifier,
+			baseProof, headerVerifier, groupVerifier,
+			groupAnchorVerifier,
 			proof.WithAssetMetaReveals(b.cfg.Batch.AssetMetas),
-			proof.WithSiblingPreimage(batchSibling),
 		)
 		if err != nil {
 			return 0, fmt.Errorf("unable to construct minting "+
@@ -1144,7 +1010,7 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 
 			proofBlob, uniProof, err := b.storeMintingProof(
 				ctx, newAsset, mintingProof, mintTxHash,
-				headerVerifier, merkleVerifier, groupVerifier,
+				headerVerifier, groupVerifier,
 			)
 			if err != nil {
 				return fmt.Errorf("unable to store "+
@@ -1233,7 +1099,7 @@ func (b *BatchCaretaker) stateStep(currentState BatchState) (BatchState, error) 
 // can be used to register the asset with the universe.
 func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 	a *asset.Asset, mintingProof *proof.Proof, mintTxHash chainhash.Hash,
-	headerVerifier proof.HeaderVerifier, merkleVerifier proof.MerkleVerifier,
+	headerVerifier proof.HeaderVerifier,
 	groupVerifier proof.GroupVerifier) (proof.Blob, *universe.Item,
 	error) {
 
@@ -1254,8 +1120,7 @@ func (b *BatchCaretaker) storeMintingProof(ctx context.Context,
 	}
 
 	err = b.cfg.ProofFiles.ImportProofs(
-		ctx, headerVerifier, merkleVerifier, groupVerifier, false,
-		fullProof,
+		ctx, headerVerifier, groupVerifier, false, fullProof,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to insert proofs: %w", err)
@@ -1426,6 +1291,21 @@ func SortAssets(fullAssets []*asset.Asset,
 	return anchorAssets, nonAnchorAssets, nil
 }
 
+// GetTxFee returns the value of the on-chain fees paid by a finalized PSBT.
+func GetTxFee(pkt *psbt.Packet) (int64, error) {
+	inputValue, err := psbt.SumUtxoInputValues(pkt)
+	if err != nil {
+		return 0, fmt.Errorf("unable to sum input values: %v", err)
+	}
+
+	outputValue := int64(0)
+	for _, out := range pkt.UnsignedTx.TxOut {
+		outputValue += out.Value
+	}
+
+	return inputValue - outputValue, nil
+}
+
 // GenHeaderVerifier generates a block header on-chain verification callback
 // function given a chain bridge.
 func GenHeaderVerifier(ctx context.Context,
@@ -1492,9 +1372,8 @@ func GenGroupVerifier(ctx context.Context,
 		// tweaked group key.
 		_, err = mintingStore.FetchGroupByGroupKey(ctx, groupKey)
 		if err != nil {
-			return fmt.Errorf("%x: group verifier: %s: %w",
-				assetGroupKey[:], err.Error(),
-				ErrGroupKeyUnknown)
+			return fmt.Errorf("%x: group verifier: %v: %w",
+				assetGroupKey[:], err, ErrGroupKeyUnknown)
 		}
 
 		_, _ = assetGroups.Put(assetGroupKey, emptyCacheVal{})

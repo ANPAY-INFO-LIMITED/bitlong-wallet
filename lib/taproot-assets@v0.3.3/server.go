@@ -94,7 +94,7 @@ func (s *Server) initialize(interceptorChain *rpcperms.InterceptorChain) error {
 		)
 		if err != nil {
 			return fmt.Errorf("unable to create macaroon "+
-				"service: %w", err)
+				"service: %v", err)
 		}
 		rpcsLog.Infof("Validating RPC requests based on macaroon "+
 			"at: %v", s.cfg.MacaroonPath)
@@ -132,49 +132,44 @@ func (s *Server) initialize(interceptorChain *rpcperms.InterceptorChain) error {
 		s.cfg.SignalInterceptor, interceptorChain, s.cfg,
 	)
 	if err != nil {
-		return fmt.Errorf("unable to create rpc server: %w", err)
+		return fmt.Errorf("unable to create rpc server: %v", err)
 	}
 
 	// First, we'll start the main batched asset minter.
 	if err := s.cfg.AssetMinter.Start(); err != nil {
-		return fmt.Errorf("unable to start asset minter: %w", err)
+		return fmt.Errorf("unable to start asset minter: %v", err)
 	}
 
 	// Next, we'll start the asset custodian.
 	if err := s.cfg.AssetCustodian.Start(); err != nil {
-		return fmt.Errorf("unable to start asset custodian: %w", err)
+		return fmt.Errorf("unable to start asset custodian: %v", err)
 	}
 
 	if err := s.cfg.ReOrgWatcher.Start(); err != nil {
-		return fmt.Errorf("unable to start re-org watcher: %w", err)
+		return fmt.Errorf("unable to start re-org watcher: %v", err)
 	}
 
 	if err := s.cfg.ChainPorter.Start(); err != nil {
-		return fmt.Errorf("unable to start chain porter: %w", err)
+		return fmt.Errorf("unable to start chain porter: %v", err)
 	}
 
 	if err := s.cfg.UniverseFederation.Start(); err != nil {
 		return fmt.Errorf("unable to start universe "+
-			"federation: %w", err)
-	}
-
-	// Start the request for quote (RFQ) manager.
-	if err := s.cfg.RfqManager.Start(); err != nil {
-		return fmt.Errorf("unable to start RFQ manager: %w", err)
+			"federation: %v", err)
 	}
 
 	if s.cfg.UniversePublicAccess {
 		err := s.cfg.UniverseFederation.SetAllowPublicAccess()
 		if err != nil {
 			return fmt.Errorf("unable to set public access "+
-				"for universe federation: %w", err)
+				"for universe federation: %v", err)
 		}
 	}
 
 	// Now we have created all dependencies necessary to populate and
 	// start the RPC server.
 	if err := s.rpcServer.Start(); err != nil {
-		return fmt.Errorf("unable to start RPC server: %w", err)
+		return fmt.Errorf("unable to start RPC server: %v", err)
 	}
 
 	// This does have no effect if starting the rpc server is the last step
@@ -387,7 +382,7 @@ func (s *Server) RunUntilShutdown(mainErrChan <-chan error) error {
 // register to an existing one.
 func (s *Server) StartAsSubserver(lndGrpc *lndclient.GrpcLndServices) error {
 	if err := s.initialize(nil); err != nil {
-		return fmt.Errorf("unable to initialize RPC server: %w", err)
+		return fmt.Errorf("unable to initialize RPC server: %v", err)
 	}
 
 	return nil
@@ -588,10 +583,6 @@ func (s *Server) Stop() error {
 	}
 
 	if err := s.cfg.UniverseFederation.Start(); err != nil {
-		return err
-	}
-
-	if err := s.cfg.RfqManager.Stop(); err != nil {
 		return err
 	}
 
