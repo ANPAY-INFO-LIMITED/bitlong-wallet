@@ -199,19 +199,11 @@ func FindAssetByAssetName(assetName string) string {
 //	@Description: ListGroups lists the asset groups known to the target daemon, and the assets held in each group.
 //	@return string
 func ListGroups() string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	response, err := rpcclient.ListGroups()
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	defer clearUp()
-	client := taprpc.NewTaprootAssetsClient(conn)
-	request := &taprpc.ListGroupsRequest{}
-	response, err := client.ListGroups(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s taprpc ListGroups Error: %v\n", GetTimeNow(), err)
-		return ""
-	}
-	return response.String()
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
 // ListTransfers
@@ -674,4 +666,65 @@ func ListAssetsAll() string {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func ListNFTGroups() string {
+	resResponse, err := rpcclient.ListGroups()
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	type NFTId struct {
+		Id  string `json:"id"`
+		Tag string `json:"tag"`
+	}
+	type Group struct {
+		GroupKey  string   `json:"group_key"`
+		GroupName string   `json:"group_name"`
+		Supply    int      `json:"supply"`
+		NFTIds    *[]NFTId `json:"nft_ids"`
+	}
+
+	var Groups []Group
+	if resResponse.Groups != nil {
+		for key, group := range resResponse.Groups {
+			if group.Assets[0].Type != taprpc.AssetType_COLLECTIBLE {
+				break
+			}
+			var nftIds []NFTId
+			for _, asset := range group.Assets {
+				nftIds = append(nftIds, NFTId{
+					Id:  hex.EncodeToString(asset.Id),
+					Tag: asset.Tag,
+				})
+			}
+			meta := Meta{}
+			meta.FetchAssetMeta(false, hex.EncodeToString(group.Assets[0].Id))
+			Groups = append(Groups, Group{
+				GroupKey:  key,
+				GroupName: meta.Name,
+				Supply:    len(group.Assets),
+				NFTIds:    &nftIds,
+			})
+		}
+	}
+
+	return MakeJsonErrorResult(SUCCESS, "", Groups)
+}
+func ListNFTAssets() string {
+	processed, err := ListAssetsProcessed(false, false, false)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	var result []ListAssetsResponse
+	for index, pr := range *processed {
+		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
+			result = append(result, (*processed)[index])
+		}
+	}
+	return MakeJsonErrorResult(SUCCESS, "", &result)
+}
+
+func QueryAllNFTByGroup() string {
+
+	return ""
 }
