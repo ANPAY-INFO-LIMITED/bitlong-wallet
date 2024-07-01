@@ -125,10 +125,9 @@ func GetAssetInfo(id string) string {
 	assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
 	amount := proof.DecodedProof.Asset.Amount
 	assetName := proof.DecodedProof.Asset.AssetGenesis.Name
-
+	fmt.Println(proof)
 	var newMeta Meta
 	newMeta.FetchAssetMeta(false, id)
-	groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
 
 	var assetInfo = struct {
 		AssetId      string  `json:"asset_Id"`
@@ -148,13 +147,17 @@ func GetAssetInfo(id string) string {
 		Point:        assetPoint,
 		AssetType:    assetType,
 		GroupName:    &newMeta.GroupName,
-		GroupKey:     &groupKey,
 		Amount:       amount,
 		Meta:         &newMeta.Description,
 		CreateHeight: int64(createHeight),
 		CreateTime:   createTime,
 		Universe:     "localhost",
 	}
+	if proof.DecodedProof.Asset.AssetGroup != nil {
+		groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
+		assetInfo.GroupKey = &groupKey
+	}
+
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
 
