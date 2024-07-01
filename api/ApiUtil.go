@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
 	"github.com/lightninglabs/taproot-assets/taprpc"
@@ -12,6 +13,10 @@ import (
 	"log"
 	"math"
 	"os"
+	"path"
+	"reflect"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -201,4 +206,193 @@ func ValueJsonString(value any) string {
 		return ""
 	}
 	return string(resultJSON)
+}
+
+func AppendErrorInfo(err error, info string) error {
+	if err == nil {
+		err = errors.New("[nil err]")
+	}
+	return errors.New(err.Error() + ";" + info)
+}
+
+func AppendError(e error) func(error) error {
+	return func(err error) error {
+		if e == nil {
+			e = errors.New("")
+		}
+		if err == nil {
+			return e
+		}
+		if e.Error() == "" {
+			e = err
+			return e
+		}
+		e = errors.New(e.Error() + "; " + err.Error())
+		return e
+	}
+}
+
+func AppendInfo(s string) func(string) string {
+	return func(info string) string {
+		if info == "" {
+			return s
+		}
+		if s == "" {
+			s = info
+			return s
+		}
+		s = s + "; " + info
+		return s
+	}
+}
+
+func InfoAppendError(i string) func(error) error {
+	e := errors.New(i)
+	return func(err error) error {
+		if err == nil {
+			return e
+		}
+		if e.Error() == "" {
+			e = err
+			return e
+		}
+		e = errors.New(e.Error() + "; " + err.Error())
+		return e
+	}
+}
+
+func ErrorAppendInfo(e error) func(string) error {
+	return func(info string) error {
+		if e == nil {
+			e = errors.New("")
+		}
+		if info == "" {
+			return e
+		}
+		if e.Error() == "" {
+			e = errors.New(info)
+			return e
+		}
+		info = e.Error() + "; " + info
+		e = errors.New(info)
+		return e
+	}
+}
+
+func IsPathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func IsHexString(s string) bool {
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
+func SwapValue[T any](a *T, b *T) {
+	temp := *a
+	*a = *b
+	*b = temp
+}
+
+func SwapInt(a *int, b *int) {
+	*a ^= *b
+	*b ^= *a
+	*a ^= *b
+}
+
+func ToLowerWords(s string) string {
+	var result strings.Builder
+	for i, char := range s {
+		if i > 0 && char >= 'A' && char <= 'Z' {
+			temp := result.String()
+			if len(temp) > 0 && temp[len(temp)-1] != ' ' {
+				result.WriteRune(' ')
+			}
+		}
+		result.WriteRune(char)
+	}
+	return strings.ToLower(result.String())
+}
+
+func ToLowerWordsWithHyphens(s string) string {
+	var result strings.Builder
+	for i, char := range s {
+		if char == ' ' {
+			continue
+		}
+		if i > 0 && char >= 'A' && char <= 'Z' {
+			temp := result.String()
+			if len(temp) > 0 && temp[len(temp)-1] != ' ' {
+				result.WriteRune('-')
+			}
+		}
+		result.WriteRune(char)
+	}
+	return strings.ToLower(result.String())
+}
+
+func FirstUpper(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func ToCamelWord(s string, isByUnderline bool, isLowerCaseInitial bool) string {
+	var sli []string
+	if isByUnderline {
+		sli = strings.Split(s, "_")
+	} else {
+		sli = strings.Split(s, " ")
+	}
+	var result strings.Builder
+	for _, word := range sli {
+		if result.String() == "" && isLowerCaseInitial {
+			result.WriteString(word)
+		} else {
+			result.WriteString(FirstUpper(word))
+		}
+	}
+	return result.String()
+}
+
+func CreateTestMainFile(testPath string, testFuncName string) {
+	dirPath := path.Join(testPath, ToLowerWordsWithHyphens(testFuncName))
+	err := os.Mkdir(dirPath, os.ModePerm)
+	if err != nil {
+		fmt.Println(err)
+	}
+	filePath := path.Join(dirPath, "main.go")
+	f, err := os.Create(filePath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}(f)
+	content := []byte("package main\n\nfunc main() {\n\n}\n")
+	_, err = f.Write(content)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(filePath, "has been created successfully!")
+}
+
+func GetFunctionName(i any) string {
+	completeName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	s := strings.Split(completeName, ".")
+	return s[len(s)-1]
 }

@@ -1485,8 +1485,18 @@ type RawTransactionResultVoutScriptPubKey struct {
 	Type    string `json:"type"`
 }
 
-func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting() {
-
+// DecodeTransactionsWhoseLabelIsNotTapdAssetMinting
+// @dev: Call to decode transactions
+func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
+	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
+	if err != nil {
+		return nil, err
+	}
+	decodedRawTransactions, err := PostCallBitcoindToDecodeRawTransaction(token, rawTransactions)
+	if err != nil {
+		return nil, err
+	}
+	return decodedRawTransactions, nil
 }
 
 func RawTransactionHexSliceToRequestBodyRawString(rawTransactions []string) (request string) {
@@ -1537,7 +1547,6 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 		return nil, err
 	}
 	var response DecodeRawTransactionsResponse
-	fmt.Println(body)
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		//var responseSingle PostDecodeRawTransactionResponse
@@ -1600,3 +1609,32 @@ type DecodeRawTransactionResultVoutScriptPubKey struct {
 	Address string `json:"address"`
 	Type    string `json:"type"`
 }
+
+func ProcessDecodedTransactionsData(decodedRawTransactions *[]PostDecodeRawTransactionResponse) *[]PostDecodeRawTransactionResponse {
+	var result []PostDecodeRawTransactionResponse
+	for _, rawTransaction := range *decodedRawTransactions {
+		if rawTransaction.Error == nil {
+			result = append(result, rawTransaction)
+		}
+	}
+	return &result
+}
+
+func GetAndDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRawTransactionResponse, error) {
+	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
+	if err != nil {
+		return nil, err
+	}
+	var rawTransactions []string
+	for _, transaction := range *getTransactions {
+		rawTransactions = append(rawTransactions, transaction.RawTxHex)
+	}
+	decodedTransactions, err := DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	if err != nil {
+		return nil, err
+	}
+	result := ProcessDecodedTransactionsData(decodedTransactions.Data)
+	return result, nil
+}
+
+// TODO: continue processing transactions
