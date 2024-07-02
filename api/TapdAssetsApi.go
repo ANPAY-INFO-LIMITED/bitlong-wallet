@@ -1141,7 +1141,7 @@ type ListBatchesAssetMeta struct {
 func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
 	conn, clearUp, err := connect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, err
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -1415,11 +1415,11 @@ func GetTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]GetTransactionsRespons
 
 type PostGetRawTransactionResponse struct {
 	Result *PostGetRawTransactionResult `json:"result"`
-	Error  *PostGetRawTransactionError  `json:"error"`
+	Error  *BitcoindRpcResponseError    `json:"error"`
 	ID     string                       `json:"id"`
 }
 
-type PostGetRawTransactionError struct {
+type BitcoindRpcResponseError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
@@ -1448,7 +1448,7 @@ type RawTransactionResultVin struct {
 	ScriptSig   RawTransactionResultVinScriptSig `json:"scriptSig"`
 	Txinwitness []string                         `json:"txinwitness"`
 	Prevout     RawTransactionResultVinPrevout   `json:"prevout"`
-	Sequence    int64                            `json:"sequence"`
+	Sequence    int                              `json:"sequence"`
 }
 
 type RawTransactionResultVinPrevout struct {
@@ -1459,7 +1459,7 @@ type RawTransactionResultVinPrevout struct {
 }
 
 type RawTransactionResultVinPrevoutScriptPubKey struct {
-	Asm     string `json:"asm"`
+	Asm_    string `json:"asm"`
 	Desc    string `json:"desc"`
 	Hex     string `json:"hex"`
 	Address string `json:"address"`
@@ -1467,8 +1467,8 @@ type RawTransactionResultVinPrevoutScriptPubKey struct {
 }
 
 type RawTransactionResultVinScriptSig struct {
-	Asm string `json:"asm"`
-	Hex string `json:"hex"`
+	Asm_ string `json:"asm"`
+	Hex  string `json:"hex"`
 }
 
 type RawTransactionResultVout struct {
@@ -1478,11 +1478,51 @@ type RawTransactionResultVout struct {
 }
 
 type RawTransactionResultVoutScriptPubKey struct {
-	Asm     string `json:"asm"`
+	Asm_    string `json:"asm"`
 	Desc    string `json:"desc"`
 	Hex     string `json:"hex"`
 	Address string `json:"address"`
 	Type    string `json:"type"`
+}
+
+type PostGetRawTransactionResultSat struct {
+	Txid          string                        `json:"txid"`
+	Hash          string                        `json:"hash"`
+	Version       int                           `json:"version"`
+	Size          int                           `json:"size"`
+	Vsize         int                           `json:"vsize"`
+	Weight        int                           `json:"weight"`
+	Locktime      int                           `json:"locktime"`
+	Vin           []RawTransactionResultVinSat  `json:"vin"`
+	Vout          []RawTransactionResultVoutSat `json:"vout"`
+	Fee           int                           `json:"fee"`
+	Hex           string                        `json:"hex"`
+	Blockhash     string                        `json:"blockhash"`
+	Confirmations int                           `json:"confirmations"`
+	Time          int                           `json:"time"`
+	Blocktime     int                           `json:"blocktime"`
+}
+
+type RawTransactionResultVinSat struct {
+	Txid        string                            `json:"txid"`
+	Vout        int                               `json:"vout"`
+	ScriptSig   RawTransactionResultVinScriptSig  `json:"scriptSig"`
+	Txinwitness []string                          `json:"txinwitness"`
+	Prevout     RawTransactionResultVinPrevoutSat `json:"prevout"`
+	Sequence    int                               `json:"sequence"`
+}
+
+type RawTransactionResultVinPrevoutSat struct {
+	Generated    bool                                       `json:"generated"`
+	Height       int                                        `json:"height"`
+	Value        int                                        `json:"value"`
+	ScriptPubKey RawTransactionResultVinPrevoutScriptPubKey `json:"scriptPubKey"`
+}
+
+type RawTransactionResultVoutSat struct {
+	Value        int                                  `json:"value"`
+	N            int                                  `json:"n"`
+	ScriptPubKey RawTransactionResultVoutScriptPubKey `json:"scriptPubKey"`
 }
 
 // DecodeTransactionsWhoseLabelIsNotTapdAssetMinting
@@ -1493,6 +1533,18 @@ func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string)
 		return nil, err
 	}
 	decodedRawTransactions, err := PostCallBitcoindToDecodeRawTransaction(token, rawTransactions)
+	if err != nil {
+		return nil, err
+	}
+	return decodedRawTransactions, nil
+}
+
+func DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
+	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
+	if err != nil {
+		return nil, err
+	}
+	decodedRawTransactions, err := PostCallBitcoindToDecodeAndQueryTransaction(token, rawTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -1549,12 +1601,40 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 	var response DecodeRawTransactionsResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		//var responseSingle PostDecodeRawTransactionResponse
-		//err = json.Unmarshal(body, &responseSingle)
-		//if err != nil {
-		//	return nil, err
-		//}
-		//response = append(response, responseSingle)
+		return nil, err
+	}
+	return &response, nil
+}
+
+func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/bitcoind/regtest/decode/query/transactions"
+	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
+	payload := strings.NewReader(requestStr)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response DecodeAndQueryTransactionsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
 		return nil, err
 	}
 	return &response, nil
@@ -1564,11 +1644,6 @@ type PostDecodeRawTransactionResponse struct {
 	Result *PostDecodeRawTransactionResult `json:"result"`
 	Error  *BitcoindRpcResponseError       `json:"error"`
 	ID     string                          `json:"id"`
-}
-
-type BitcoindRpcResponseError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
 }
 
 type PostDecodeRawTransactionResult struct {
@@ -1592,8 +1667,8 @@ type DecodeRawTransactionResultVin struct {
 }
 
 type DecodeRawTransactionResultVinScriptSig struct {
-	Asm string `json:"asm"`
-	Hex string `json:"hex"`
+	Asm_ string `json:"asm"`
+	Hex  string `json:"hex"`
 }
 
 type DecodeRawTransactionResultVout struct {
@@ -1603,7 +1678,7 @@ type DecodeRawTransactionResultVout struct {
 }
 
 type DecodeRawTransactionResultVoutScriptPubKey struct {
-	Asm     string `json:"asm"`
+	Asm_    string `json:"asm"`
 	Desc    string `json:"desc"`
 	Hex     string `json:"hex"`
 	Address string `json:"address"`
@@ -1620,7 +1695,17 @@ func ProcessDecodedTransactionsData(decodedRawTransactions *[]PostDecodeRawTrans
 	return &result
 }
 
-func GetAndDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRawTransactionResponse, error) {
+func ProcessDecodedAndQueryTransactionsData(decodedRawTransactions *[]PostGetRawTransactionResponse) *[]PostGetRawTransactionResult {
+	var result []PostGetRawTransactionResult
+	for _, rawTransaction := range *decodedRawTransactions {
+		if rawTransaction.Error == nil && rawTransaction.Result != nil {
+			result = append(result, *(rawTransaction.Result))
+		}
+	}
+	return &result
+}
+
+func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRawTransactionResponse, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
@@ -1637,4 +1722,98 @@ func GetAndDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRaw
 	return result, nil
 }
 
-// TODO: continue processing transactions
+type DecodeAndQueryTransactionsResponse struct {
+	Success bool                             `json:"success"`
+	Error   string                           `json:"error"`
+	Code    int                              `json:"code"`
+	Data    *[]PostGetRawTransactionResponse `json:"data"`
+}
+
+func ProcessPostGetRawTransactionResultToUseSat(btcUesult *[]PostGetRawTransactionResult) *[]PostGetRawTransactionResultSat {
+	var result []PostGetRawTransactionResultSat
+	for _, transaction := range *btcUesult {
+		var rawTransactionResultVinSats []RawTransactionResultVinSat
+		for _, vin := range transaction.Vin {
+			rawTransactionResultVinSats = append(rawTransactionResultVinSats, RawTransactionResultVinSat{
+				Txid:        vin.Txid,
+				Vout:        vin.Vout,
+				ScriptSig:   vin.ScriptSig,
+				Txinwitness: vin.Txinwitness,
+				Prevout: RawTransactionResultVinPrevoutSat{
+					Generated:    vin.Prevout.Generated,
+					Height:       vin.Prevout.Height,
+					Value:        ToSat(vin.Prevout.Value),
+					ScriptPubKey: vin.Prevout.ScriptPubKey,
+				},
+				Sequence: vin.Sequence,
+			})
+		}
+		var rawTransactionResultVoutSats []RawTransactionResultVoutSat
+		for _, vout := range transaction.Vout {
+			rawTransactionResultVoutSats = append(rawTransactionResultVoutSats, RawTransactionResultVoutSat{
+				Value:        ToSat(vout.Value),
+				N:            vout.N,
+				ScriptPubKey: vout.ScriptPubKey,
+			})
+		}
+		result = append(result, PostGetRawTransactionResultSat{
+			Txid:          transaction.Txid,
+			Hash:          transaction.Hash,
+			Version:       transaction.Version,
+			Size:          transaction.Size,
+			Vsize:         transaction.Vsize,
+			Weight:        transaction.Weight,
+			Locktime:      transaction.Locktime,
+			Vin:           rawTransactionResultVinSats,
+			Vout:          rawTransactionResultVoutSats,
+			Fee:           ToSat(transaction.Fee),
+			Hex:           transaction.Hex,
+			Blockhash:     transaction.Blockhash,
+			Confirmations: transaction.Confirmations,
+			Time:          transaction.Time,
+			Blocktime:     transaction.Blocktime,
+		})
+	}
+	return &result
+}
+
+func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostGetRawTransactionResultSat, error) {
+	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
+	if err != nil {
+		return nil, err
+	}
+	var rawTransactions []string
+	for _, transaction := range *getTransactions {
+		rawTransactions = append(rawTransactions, transaction.RawTxHex)
+	}
+	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	if err != nil {
+		return nil, err
+	}
+	btcUesult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
+	result := ProcessPostGetRawTransactionResultToUseSat(btcUesult)
+	return result, nil
+}
+
+type BtcTransferOut struct {
+	Address string `json:"address"`
+	Value   string `json:"value"`
+	Time    int    `json:"time"`
+	Detail  *PostGetRawTransactionResultSat
+}
+
+// TODO: need to test
+func GetAllAddresses() ([]string, error) {
+	var result []string
+	listAddress, err := ListAddressesAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	for _, accountWithAddresse := range listAddress.AccountWithAddresses {
+		addresses := accountWithAddresse.Addresses
+		for _, address := range addresses {
+			result = append(result, address.Address)
+		}
+	}
+	return result, nil
+}
