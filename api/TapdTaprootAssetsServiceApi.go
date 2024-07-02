@@ -285,7 +285,6 @@ func QueryAddrs(assetId string) string {
 		addrTemp.getData(a)
 		addrs = append(addrs, addrTemp)
 	}
-
 	if len(addrs) == 0 {
 		return MakeJsonErrorResult(SUCCESS, "NOT_FOUND", addrs)
 	}
@@ -304,6 +303,43 @@ func SendAssets(jsonAddrs string, feeRate int64) string {
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
+	//// TODO: Decode Addr
+	////response, err := rpcclient.DecodeAddr(addr)
+	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"[","")
+	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"]","")
+	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"\"","")
+	//jsonAddrs=strings.ReplaceAll(jsonAddrs," ","")
+	//assetAddrs:= strings.Split(jsonAddrs,",")
+	//// TODO: Transfer type out
+	//request := AssetTransferSetRequest{
+	//	AssetID:           "",
+	//	AssetAddressFrom:  "",
+	//	AssetAddressTo:    "",
+	//	Amount:            0,
+	//	TransferType:      0,
+	//	TransactionID:     "",
+	//	TransferTimestamp: 0,
+	//	AnchorTxChainFees: 0,
+	//}
+	//err = PostToSetAssetTransfer(token, request)
+	//if err != nil {
+	//	return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	//}
+	//// TODO: Transfer type in
+	//request = AssetTransferSetRequest{
+	//	AssetID:           "",
+	//	AssetAddressFrom:  "",
+	//	AssetAddressTo:    "",
+	//	Amount:            0,
+	//	TransferType:      0,
+	//	TransactionID:     "",
+	//	TransferTimestamp: 0,
+	//	AnchorTxChainFees: 0,
+	//}
+	//err = PostToSetAssetTransfer(token, request)
+	//if err != nil {
+	//	return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	//}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
