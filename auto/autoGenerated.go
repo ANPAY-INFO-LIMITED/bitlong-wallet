@@ -16,6 +16,7 @@ import (
 const apiPackagePath = "github.com/wallet/api"
 
 var (
+	//排除的文件
 	excludedFiles = []string{"FrpcApi.go", "FrpcPeriphery.go", "FrpcRequest.go", "FileServerRouter.go", "LnurlApi.go",
 		"LnurlBoltPhoneStore.go",
 		"LnurlBoltServerStore.go",
@@ -26,6 +27,7 @@ var (
 		"LnurlUtil.go",
 		"LndAddrStoreInBolt.go", "" +
 			"ApiUtil.go"}
+	//排除的方法
 	excludedFunctions = []string{"MakeJsonResult", "MakeJsonErrorResult", "TapMarshalRespString", "B64DecodeToHex"}
 )
 

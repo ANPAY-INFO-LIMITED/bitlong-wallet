@@ -4,7 +4,7 @@ import (
 	"github.com/wallet/api"
 )
 
-const PATH = "D:\\share\\bitlong\\code\\back-end\\wallet\\config"
+const PATH = "D:\\share\\project\\wallet\\config"
 const PATH2 = "/home/en/test"
 
 func main() {
@@ -15,4 +15,5 @@ func main() {
 
 func init() {
 	api.SetPath(PATH, "regtest")
+
 }
