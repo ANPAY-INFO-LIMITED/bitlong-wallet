@@ -1527,11 +1527,7 @@ type RawTransactionResultVoutSat struct {
 
 // DecodeTransactionsWhoseLabelIsNotTapdAssetMinting
 // @dev: Call to decode transactions
-func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
-	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
-	if err != nil {
-		return nil, err
-	}
+func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	decodedRawTransactions, err := PostCallBitcoindToDecodeRawTransaction(token, rawTransactions)
 	if err != nil {
 		return nil, err
@@ -1539,11 +1535,7 @@ func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string)
 	return decodedRawTransactions, nil
 }
 
-func DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
-	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
-	if err != nil {
-		return nil, err
-	}
+func DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
 	decodedRawTransactions, err := PostCallBitcoindToDecodeAndQueryTransaction(token, rawTransactions)
 	if err != nil {
 		return nil, err
@@ -1574,7 +1566,8 @@ type DecodeRawTransactionsResponse struct {
 
 func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	serverDomainOrSocket := "132.232.109.84:8090"
-	url := "http://" + serverDomainOrSocket + "/bitcoind/regtest/decode/transactions"
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1608,7 +1601,8 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 
 func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
 	serverDomainOrSocket := "132.232.109.84:8090"
-	url := "http://" + serverDomainOrSocket + "/bitcoind/regtest/decode/query/transactions"
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/query/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1705,7 +1699,7 @@ func ProcessDecodedAndQueryTransactionsData(decodedRawTransactions *[]PostGetRaw
 	return &result
 }
 
-func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRawTransactionResponse, error) {
+func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token string) (*[]PostDecodeRawTransactionResponse, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
@@ -1714,7 +1708,7 @@ func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRa
 	for _, transaction := range *getTransactions {
 		rawTransactions = append(rawTransactions, transaction.RawTxHex)
 	}
-	decodedTransactions, err := DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	decodedTransactions, err := DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -1777,7 +1771,7 @@ func ProcessPostGetRawTransactionResultToUseSat(btcUesult *[]PostGetRawTransacti
 	return &result
 }
 
-func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostGetRawTransactionResultSat, error) {
+func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token string) (*[]PostGetRawTransactionResultSat, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
@@ -1786,7 +1780,7 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]Post
 	for _, transaction := range *getTransactions {
 		rawTransactions = append(rawTransactions, transaction.RawTxHex)
 	}
-	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -1795,14 +1789,13 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]Post
 	return result, nil
 }
 
-type BtcTransferOut struct {
-	Address string `json:"address"`
-	Value   string `json:"value"`
-	Time    int    `json:"time"`
-	Detail  *PostGetRawTransactionResultSat
+type BtcTransferOutInfo struct {
+	Address string                          `json:"address"`
+	Value   int                             `json:"value"`
+	Time    int                             `json:"time"`
+	Detail  *PostGetRawTransactionResultSat `json:"detail"`
 }
 
-// TODO: need to test
 func GetAllAddresses() ([]string, error) {
 	var result []string
 	listAddress, err := ListAddressesAndGetResponse()
@@ -1816,4 +1809,74 @@ func GetAllAddresses() ([]string, error) {
 		}
 	}
 	return result, nil
+}
+
+func GetBtcTransferOutInfos(token string) (*[]TransactionsSimplified, error) {
+	var btcTransferOutInfos []BtcTransferOutInfo
+	addresses, err := GetAllAddresses()
+	if err != nil {
+		return nil, err
+	}
+	transactions, err := GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, transaction := range *transactions {
+		for _, vin := range transaction.Vin {
+			vinAddress := vin.Prevout.ScriptPubKey.Address
+			for _, address := range addresses {
+				if vinAddress == address {
+					btcTransferOutInfos = append(btcTransferOutInfos, BtcTransferOutInfo{
+						Address: vinAddress,
+						Value:   vin.Prevout.Value,
+						Time:    transaction.Time,
+						Detail:  &transaction,
+					})
+					//	TODO: transaction to simplified info, refer mempool's tx return
+				}
+			}
+		}
+	}
+	transactionsSimplified := BtcTransferOutInfoToTransactionsSimplified(&btcTransferOutInfos)
+	return transactionsSimplified, nil
+}
+
+func BtcTransferOutInfoToTransactionsSimplified(btcTransferOutInfos *[]BtcTransferOutInfo) *[]TransactionsSimplified {
+	var transactionsSimplified []TransactionsSimplified
+	for _, btcTransferOutInfo := range *btcTransferOutInfos {
+		feeRate := RoundToDecimalPlace(float64(btcTransferOutInfo.Detail.Fee)/float64(btcTransferOutInfo.Detail.Vsize), 2)
+		var transactionsSimplifiedVin []TransactionsSimplifiedVin
+		var transactionsSimplifiedVout []TransactionsSimplifiedVout
+		for _, vin := range btcTransferOutInfo.Detail.Vin {
+			transactionsSimplifiedVin = append(transactionsSimplifiedVin, TransactionsSimplifiedVin{
+				ScriptpubkeyAddress: vin.Prevout.ScriptPubKey.Address,
+				Value:               vin.Prevout.Value,
+			})
+		}
+		for _, vout := range btcTransferOutInfo.Detail.Vout {
+			transactionsSimplifiedVout = append(transactionsSimplifiedVout, TransactionsSimplifiedVout{
+				ScriptpubkeyAddress: vout.ScriptPubKey.Address,
+				Value:               vout.Value,
+			})
+		}
+		transactionsSimplified = append(transactionsSimplified, TransactionsSimplified{
+			Txid:            btcTransferOutInfo.Detail.Txid,
+			Vin:             transactionsSimplifiedVin,
+			Vout:            transactionsSimplifiedVout,
+			BlockTime:       btcTransferOutInfo.Detail.Blocktime,
+			BalanceResult:   -(btcTransferOutInfo.Value),
+			FeeRate:         feeRate,
+			Fee:             btcTransferOutInfo.Detail.Fee,
+			ConfirmedBlocks: btcTransferOutInfo.Detail.Confirmations,
+		})
+	}
+	return &transactionsSimplified
+}
+
+func GetBtcTransferOutInfosJsonResult(token string) string {
+	response, err := GetBtcTransferOutInfos(token)
+	if err != nil {
+		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }

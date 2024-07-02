@@ -23,9 +23,10 @@ import (
 type ErrCode int
 
 const (
-	DefaultErr   ErrCode = -1
-	SUCCESS      ErrCode = 200
-	NotFoundData ErrCode = 601
+	DefaultErr                ErrCode = -1
+	SUCCESS                   ErrCode = 200
+	NotFoundData              ErrCode = 601
+	GetBtcTransferOutInfosErr         = iota
 )
 
 type JsonResult struct {
