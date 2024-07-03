@@ -1816,6 +1816,13 @@ type BtcTransferOutInfo struct {
 	Detail  *PostGetRawTransactionResultSat `json:"detail"`
 }
 
+type BtcTransferOutInfoSimplified struct {
+	Address string                  `json:"address"`
+	Value   int                     `json:"value"`
+	Time    int                     `json:"time"`
+	Detail  *TransactionsSimplified `json:"detail"`
+}
+
 func GetAllAddresses() ([]string, error) {
 	var result []string
 	listAddress, err := ListAddressesAndGetResponse()
@@ -1831,7 +1838,7 @@ func GetAllAddresses() ([]string, error) {
 	return result, nil
 }
 
-func GetBtcTransferOutInfos(token string) (*[]TransactionsSimplified, error) {
+func GetBtcTransferOutInfos(token string) (*[]BtcTransferOutInfoSimplified, error) {
 	var btcTransferOutInfos []BtcTransferOutInfo
 	addresses, err := GetAllAddresses()
 	if err != nil {
@@ -1856,7 +1863,7 @@ func GetBtcTransferOutInfos(token string) (*[]TransactionsSimplified, error) {
 			}
 		}
 	}
-	transactionsSimplified := BtcTransferOutInfoToTransactionsSimplified(&btcTransferOutInfos)
+	transactionsSimplified := BtcTransferOutInfoToBtcTransferOutInfoSimplified(&btcTransferOutInfos)
 	return transactionsSimplified, nil
 }
 
@@ -1890,6 +1897,47 @@ func BtcTransferOutInfoToTransactionsSimplified(btcTransferOutInfos *[]BtcTransf
 		})
 	}
 	return &transactionsSimplified
+}
+
+func BtcTransferOutInfoToBtcTransferOutInfoSimplified(btcTransferOutInfos *[]BtcTransferOutInfo) *[]BtcTransferOutInfoSimplified {
+	var btcTransferOutInfoSimplified []BtcTransferOutInfoSimplified
+	for _, btcTransferOutInfo := range *btcTransferOutInfos {
+		var transactionsSimplified TransactionsSimplified
+		var postGetRawTransactionResultSat PostGetRawTransactionResultSat
+		postGetRawTransactionResultSat = *btcTransferOutInfo.Detail
+		feeRate := RoundToDecimalPlace(float64(postGetRawTransactionResultSat.Fee)/float64(postGetRawTransactionResultSat.Vsize), 2)
+		var transactionsSimplifiedVin []TransactionsSimplifiedVin
+		var transactionsSimplifiedVout []TransactionsSimplifiedVout
+		for _, vin := range postGetRawTransactionResultSat.Vin {
+			transactionsSimplifiedVin = append(transactionsSimplifiedVin, TransactionsSimplifiedVin{
+				ScriptpubkeyAddress: vin.Prevout.ScriptPubKey.Address,
+				Value:               vin.Prevout.Value,
+			})
+		}
+		for _, vout := range postGetRawTransactionResultSat.Vout {
+			transactionsSimplifiedVout = append(transactionsSimplifiedVout, TransactionsSimplifiedVout{
+				ScriptpubkeyAddress: vout.ScriptPubKey.Address,
+				Value:               vout.Value,
+			})
+		}
+		transactionsSimplified = TransactionsSimplified{
+			Txid:            postGetRawTransactionResultSat.Txid,
+			Vin:             transactionsSimplifiedVin,
+			Vout:            transactionsSimplifiedVout,
+			BlockTime:       postGetRawTransactionResultSat.Blocktime,
+			BalanceResult:   -(btcTransferOutInfo.Value),
+			FeeRate:         feeRate,
+			Fee:             postGetRawTransactionResultSat.Fee,
+			ConfirmedBlocks: postGetRawTransactionResultSat.Confirmations,
+		}
+		btcTransferOutInfoSimplified = append(btcTransferOutInfoSimplified, BtcTransferOutInfoSimplified{
+			Address: btcTransferOutInfo.Address,
+			Value:   btcTransferOutInfo.Value,
+			Time:    btcTransferOutInfo.Time,
+			Detail:  &transactionsSimplified,
+		})
+	}
+	return &btcTransferOutInfoSimplified
 }
 
 func GetBtcTransferOutInfosJsonResult(token string) string {
