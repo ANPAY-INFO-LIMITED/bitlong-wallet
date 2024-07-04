@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -1527,11 +1528,7 @@ type RawTransactionResultVoutSat struct {
 
 // DecodeTransactionsWhoseLabelIsNotTapdAssetMinting
 // @dev: Call to decode transactions
-func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
-	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
-	if err != nil {
-		return nil, err
-	}
+func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	decodedRawTransactions, err := PostCallBitcoindToDecodeRawTransaction(token, rawTransactions)
 	if err != nil {
 		return nil, err
@@ -1539,11 +1536,7 @@ func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string)
 	return decodedRawTransactions, nil
 }
 
-func DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
-	token, err := Refresh("decoderawtransaction", "decoderawtransaction")
-	if err != nil {
-		return nil, err
-	}
+func DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
 	decodedRawTransactions, err := PostCallBitcoindToDecodeAndQueryTransaction(token, rawTransactions)
 	if err != nil {
 		return nil, err
@@ -1562,7 +1555,19 @@ func RawTransactionHexSliceToRequestBodyRawString(rawTransactions []string) (req
 	}
 	request += "]}"
 	return request
+}
 
+func OutpointSliceToRequestBodyRawString(outpoints []string) (request string) {
+	request = "{\"outpoints\":["
+	for i, transaction := range outpoints {
+		element := fmt.Sprintf("\"%s\"", transaction)
+		request += element
+		if i != len(outpoints)-1 {
+			request += ","
+		}
+	}
+	request += "]}"
+	return request
 }
 
 type DecodeRawTransactionsResponse struct {
@@ -1574,7 +1579,8 @@ type DecodeRawTransactionsResponse struct {
 
 func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	serverDomainOrSocket := "132.232.109.84:8090"
-	url := "http://" + serverDomainOrSocket + "/bitcoind/regtest/decode/transactions"
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1608,7 +1614,8 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 
 func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
 	serverDomainOrSocket := "132.232.109.84:8090"
-	url := "http://" + serverDomainOrSocket + "/bitcoind/regtest/decode/query/transactions"
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/query/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1705,7 +1712,7 @@ func ProcessDecodedAndQueryTransactionsData(decodedRawTransactions *[]PostGetRaw
 	return &result
 }
 
-func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRawTransactionResponse, error) {
+func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token string) (*[]PostDecodeRawTransactionResponse, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
@@ -1714,7 +1721,7 @@ func GetThenDecodeTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostDecodeRa
 	for _, transaction := range *getTransactions {
 		rawTransactions = append(rawTransactions, transaction.RawTxHex)
 	}
-	decodedTransactions, err := DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	decodedTransactions, err := DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -1777,7 +1784,14 @@ func ProcessPostGetRawTransactionResultToUseSat(btcUesult *[]PostGetRawTransacti
 	return &result
 }
 
-func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]PostGetRawTransactionResultSat, error) {
+type GetAddressesByOutpointSliceResponse struct {
+	Success bool              `json:"success"`
+	Error   string            `json:"error"`
+	Code    ErrCode           `json:"code"`
+	Data    map[string]string `json:"data"`
+}
+
+func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token string) (*[]PostGetRawTransactionResultSat, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
@@ -1786,7 +1800,7 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]Post
 	for _, transaction := range *getTransactions {
 		rawTransactions = append(rawTransactions, transaction.RawTxHex)
 	}
-	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(rawTransactions)
+	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
 	if err != nil {
 		return nil, err
 	}
@@ -1795,14 +1809,20 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]Post
 	return result, nil
 }
 
-type BtcTransferOut struct {
-	Address string `json:"address"`
-	Value   string `json:"value"`
-	Time    int    `json:"time"`
-	Detail  *PostGetRawTransactionResultSat
+type BtcTransferOutInfo struct {
+	Address string                          `json:"address"`
+	Value   int                             `json:"value"`
+	Time    int                             `json:"time"`
+	Detail  *PostGetRawTransactionResultSat `json:"detail"`
 }
 
-// TODO: need to test
+type BtcTransferOutInfoSimplified struct {
+	Address string                  `json:"address"`
+	Value   int                     `json:"value"`
+	Time    int                     `json:"time"`
+	Detail  *TransactionsSimplified `json:"detail"`
+}
+
 func GetAllAddresses() ([]string, error) {
 	var result []string
 	listAddress, err := ListAddressesAndGetResponse()
@@ -1817,3 +1837,341 @@ func GetAllAddresses() ([]string, error) {
 	}
 	return result, nil
 }
+
+func GetBtcTransferOutInfos(token string) (*[]BtcTransferOutInfoSimplified, error) {
+	var btcTransferOutInfos []BtcTransferOutInfo
+	addresses, err := GetAllAddresses()
+	if err != nil {
+		return nil, err
+	}
+	transactions, err := GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, transaction := range *transactions {
+		for _, vin := range transaction.Vin {
+			vinAddress := vin.Prevout.ScriptPubKey.Address
+			for _, address := range addresses {
+				if vinAddress == address {
+					btcTransferOutInfos = append(btcTransferOutInfos, BtcTransferOutInfo{
+						Address: vinAddress,
+						Value:   vin.Prevout.Value,
+						Time:    transaction.Time,
+						Detail:  &transaction,
+					})
+				}
+			}
+		}
+	}
+	transactionsSimplified := BtcTransferOutInfoToBtcTransferOutInfoSimplified(&btcTransferOutInfos)
+	return transactionsSimplified, nil
+}
+
+func BtcTransferOutInfoToTransactionsSimplified(btcTransferOutInfos *[]BtcTransferOutInfo) *[]TransactionsSimplified {
+	var transactionsSimplified []TransactionsSimplified
+	for _, btcTransferOutInfo := range *btcTransferOutInfos {
+		feeRate := RoundToDecimalPlace(float64(btcTransferOutInfo.Detail.Fee)/float64(btcTransferOutInfo.Detail.Vsize), 2)
+		var transactionsSimplifiedVin []TransactionsSimplifiedVin
+		var transactionsSimplifiedVout []TransactionsSimplifiedVout
+		for _, vin := range btcTransferOutInfo.Detail.Vin {
+			transactionsSimplifiedVin = append(transactionsSimplifiedVin, TransactionsSimplifiedVin{
+				ScriptpubkeyAddress: vin.Prevout.ScriptPubKey.Address,
+				Value:               vin.Prevout.Value,
+			})
+		}
+		for _, vout := range btcTransferOutInfo.Detail.Vout {
+			transactionsSimplifiedVout = append(transactionsSimplifiedVout, TransactionsSimplifiedVout{
+				ScriptpubkeyAddress: vout.ScriptPubKey.Address,
+				Value:               vout.Value,
+			})
+		}
+		transactionsSimplified = append(transactionsSimplified, TransactionsSimplified{
+			Txid:            btcTransferOutInfo.Detail.Txid,
+			Vin:             transactionsSimplifiedVin,
+			Vout:            transactionsSimplifiedVout,
+			BlockTime:       btcTransferOutInfo.Detail.Blocktime,
+			BalanceResult:   -(btcTransferOutInfo.Value),
+			FeeRate:         feeRate,
+			Fee:             btcTransferOutInfo.Detail.Fee,
+			ConfirmedBlocks: btcTransferOutInfo.Detail.Confirmations,
+		})
+	}
+	return &transactionsSimplified
+}
+
+func BtcTransferOutInfoToBtcTransferOutInfoSimplified(btcTransferOutInfos *[]BtcTransferOutInfo) *[]BtcTransferOutInfoSimplified {
+	var btcTransferOutInfoSimplified []BtcTransferOutInfoSimplified
+	for _, btcTransferOutInfo := range *btcTransferOutInfos {
+		var transactionsSimplified TransactionsSimplified
+		var postGetRawTransactionResultSat PostGetRawTransactionResultSat
+		postGetRawTransactionResultSat = *btcTransferOutInfo.Detail
+		feeRate := RoundToDecimalPlace(float64(postGetRawTransactionResultSat.Fee)/float64(postGetRawTransactionResultSat.Vsize), 2)
+		var transactionsSimplifiedVin []TransactionsSimplifiedVin
+		var transactionsSimplifiedVout []TransactionsSimplifiedVout
+		for _, vin := range postGetRawTransactionResultSat.Vin {
+			transactionsSimplifiedVin = append(transactionsSimplifiedVin, TransactionsSimplifiedVin{
+				ScriptpubkeyAddress: vin.Prevout.ScriptPubKey.Address,
+				Value:               vin.Prevout.Value,
+			})
+		}
+		for _, vout := range postGetRawTransactionResultSat.Vout {
+			transactionsSimplifiedVout = append(transactionsSimplifiedVout, TransactionsSimplifiedVout{
+				ScriptpubkeyAddress: vout.ScriptPubKey.Address,
+				Value:               vout.Value,
+			})
+		}
+		transactionsSimplified = TransactionsSimplified{
+			Txid:            postGetRawTransactionResultSat.Txid,
+			Vin:             transactionsSimplifiedVin,
+			Vout:            transactionsSimplifiedVout,
+			BlockTime:       postGetRawTransactionResultSat.Blocktime,
+			BalanceResult:   -(btcTransferOutInfo.Value),
+			FeeRate:         feeRate,
+			Fee:             postGetRawTransactionResultSat.Fee,
+			ConfirmedBlocks: postGetRawTransactionResultSat.Confirmations,
+		}
+		btcTransferOutInfoSimplified = append(btcTransferOutInfoSimplified, BtcTransferOutInfoSimplified{
+			Address: btcTransferOutInfo.Address,
+			Value:   btcTransferOutInfo.Value,
+			Time:    btcTransferOutInfo.Time,
+			Detail:  &transactionsSimplified,
+		})
+	}
+	return &btcTransferOutInfoSimplified
+}
+
+func GetBtcTransferOutInfosJsonResult(token string) string {
+	response, err := GetBtcTransferOutInfos(token)
+	if err != nil {
+		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+type AssetTransferType int
+
+const (
+	AssetTransferTypeOut AssetTransferType = iota
+	AssetTransferTypeIn
+)
+
+type AssetTransferSetRequest struct {
+	AssetID           string            `json:"asset_id" gorm:"type:varchar(255)"`
+	AssetAddressFrom  string            `json:"address_from" gorm:"type:varchar(255)"`
+	AssetAddressTo    string            `json:"address_to" gorm:"type:varchar(255)"`
+	Amount            int               `json:"amount"`
+	TransferType      AssetTransferType `json:"transfer_type"`
+	TransactionID     string            `json:"transaction_id" gorm:"type:varchar(255)"`
+	TransferTimestamp int               `json:"transfer_timestamp"`
+	AnchorTxChainFees int               `json:"anchor_tx_chain_fees"`
+}
+
+func PostToSetAssetTransfer(token string, assetTransferSetRequest AssetTransferSetRequest) error {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_transfer/set"
+	requestJsonBytes, err := json.Marshal(assetTransferSetRequest)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+func ListTransfersAndGetResponse() (*taprpc.ListTransfersResponse, error) {
+	response, err := rpcclient.ListTransfers()
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+type AssetTransferProcessed struct {
+	Txid               string                         `json:"txid"`
+	AssetID            string                         `json:"asset_id"`
+	TransferTimestamp  int                            `json:"transfer_timestamp"`
+	AnchorTxHash       string                         `json:"anchor_tx_hash"`
+	AnchorTxHeightHint int                            `json:"anchor_tx_height_hint"`
+	AnchorTxChainFees  int                            `json:"anchor_tx_chain_fees"`
+	Inputs             []AssetTransferProcessedInput  `json:"inputs"`
+	Outputs            []AssetTransferProcessedOutput `json:"outputs"`
+}
+
+type AssetTransferProcessedInput struct {
+	Address     string `json:"address"`
+	Amount      int    `json:"amount"`
+	AnchorPoint string `json:"anchor_point"`
+	ScriptKey   string `json:"script_key"`
+}
+
+type AssetTransferProcessedOutput struct {
+	Address                string `json:"address"`
+	Amount                 int    `json:"amount"`
+	AnchorOutpoint         string `json:"anchor_outpoint"`
+	AnchorValue            int    `json:"anchor_value"`
+	AnchorInternalKey      string `json:"anchor_internal_key"`
+	AnchorTaprootAssetRoot string `json:"anchor_taproot_asset_root"`
+	AnchorMerkleRoot       string `json:"anchor_merkle_root"`
+	AnchorTapscriptSibling string `json:"anchor_tapscript_sibling"`
+	AnchorNumPassiveAssets int    `json:"anchor_num_passive_assets"`
+	ScriptKey              string `json:"script_key"`
+	ScriptKeyIsLocal       bool   `json:"script_key_is_local"`
+	NewProofBlob           string `json:"new_proof_blob"`
+	SplitCommitRootHash    string `json:"split_commit_root_hash"`
+	OutputType             string `json:"output_type"`
+	AssetVersion           string `json:"asset_version"`
+}
+
+func GetTxidFromOutpoint(outpoint string) (string, error) {
+	txid, indexStr := getTransactionAndIndexByOutpoint(outpoint)
+	if txid == "" || indexStr == "" {
+		return "", errors.New("txid or index is empty")
+	}
+	return txid, nil
+}
+
+func GetAllOutPointsOfListTransfersResponse(listTransfersResponse *taprpc.ListTransfersResponse) []string {
+	var allOutPoints []string
+	for _, listTransfer := range listTransfersResponse.Transfers {
+		for _, input := range listTransfer.Inputs {
+			allOutPoints = append(allOutPoints, input.AnchorPoint)
+		}
+
+		for _, output := range listTransfer.Outputs {
+			allOutPoints = append(allOutPoints, output.Anchor.Outpoint)
+		}
+	}
+	return allOutPoints
+}
+
+func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string) (*GetAddressesByOutpointSliceResponse, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/address/outpoints"
+	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
+	payload := strings.NewReader(requestStr)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAddressesByOutpointSliceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.ListTransfersResponse) *[]AssetTransferProcessed {
+	var assetTransferProcessed []AssetTransferProcessed
+	allOutpoints := GetAllOutPointsOfListTransfersResponse(listTransfersResponse)
+	response, err := PostCallBitcoindToQueryAddressByOutpoints(token, allOutpoints)
+	if err != nil {
+		return nil
+	}
+	addressMap := response.Data
+	for _, listTransfer := range listTransfersResponse.Transfers {
+		txid, err := GetTxidFromOutpoint(listTransfer.Outputs[0].Anchor.Outpoint)
+		if err != nil {
+			return nil
+		}
+		var assetTransferProcessedInput []AssetTransferProcessedInput
+		for _, input := range listTransfer.Inputs {
+			inOp := input.AnchorPoint
+			assetTransferProcessedInput = append(assetTransferProcessedInput, AssetTransferProcessedInput{
+				Address:     addressMap[inOp],
+				Amount:      int(input.Amount),
+				AnchorPoint: inOp,
+				ScriptKey:   hex.EncodeToString(input.ScriptKey),
+			})
+		}
+		var assetTransferProcessedOutput []AssetTransferProcessedOutput
+		for _, output := range listTransfer.Outputs {
+			outOp := output.Anchor.Outpoint
+			assetTransferProcessedOutput = append(assetTransferProcessedOutput, AssetTransferProcessedOutput{
+				Address:                addressMap[outOp],
+				Amount:                 int(output.Amount),
+				AnchorOutpoint:         outOp,
+				AnchorValue:            int(output.Anchor.Value),
+				AnchorInternalKey:      hex.EncodeToString(output.Anchor.InternalKey),
+				AnchorTaprootAssetRoot: hex.EncodeToString(output.Anchor.TaprootAssetRoot),
+				AnchorMerkleRoot:       hex.EncodeToString(output.Anchor.MerkleRoot),
+				AnchorTapscriptSibling: hex.EncodeToString(output.Anchor.TapscriptSibling),
+				AnchorNumPassiveAssets: int(output.Anchor.NumPassiveAssets),
+				ScriptKey:              hex.EncodeToString(output.ScriptKey),
+				ScriptKeyIsLocal:       output.ScriptKeyIsLocal,
+				NewProofBlob:           hex.EncodeToString(output.NewProofBlob),
+				SplitCommitRootHash:    hex.EncodeToString(output.SplitCommitRootHash),
+				OutputType:             output.OutputType.String(),
+				AssetVersion:           output.AssetVersion.String(),
+			})
+		}
+		assetTransferProcessed = append(assetTransferProcessed, AssetTransferProcessed{
+			Txid:               txid,
+			AssetID:            hex.EncodeToString(listTransfer.Inputs[0].AssetId),
+			TransferTimestamp:  int(listTransfer.TransferTimestamp),
+			AnchorTxHash:       hex.EncodeToString(listTransfer.AnchorTxHash),
+			AnchorTxHeightHint: int(listTransfer.AnchorTxHeightHint),
+			AnchorTxChainFees:  int(listTransfer.AnchorTxChainFees),
+			Inputs:             assetTransferProcessedInput,
+			Outputs:            assetTransferProcessedOutput,
+		})
+	}
+	return &assetTransferProcessed
+}
+
+func ListTransfersAndGetProcessedResponse(token string) (*[]AssetTransferProcessed, error) {
+	listTransfers, err := ListTransfersAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	processedListTransfers := ProcessListTransfersResponse(token, listTransfers)
+	return processedListTransfers, nil
+}
+
+// TODO: query local and server txns, upload new items

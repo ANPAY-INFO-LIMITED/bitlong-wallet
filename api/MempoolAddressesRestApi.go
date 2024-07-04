@@ -66,20 +66,24 @@ type GetAddressTransactionsResponse []struct {
 }
 
 type TransactionsSimplified struct {
-	Txid string `json:"txid"`
-	Vin  []struct {
-		ScriptpubkeyAddress string `json:"scriptpubkey_address"`
-		Value               int    `json:"value"`
-	} `json:"vin"`
-	Vout []struct {
-		ScriptpubkeyAddress string `json:"scriptpubkey_address"`
-		Value               int    `json:"value"`
-	} `json:"vout"`
-	BlockTime       int     `json:"block_time"`
-	BalanceResult   int     `json:"balance_result"`
-	FeeRate         float64 `json:"fee_rate"`
-	Fee             int     `json:"fee"`
-	ConfirmedBlocks int     `json:"confirmed_blocks"`
+	Txid            string                       `json:"txid"`
+	Vin             []TransactionsSimplifiedVin  `json:"vin"`
+	Vout            []TransactionsSimplifiedVout `json:"vout"`
+	BlockTime       int                          `json:"block_time"`
+	BalanceResult   int                          `json:"balance_result"`
+	FeeRate         float64                      `json:"fee_rate"`
+	Fee             int                          `json:"fee"`
+	ConfirmedBlocks int                          `json:"confirmed_blocks"`
+}
+
+type TransactionsSimplifiedVin struct {
+	ScriptpubkeyAddress string `json:"scriptpubkey_address"`
+	Value               int    `json:"value"`
+}
+
+type TransactionsSimplifiedVout struct {
+	ScriptpubkeyAddress string `json:"scriptpubkey_address"`
+	Value               int    `json:"value"`
 }
 
 func SimplifyTransactions(address string, responses *GetAddressTransactionsResponse) *[]TransactionsSimplified {

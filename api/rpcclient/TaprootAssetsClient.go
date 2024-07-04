@@ -11,6 +11,13 @@ import (
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/wallet/api/connect"
+	"github.com/wallet/base"
+)
+
+const (
+	mainnetProofCourierAddr = "universerpc://132.232.109.84:8444"
+	testnetProofCourierAddr = "universerpc://testnet.universe.lightning.finance:10029"
+	regtestProofCourierAddr = "universerpc://132.232.109.84:8443"
 )
 
 func getTaprootAssetsClient() (taprpc.TaprootAssetsClient, func(), error) {
@@ -100,10 +107,24 @@ func NewAddr(assetId string, amt int) (*taprpc.Addr, error) {
 	}
 	defer clearUp()
 
+	var ProofCourierAddr string
+	switch base.NetWork {
+	case "mainnet":
+		ProofCourierAddr = mainnetProofCourierAddr
+	case "testnet":
+		ProofCourierAddr = testnetProofCourierAddr
+	case "regtest":
+		ProofCourierAddr = regtestProofCourierAddr
+	default:
+		return nil, fmt.Errorf("invalid network: %s", base.NetWork)
+
+	}
+
 	_assetIdByteSlice, _ := hex.DecodeString(assetId)
 	request := &taprpc.NewAddrRequest{
-		AssetId: _assetIdByteSlice,
-		Amt:     uint64(amt),
+		AssetId:          _assetIdByteSlice,
+		Amt:              uint64(amt),
+		ProofCourierAddr: ProofCourierAddr,
 	}
 	response, err := client.NewAddr(context.Background(), request)
 	if err != nil {
