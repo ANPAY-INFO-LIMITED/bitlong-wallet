@@ -27,6 +27,15 @@ const (
 	SUCCESS                   ErrCode = 200
 	NotFoundData              ErrCode = 601
 	GetBtcTransferOutInfosErr         = iota
+	ListTransfersAndGetProcessedResponseErr
+	PostToSetAssetTransferErr
+	PostToGetAssetTransferAndGetResponseErr
+	BatchTxidToAssetIdErr
+)
+
+var (
+	SuccessErr   = errors.New("")
+	SuccessError = SuccessErr.Error()
 )
 
 type JsonResult struct {

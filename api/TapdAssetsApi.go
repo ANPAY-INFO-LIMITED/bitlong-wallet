@@ -1966,46 +1966,6 @@ type AssetTransferSetRequest struct {
 	AnchorTxChainFees int               `json:"anchor_tx_chain_fees"`
 }
 
-func PostToSetAssetTransfer(token string, assetTransferSetRequest AssetTransferSetRequest) error {
-	serverDomainOrSocket := "132.232.109.84:8090"
-	url := "http://" + serverDomainOrSocket + "/asset_transfer/set"
-	requestJsonBytes, err := json.Marshal(assetTransferSetRequest)
-	if err != nil {
-		return err
-	}
-	payload := bytes.NewBuffer(requestJsonBytes)
-	req, err := http.NewRequest("POST", url, payload)
-	if err != nil {
-		return err
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("accept", "application/json")
-	req.Header.Add("content-type", "application/json")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return
-		}
-	}(res.Body)
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-	var response JsonResult
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return err
-	}
-	if response.Error != "" {
-		return errors.New(response.Error)
-	}
-	return nil
-}
-
 func ListTransfersAndGetResponse() (*taprpc.ListTransfersResponse, error) {
 	response, err := rpcclient.ListTransfers()
 	if err != nil {
@@ -2048,6 +2008,93 @@ type AssetTransferProcessedOutput struct {
 	SplitCommitRootHash    string `json:"split_commit_root_hash"`
 	OutputType             string `json:"output_type"`
 	AssetVersion           string `json:"asset_version"`
+}
+
+func PostToSetAssetTransfer(token string, assetTransferSetRequest *[]AssetTransferProcessed) (*JsonResult, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_transfer/set"
+	requestJsonBytes, err := json.Marshal(assetTransferSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return &response, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+type PostToGetAssetTransferTxidsResponse struct {
+	Success bool     `json:"success"`
+	Error   string   `json:"error"`
+	Code    ErrCode  `json:"code"`
+	Data    []string `json:"data"`
+}
+
+func PostToGetAssetTransferTxids(token string) (txids []string, err error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/txids"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response PostToGetAssetTransferTxidsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
 }
 
 func GetTxidFromOutpoint(outpoint string) (string, error) {
@@ -2174,4 +2221,107 @@ func ListTransfersAndGetProcessedResponse(token string) (*[]AssetTransferProcess
 	return processedListTransfers, nil
 }
 
-// TODO: query local and server txns, upload new items
+func ListAndPostToSetAssetTransfers(token string) string {
+	transfers, err := ListTransfersAndGetProcessedResponse(token)
+	if err != nil {
+		return MakeJsonErrorResult(ListTransfersAndGetProcessedResponseErr, err.Error(), nil)
+	}
+	_, err = PostToSetAssetTransfer(token, transfers)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetAssetTransferErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", nil)
+}
+
+type GetAssetTransferResponse struct {
+	// Deprecated: Use Code instead
+	Success bool                      `json:"success"`
+	Error   string                    `json:"error"`
+	Code    ErrCode                   `json:"code"`
+	Data    *[]AssetTransferProcessed `json:"data"`
+}
+
+func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferResponse, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_transfer/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetTransferResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return &response, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func PostToGetAssetTransfer(token string) string {
+	response, err := PostToGetAssetTransferAndGetResponse(token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetAssetTransferAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
+}
+
+// UploadAssetTransfer
+// @Description: Upload assets transfer info
+func UploadAssetTransfer(token string) string {
+	return ListAndPostToSetAssetTransfers(token)
+}
+
+// GetAssetTransfer
+// @Description: Get assets transfer info
+func GetAssetTransfer(token string) string {
+	return PostToGetAssetTransfer(token)
+}
+
+func OutpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
+	result := strings.Split(outpoint, ":")
+	return result[0], result[1]
+}
+
+func BatchTxidToAssetId(batchTxid string) (string, error) {
+	assets, _ := listAssets(true, true, false)
+	for _, asset := range assets.Assets {
+		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		if batchTxid == txid {
+			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
+		}
+	}
+	err := errors.New("no asset found for batch txid")
+	return "", err
+}
+
+func QueryAssetIdByBatchTxid(batchTxid string) string {
+	assetId, err := BatchTxidToAssetId(batchTxid)
+	if err != nil {
+		return MakeJsonErrorResult(BatchTxidToAssetIdErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
