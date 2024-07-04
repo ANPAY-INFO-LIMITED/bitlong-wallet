@@ -2301,7 +2301,7 @@ func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
 }
 
-func OutpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
+func outpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
 	result := strings.Split(outpoint, ":")
 	return result[0], result[1]
 }
@@ -2309,7 +2309,7 @@ func OutpointToTransactionAndIndex(outpoint string) (transaction string, index s
 func BatchTxidToAssetId(batchTxid string) (string, error) {
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
-		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
 		if batchTxid == txid {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}

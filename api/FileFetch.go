@@ -31,10 +31,10 @@ func GetPath() string {
 	return base.GetFilePath()
 }
 
-// 检查目录的完整性
+// Check the integrity of the directory
 func CheckDir() error {
 	baseDir := GetPath()
-	//检查快照文件位置是否存在
+	//Check whether the snapshot file location exists
 	neutrinoPath := filepath.Join(baseDir, defaultlndpath, defaultbitcoinpath, base.NetWork)
 	if !fileExists(neutrinoPath) {
 		if err := os.MkdirAll(neutrinoPath, 0700); err != nil {
