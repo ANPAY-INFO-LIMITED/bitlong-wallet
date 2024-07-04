@@ -152,6 +152,14 @@ func getPublicKey(sk string) (string, error) {
 	_, pk := btcec.PrivKeyFromBytes(b)
 	return hex.EncodeToString(schnorr.SerializePubKey(pk)), nil
 }
+func GetPublicRawKey() (string, error) {
+	retrievedKey, err := readDb()
+	if err != nil {
+		fmt.Printf("err is :%v\n", err)
+		return "", err
+	}
+	return retrievedKey.PublicKey, nil
+}
 
 func getNoStrAddress(pk string) (string, error) {
 	compressedPubKeyBytes, err := hex.DecodeString(pk)

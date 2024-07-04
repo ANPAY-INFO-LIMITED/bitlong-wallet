@@ -18,6 +18,14 @@ func GenerateKeys(mnemonic string) string {
 }
 
 func GetPublicKey() string {
+	pb, err := service.GetPublicRawKey()
+	if err != nil {
+		fmt.Printf("GetPublicKey->errl1:%x", err)
+		return ""
+	}
+	return pb
+}
+func GetRawPublicKey() string {
 	pb, _, err := service.GetPublicKey()
 	if err != nil {
 		fmt.Printf("GetPublicKey->errl1:%x", err)
