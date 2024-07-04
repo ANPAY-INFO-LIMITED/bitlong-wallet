@@ -2325,3 +2325,59 @@ func QueryAssetIdByBatchTxid(batchTxid string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
 }
+
+func AddrReceivesAndGetResponse() (*taprpc.AddrReceivesResponse, error) {
+	return rpcclient.AddrReceives()
+}
+
+type AddrReceiveEvent struct {
+	CreationTimeUnixSeconds int                  `json:"creation_time_unix_seconds"`
+	Addr                    AddrReceiveEventAddr `json:"addr"`
+	Status                  string               `json:"status"`
+	Outpoint                string               `json:"outpoint"`
+	UtxoAmtSat              int                  `json:"utxo_amt_sat"`
+	ConfirmationHeight      int                  `json:"confirmation_height"`
+	HasProof                bool                 `json:"has_proof,omitempty"`
+}
+
+type AddrReceiveEventAddr struct {
+	Encoded          string `json:"encoded"`
+	AssetID          string `json:"asset_id"`
+	Amount           int    `json:"amount"`
+	ScriptKey        string `json:"script_key"`
+	InternalKey      string `json:"internal_key"`
+	TaprootOutputKey string `json:"taproot_output_key"`
+	ProofCourierAddr string `json:"proof_courier_addr"`
+}
+
+func AddrReceivesResponseToAddrReceiveEvents(addrReceivesResponse *taprpc.AddrReceivesResponse) *[]AddrReceiveEvent {
+	var addrReceiveEvents []AddrReceiveEvent
+	for _, event := range addrReceivesResponse.Events {
+		addrReceiveEvents = append(addrReceiveEvents, AddrReceiveEvent{
+			CreationTimeUnixSeconds: int(event.CreationTimeUnixSeconds),
+			Addr: AddrReceiveEventAddr{
+				Encoded:          event.Addr.Encoded,
+				AssetID:          hex.EncodeToString(event.Addr.AssetId),
+				Amount:           int(event.Addr.Amount),
+				ScriptKey:        hex.EncodeToString(event.Addr.ScriptKey),
+				InternalKey:      hex.EncodeToString(event.Addr.InternalKey),
+				TaprootOutputKey: hex.EncodeToString(event.Addr.TaprootOutputKey),
+				ProofCourierAddr: event.Addr.ProofCourierAddr,
+			},
+			Status:             event.Status.String(),
+			Outpoint:           event.Outpoint,
+			UtxoAmtSat:         int(event.UtxoAmtSat),
+			ConfirmationHeight: int(event.ConfirmationHeight),
+			HasProof:           event.HasProof,
+		})
+	}
+	return &addrReceiveEvents
+}
+
+func AddrReceivesAndGetEvents() (*[]AddrReceiveEvent, error) {
+	response, err := AddrReceivesAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	return AddrReceivesResponseToAddrReceiveEvents(response), nil
+}
