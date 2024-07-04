@@ -719,7 +719,6 @@ func ListNFTGroups() string {
 		Supply    int      `json:"supply"`
 		NFTIds    *[]NFTId `json:"nft_ids"`
 	}
-
 	var Groups []Group
 	if resResponse.Groups != nil {
 		for key, group := range resResponse.Groups {
@@ -743,9 +742,9 @@ func ListNFTGroups() string {
 			})
 		}
 	}
-
 	return MakeJsonErrorResult(SUCCESS, "", Groups)
 }
+
 func ListNFTAssets() string {
 	processed, err := ListAssetsProcessed(false, false, false)
 	if err != nil {
