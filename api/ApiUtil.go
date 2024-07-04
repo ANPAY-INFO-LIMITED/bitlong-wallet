@@ -30,6 +30,7 @@ const (
 	ListTransfersAndGetProcessedResponseErr
 	PostToSetAssetTransferErr
 	PostToGetAssetTransferAndGetResponseErr
+	BatchTxidToAssetIdErr
 )
 
 var (

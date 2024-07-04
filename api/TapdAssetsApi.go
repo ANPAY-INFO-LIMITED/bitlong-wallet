@@ -2300,3 +2300,28 @@ func UploadAssetTransfer(token string) string {
 func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
 }
+
+func OutpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
+	result := strings.Split(outpoint, ":")
+	return result[0], result[1]
+}
+
+func BatchTxidToAssetId(batchTxid string) (string, error) {
+	assets, _ := listAssets(true, true, false)
+	for _, asset := range assets.Assets {
+		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		if batchTxid == txid {
+			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
+		}
+	}
+	err := errors.New("no asset found for batch txid")
+	return "", err
+}
+
+func QueryAssetIdByBatchTxid(batchTxid string) string {
+	assetId, err := BatchTxidToAssetId(batchTxid)
+	if err != nil {
+		return MakeJsonErrorResult(BatchTxidToAssetIdErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
