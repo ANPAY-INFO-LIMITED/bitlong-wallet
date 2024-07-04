@@ -23,7 +23,7 @@ func StartLitd() {
 	}
 }
 
-func StartLnd() {
+func startLnd() {
 	// Hook interceptor for os signals.
 	shutdownInterceptor, err := signal.Intercept()
 	if err != nil {
@@ -58,7 +58,7 @@ func StartLnd() {
 	}
 }
 
-func StartTapd() {
+func startTapd() {
 	// Hook interceptor for os signals.
 	shutdownInterceptor, err := signal.Intercept()
 	if err != nil {
