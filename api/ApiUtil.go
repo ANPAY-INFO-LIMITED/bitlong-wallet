@@ -31,6 +31,9 @@ const (
 	PostToSetAssetTransferErr
 	PostToGetAssetTransferAndGetResponseErr
 	BatchTxidToAssetIdErr
+	AddrReceivesAndGetEventsErr
+	PostToSetAddrReceivesEventsErr
+	PostToGetAddrReceivesEventsErr
 )
 
 var (

@@ -2045,7 +2045,7 @@ func PostToSetAssetTransfer(token string, assetTransferSetRequest *[]AssetTransf
 		return nil, err
 	}
 	if response.Error != "" {
-		return &response, errors.New(response.Error)
+		return nil, errors.New(response.Error)
 	}
 	return &response, nil
 }
@@ -2276,7 +2276,7 @@ func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferRespon
 		return nil, err
 	}
 	if response.Error != "" {
-		return &response, errors.New(response.Error)
+		return nil, errors.New(response.Error)
 	}
 	return &response, nil
 }
@@ -2380,4 +2380,111 @@ func AddrReceivesAndGetEvents() (*[]AddrReceiveEvent, error) {
 		return nil, err
 	}
 	return AddrReceivesResponseToAddrReceiveEvents(response), nil
+}
+
+func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveEvent) error {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/addr_receive/set"
+	requestJsonBytes, err := json.Marshal(addrReceiveEvents)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+type GetAddrReceivesEventsResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AddrReceiveEvent `json:"data"`
+}
+
+func PostToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/addr_receive/get/origin"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAddrReceivesEventsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func UploadAddrReceives(token string) string {
+	events, err := AddrReceivesAndGetEvents()
+	if err != nil {
+		return MakeJsonErrorResult(AddrReceivesAndGetEventsErr, err.Error(), nil)
+	}
+	err = PostToSetAddrReceivesEvents(token, events)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetAddrReceivesEventsErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
+
+func GetAddrReceives(token string) string {
+	response, err := PostToGetAddrReceivesEvents(token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetAddrReceivesEventsErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
