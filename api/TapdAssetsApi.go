@@ -1402,7 +1402,6 @@ func GetTransactionsWhoseLabelIsTapdAssetMinting() (*[]GetTransactionsResponse, 
 func GetTransactionsWhoseLabelIsNotTapdAssetMinting() (*[]GetTransactionsResponse, error) {
 	response, err := GetTransactionsAndGetCustomResponse()
 	if err != nil {
-		LogError("", err)
 		return nil, err
 	}
 	var getTransactionsResponse []GetTransactionsResponse
@@ -1704,6 +1703,11 @@ func ProcessDecodedTransactionsData(decodedRawTransactions *[]PostDecodeRawTrans
 
 func ProcessDecodedAndQueryTransactionsData(decodedRawTransactions *[]PostGetRawTransactionResponse) *[]PostGetRawTransactionResult {
 	var result []PostGetRawTransactionResult
+	// @dev: add return if nil
+	if decodedRawTransactions == nil {
+		return &result
+	}
+	// @note: maybe cause nil pointer
 	for _, rawTransaction := range *decodedRawTransactions {
 		if rawTransaction.Error == nil && rawTransaction.Result != nil {
 			result = append(result, *(rawTransaction.Result))
@@ -1804,8 +1808,9 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token stri
 	if err != nil {
 		return nil, err
 	}
-	btcUesult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
-	result := ProcessPostGetRawTransactionResultToUseSat(btcUesult)
+	// @note: maybe cause nil pointer
+	btcResult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
+	result := ProcessPostGetRawTransactionResultToUseSat(btcResult)
 	return result, nil
 }
 
