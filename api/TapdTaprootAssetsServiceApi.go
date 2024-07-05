@@ -477,6 +477,16 @@ func ProcessListBalancesResponse(response *taprpc.ListBalancesResponse) *[]ListA
 	return &listAssetBalanceInfos
 }
 
+func ExcludeListBalancesResponseCollectible(listAssetBalanceInfos *[]ListAssetBalanceInfo) *[]ListAssetBalanceInfo {
+	var listAssetBalances []ListAssetBalanceInfo
+	for _, balance := range *listAssetBalanceInfos {
+		if balance.AssetType == taprpc.AssetType_NORMAL.String() {
+			listAssetBalances = append(listAssetBalances, balance)
+		}
+	}
+	return &listAssetBalances
+}
+
 func ProcessListBalancesByGroupKeyResponse(response *taprpc.ListBalancesResponse) *[]ListAssetGroupBalanceInfo {
 	var listAssetBalanceInfos []ListAssetGroupBalanceInfo
 	for _, balance := range response.AssetGroupBalances {
@@ -494,6 +504,16 @@ func ListBalances() string {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListBalancesResponse(response))
+}
+
+func ListNormalBalances() string {
+	response, err := listBalances(false, nil, nil)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	processed := ProcessListBalancesResponse(response)
+	filtered := ExcludeListBalancesResponseCollectible(processed)
+	return MakeJsonErrorResult(SUCCESS, "", filtered)
 }
 
 func ListBalancesByGroupKey() string {
