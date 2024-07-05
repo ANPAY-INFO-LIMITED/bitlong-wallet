@@ -2297,6 +2297,7 @@ func UploadAssetTransfer(token string) string {
 
 // GetAssetTransfer
 // @Description: Get assets transfer info
+
 func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
 }

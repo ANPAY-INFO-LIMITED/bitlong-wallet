@@ -41,6 +41,7 @@ type Inputs struct {
 	ScriptKey   string `json:"script_key"`
 	Amount      int64  `json:"amount"`
 }
+
 type anchor struct {
 	Outpoint         string `json:"outpoint"`
 	Value            int64  `json:"value"`
@@ -50,6 +51,7 @@ type anchor struct {
 	TapscriptSibling string `json:"tapscript_sibling"`
 	NumPassiveAssets int    `json:"num_passive_assets"`
 }
+
 type outputs struct {
 	Anchor              anchor `json:"anchor"`
 	ScriptKey           string `json:"script_key"`
@@ -60,7 +62,9 @@ type outputs struct {
 	OutputType          string `json:"output_type"`
 	AssetVersion        string `json:"asset_version"`
 }
+
 type transfer struct {
+	Txid               string     `json:"txid"`
 	TransferTimestamp  int64      `json:"transfer_timestamp"`
 	AnchorTxHash       string     `json:"anchor_tx_hash"`
 	AnchorTxHeightHint int        `json:"anchor_tx_height_hint"`
@@ -74,6 +78,7 @@ func (r *transfer) geData(response *taprpc.AssetTransfer) {
 	r.AnchorTxHash = hex.EncodeToString(response.AnchorTxHash)
 	r.AnchorTxHeightHint = int(response.AnchorTxHeightHint)
 	r.AnchorTxChainFees = response.AnchorTxChainFees
+	r.Txid, _ = outpointToTransactionAndIndex(response.Outputs[0].Anchor.Outpoint)
 	for _, input := range response.Inputs {
 		newInput := &Inputs{}
 		newInput.AnchorPoint = input.AnchorPoint

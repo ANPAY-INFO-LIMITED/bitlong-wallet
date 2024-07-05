@@ -225,7 +225,6 @@ func QueryAssetTransfers(assetId string) string {
 		newTransfer.geData(t)
 		transfers = append(transfers, newTransfer)
 	}
-
 	if len(transfers) == 0 {
 		return MakeJsonErrorResult(SUCCESS, "NOT_FOUND", transfers)
 	}

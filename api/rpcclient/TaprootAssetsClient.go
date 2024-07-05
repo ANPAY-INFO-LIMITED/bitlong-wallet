@@ -139,7 +139,6 @@ func ListTransfers() (*taprpc.ListTransfersResponse, error) {
 		return nil, err
 	}
 	defer clearUp()
-
 	request := &taprpc.ListTransfersRequest{}
 	response, err := client.ListTransfers(context.Background(), request)
 	if err != nil {
