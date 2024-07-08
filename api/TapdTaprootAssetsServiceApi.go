@@ -291,7 +291,7 @@ func QueryAddrs(assetId string) string {
 }
 
 // jsonAddrs : ["addrs1","addrs2",...]
-func SendAssets(jsonAddrs string, feeRate int64) string {
+func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
 	var addrs []string
 	err := json.Unmarshal([]byte(jsonAddrs), &addrs)
 	if err != nil {
@@ -300,46 +300,41 @@ func SendAssets(jsonAddrs string, feeRate int64) string {
 	}
 	response, err := sendAssets(addrs, uint32(feeRate))
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(sendAssetsErr, err.Error(), nil)
 	}
-	//// TODO: Decode Addr
-	////response, err := rpcclient.DecodeAddr(addr)
-	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"[","")
-	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"]","")
-	//jsonAddrs=strings.ReplaceAll(jsonAddrs,"\"","")
-	//jsonAddrs=strings.ReplaceAll(jsonAddrs," ","")
-	//assetAddrs:= strings.Split(jsonAddrs,",")
-	//// TODO: Transfer type out
-	//request := AssetTransferSetRequest{
-	//	AssetID:           "",
-	//	AssetAddressFrom:  "",
-	//	AssetAddressTo:    "",
-	//	Amount:            0,
-	//	TransferType:      0,
-	//	TransactionID:     "",
-	//	TransferTimestamp: 0,
-	//	AnchorTxChainFees: 0,
-	//}
-	//err = PostToSetAssetTransfer(token, request)
-	//if err != nil {
-	//	return MakeJsonErrorResult(DefaultErr, err.Error(), "")
-	//}
-	//// TODO: Transfer type in
-	//request = AssetTransferSetRequest{
-	//	AssetID:           "",
-	//	AssetAddressFrom:  "",
-	//	AssetAddressTo:    "",
-	//	Amount:            0,
-	//	TransferType:      0,
-	//	TransactionID:     "",
-	//	TransferTimestamp: 0,
-	//	AnchorTxChainFees: 0,
-	//}
-	//err = PostToSetAssetTransfer(token, request)
-	//if err != nil {
-	//	return MakeJsonErrorResult(DefaultErr, err.Error(), "")
-	//}
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	// @dev: decode addrs
+	var batchTransfersRequest []BatchTransferRequest
+	var decodedAddr *taprpc.Addr
+	for index, addr := range addrs {
+		decodedAddr, err = rpcclient.DecodeAddr(addr)
+		if err != nil {
+			return MakeJsonErrorResult(DecodeAddrErr, err.Error(), "")
+		}
+		txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+		batchTransfersRequest = append(batchTransfersRequest, BatchTransferRequest{
+			Encoded:            decodedAddr.Encoded,
+			AssetID:            hex.EncodeToString(decodedAddr.AssetId),
+			Amount:             int(decodedAddr.Amount),
+			ScriptKey:          hex.EncodeToString(decodedAddr.ScriptKey),
+			InternalKey:        hex.EncodeToString(decodedAddr.InternalKey),
+			TaprootOutputKey:   hex.EncodeToString(decodedAddr.TaprootOutputKey),
+			ProofCourierAddr:   decodedAddr.ProofCourierAddr,
+			Txid:               txid,
+			Index:              index,
+			TransferTimestamp:  GetTimestamp(),
+			AnchorTxHash:       hex.EncodeToString(response.Transfer.AnchorTxHash),
+			AnchorTxHeightHint: int(response.Transfer.AnchorTxHeightHint),
+			AnchorTxChainFees:  int(response.Transfer.AnchorTxChainFees),
+			DeviceID:           deviceId,
+		})
+	}
+	// @dev: Upload
+	err = UploadBatchTransfers(token, &batchTransfersRequest)
+	if err != nil {
+		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error(), nil)
+	}
+	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
 // SendAsset

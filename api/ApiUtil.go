@@ -34,6 +34,11 @@ const (
 	AddrReceivesAndGetEventsErr
 	PostToSetAddrReceivesEventsErr
 	PostToGetAddrReceivesEventsErr
+	jsonAddrsToAddrSliceErr
+	DecodeAddrErr
+	sendAssetsErr
+	UploadBatchTransfersErr
+	PostToGetBatchTransfersErr
 )
 
 var (
@@ -408,4 +413,8 @@ func GetFunctionName(i any) string {
 	completeName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 	s := strings.Split(completeName, ".")
 	return s[len(s)-1]
+}
+
+func GetTimestamp() int {
+	return int(time.Now().Unix())
 }
