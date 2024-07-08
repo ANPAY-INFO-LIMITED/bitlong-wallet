@@ -68,10 +68,8 @@ func Configure(appName string) string {
 	}
 	filePath := "config.txt"
 	complexFolderPath := pathStr + string(os.PathSeparator) + filePath
-	//fmt.Printf("read file path is :%v and appName is %s\n", complexFolderPath, appName)
 	fileConfig := ReadConfigFile(complexFolderPath)
 	dirPath := fileConfig["dirpath"]
-	//fmt.Printf("read dirpath is :%v\n", dirPath)
 	folderPath := filepath.Join(dirPath, "."+appName)
 	return folderPath
 }
@@ -83,7 +81,6 @@ func QueryConfigByKey(key string) (value string) {
 	}
 	filePath := "config.txt"
 	complexFolderPath := pathStr + string(os.PathSeparator) + filePath
-	//fmt.Printf("read file path is :%v and key is %s\n", complexFolderPath, key)
 	fileConfig := ReadConfigFile(complexFolderPath)
 	value = fileConfig[key]
 	return
