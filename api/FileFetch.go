@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"github.com/wallet/base"
 	"os"
 	"path/filepath"
@@ -32,10 +33,11 @@ func GetPath() string {
 }
 
 // Check the integrity of the directory
-func CheckDir() error {
-	baseDir := GetPath()
+func CheckDir(dir string) error {
+	baseDir := dir
 	//Check whether the snapshot file location exists
 	neutrinoPath := filepath.Join(baseDir, defaultlndpath, defaultbitcoinpath, base.NetWork)
+	fmt.Println(neutrinoPath)
 	if !fileExists(neutrinoPath) {
 		if err := os.MkdirAll(neutrinoPath, 0700); err != nil {
 			return err
