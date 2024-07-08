@@ -1988,6 +1988,7 @@ type AssetTransferProcessed struct {
 	AnchorTxChainFees  int                            `json:"anchor_tx_chain_fees"`
 	Inputs             []AssetTransferProcessedInput  `json:"inputs"`
 	Outputs            []AssetTransferProcessedOutput `json:"outputs"`
+	DeviceID           string                         `json:"device_id"`
 }
 
 type AssetTransferProcessedInput struct {
@@ -2159,7 +2160,7 @@ func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string)
 	return &response, nil
 }
 
-func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.ListTransfersResponse) *[]AssetTransferProcessed {
+func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.ListTransfersResponse, deviceId string) *[]AssetTransferProcessed {
 	var assetTransferProcessed []AssetTransferProcessed
 	allOutpoints := GetAllOutPointsOfListTransfersResponse(listTransfersResponse)
 	response, err := PostCallBitcoindToQueryAddressByOutpoints(token, allOutpoints)
@@ -2212,22 +2213,23 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 			AnchorTxChainFees:  int(listTransfer.AnchorTxChainFees),
 			Inputs:             assetTransferProcessedInput,
 			Outputs:            assetTransferProcessedOutput,
+			DeviceID:           deviceId,
 		})
 	}
 	return &assetTransferProcessed
 }
 
-func ListTransfersAndGetProcessedResponse(token string) (*[]AssetTransferProcessed, error) {
+func ListTransfersAndGetProcessedResponse(token string, deviceId string) (*[]AssetTransferProcessed, error) {
 	listTransfers, err := ListTransfersAndGetResponse()
 	if err != nil {
 		return nil, err
 	}
-	processedListTransfers := ProcessListTransfersResponse(token, listTransfers)
+	processedListTransfers := ProcessListTransfersResponse(token, listTransfers, deviceId)
 	return processedListTransfers, nil
 }
 
-func ListAndPostToSetAssetTransfers(token string) string {
-	transfers, err := ListTransfersAndGetProcessedResponse(token)
+func ListAndPostToSetAssetTransfers(token string, deviceId string) string {
+	transfers, err := ListTransfersAndGetProcessedResponse(token, deviceId)
 	if err != nil {
 		return MakeJsonErrorResult(ListTransfersAndGetProcessedResponseErr, err.Error(), nil)
 	}
@@ -2296,8 +2298,8 @@ func PostToGetAssetTransfer(token string) string {
 
 // UploadAssetTransfer
 // @Description: Upload assets transfer info
-func UploadAssetTransfer(token string) string {
-	return ListAndPostToSetAssetTransfers(token)
+func UploadAssetTransfer(token string, deviceId string) string {
+	return ListAndPostToSetAssetTransfers(token, deviceId)
 }
 
 // GetAssetTransfer
@@ -2344,6 +2346,7 @@ type AddrReceiveEvent struct {
 	UtxoAmtSat              int                  `json:"utxo_amt_sat"`
 	ConfirmationHeight      int                  `json:"confirmation_height"`
 	HasProof                bool                 `json:"has_proof,omitempty"`
+	DeviceID                string               `json:"device_id"`
 }
 
 type AddrReceiveEventAddr struct {
@@ -2356,7 +2359,7 @@ type AddrReceiveEventAddr struct {
 	ProofCourierAddr string `json:"proof_courier_addr"`
 }
 
-func AddrReceivesResponseToAddrReceiveEvents(addrReceivesResponse *taprpc.AddrReceivesResponse) *[]AddrReceiveEvent {
+func AddrReceivesResponseToAddrReceiveEvents(addrReceivesResponse *taprpc.AddrReceivesResponse, deviceId string) *[]AddrReceiveEvent {
 	var addrReceiveEvents []AddrReceiveEvent
 	for _, event := range addrReceivesResponse.Events {
 		addrReceiveEvents = append(addrReceiveEvents, AddrReceiveEvent{
@@ -2375,17 +2378,18 @@ func AddrReceivesResponseToAddrReceiveEvents(addrReceivesResponse *taprpc.AddrRe
 			UtxoAmtSat:         int(event.UtxoAmtSat),
 			ConfirmationHeight: int(event.ConfirmationHeight),
 			HasProof:           event.HasProof,
+			DeviceID:           deviceId,
 		})
 	}
 	return &addrReceiveEvents
 }
 
-func AddrReceivesAndGetEvents() (*[]AddrReceiveEvent, error) {
+func AddrReceivesAndGetEvents(deviceId string) (*[]AddrReceiveEvent, error) {
 	response, err := AddrReceivesAndGetResponse()
 	if err != nil {
 		return nil, err
 	}
-	return AddrReceivesResponseToAddrReceiveEvents(response), nil
+	return AddrReceivesResponseToAddrReceiveEvents(response, deviceId), nil
 }
 
 func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveEvent) error {
@@ -2475,8 +2479,8 @@ func PostToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 	return response.Data, nil
 }
 
-func UploadAddrReceives(token string) string {
-	events, err := AddrReceivesAndGetEvents()
+func UploadAddrReceives(token string, deviceId string) string {
+	events, err := AddrReceivesAndGetEvents(deviceId)
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesAndGetEventsErr, err.Error(), nil)
 	}
