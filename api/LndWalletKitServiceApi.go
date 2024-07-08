@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 )
 
 // ListAddress

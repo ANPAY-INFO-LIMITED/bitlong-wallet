@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 	"io"
 )
 

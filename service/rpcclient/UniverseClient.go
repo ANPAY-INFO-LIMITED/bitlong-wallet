@@ -3,7 +3,7 @@ package rpcclient
 import (
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 )
 
 func getUniverseClient() (*universerpc.UniverseClient, func(), error) {

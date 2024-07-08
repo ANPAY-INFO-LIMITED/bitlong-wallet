@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/wallet/api/connect"
-	"github.com/wallet/api/rpcclient"
+	"github.com/wallet/service/connect"
+	"github.com/wallet/service/rpcclient"
 	"strconv"
 	"strings"
 )
@@ -333,7 +333,8 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	if err != nil {
 		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
 // SendAsset

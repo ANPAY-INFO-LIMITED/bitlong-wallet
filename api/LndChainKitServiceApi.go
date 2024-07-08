@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/wallet/api/rpcclient"
+	"github.com/wallet/service/rpcclient"
 )
 
 func GetBlockWrap(blockHash string) string {

@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
-	"github.com/wallet/api/connect"
 	"github.com/wallet/base"
+	"github.com/wallet/service/connect"
 	"google.golang.org/grpc"
 )
 
