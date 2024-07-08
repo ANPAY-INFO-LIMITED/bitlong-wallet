@@ -13,3 +13,17 @@ taproothost=192.168.247.137:10031
 litdhost=192.168.247.137:8443
 LnurlServerHost=192.168.247.137:9080
 
+dirpath=D:\mySpace\walletDataDir\localnode
+lndhost=127.0.0.1:10009
+taproothost=127.0.0.1:8443
+litdhost=127.0.0.1:8443
+LnurlServerHost=127.0.0.1:9080
+
+
+dirpath=D:\mySpace\walletDataDir\localnode
+lndhost=202.79.173.41:10009
+taproothost=202.79.173.41:8443
+litdhost=202.79.173.41:8443
+LnurlServerHost=127.0.0.1:9080
+
+

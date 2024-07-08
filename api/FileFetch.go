@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/wallet/base"
+	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/universeCourier"
 	"os"
 	"path/filepath"
 )
@@ -25,6 +27,16 @@ func SetPath(path string, network string) error {
 		return errors.New("network not exist")
 	}
 	base.SetNetwork(network)
+	err = LoadServiceConfig()
+	if err != nil {
+		return errors.New("load config error ")
+	}
+	return nil
+}
+
+func LoadServiceConfig() error {
+	apiConnect.LoadConnectConfig()
+	universeCourier.LoadUniverseCourierConfig()
 	return nil
 }
 
@@ -32,7 +44,7 @@ func GetPath() string {
 	return base.GetFilePath()
 }
 
-// Check the integrity of the directory
+// CheckDir Check the integrity of the directory
 func CheckDir(dir string) error {
 	baseDir := dir
 	//Check whether the snapshot file location exists
@@ -54,32 +66,4 @@ func fileExists(path string) bool {
 		}
 	}
 	return true
-}
-
-func FileTestConfig() bool {
-	return base.FileConfig(GetPath())
-}
-
-func ReadConfigFile() {
-	base.ReadConfig(GetPath())
-}
-
-func ReadConfigFile1() {
-	base.ReadConfig1(GetPath())
-}
-
-func ReadConfigFile2() {
-	base.ReadConfig2(GetPath())
-}
-
-func CreateDir() {
-	base.CreateDir(GetPath())
-}
-
-func CreateDir2() {
-	base.CreateDir2(GetPath())
-}
-
-func Visit() {
-	base.VisitAll()
 }

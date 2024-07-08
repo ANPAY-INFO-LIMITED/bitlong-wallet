@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/wallet/base"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"google.golang.org/grpc"
 )
 
@@ -20,10 +20,10 @@ func AddInvoiceImportEnv(value int64, memo, _rpcServer, _tlsCertPath, _macaroonP
 	grpcHost := base.QueryConfigByKey(_rpcServer)
 	tlsCertPath := base.QueryConfigByKey(_tlsCertPath)
 	macaroonPath := base.QueryConfigByKey(_macaroonPath)
-	creds := connect.NewTlsCert(tlsCertPath)
-	macaroon := connect.GetMacaroon(macaroonPath)
+	creds := apiConnect.NewTlsCert(tlsCertPath)
+	macaroon := apiConnect.GetMacaroon(macaroonPath)
 	conn, err := grpc.Dial(grpcHost, grpc.WithTransportCredentials(creds),
-		grpc.WithPerRPCCredentials(connect.NewMacaroonCredential(macaroon)))
+		grpc.WithPerRPCCredentials(apiConnect.NewMacaroonCredential(macaroon)))
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -56,10 +56,10 @@ func SendPaymentSyncImportEnv(invoice, _rpcServer, _tlsCertPath, _macaroonPath s
 	grpcHost := base.QueryConfigByKey(_rpcServer)
 	tlsCertPath := base.QueryConfigByKey(_tlsCertPath)
 	macaroonPath := base.QueryConfigByKey(_macaroonPath)
-	creds := connect.NewTlsCert(tlsCertPath)
-	macaroon := connect.GetMacaroon(macaroonPath)
+	creds := apiConnect.NewTlsCert(tlsCertPath)
+	macaroon := apiConnect.GetMacaroon(macaroonPath)
 	conn, err := grpc.Dial(grpcHost, grpc.WithTransportCredentials(creds),
-		grpc.WithPerRPCCredentials(connect.NewMacaroonCredential(macaroon)))
+		grpc.WithPerRPCCredentials(apiConnect.NewMacaroonCredential(macaroon)))
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

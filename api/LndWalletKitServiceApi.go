@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 // ListAddress
@@ -13,7 +13,7 @@ import (
 //	An account name filter can be provided to filter through all the wallet accounts and return the addresses of only those matching.
 //	@return string
 func listAddresses() (*walletrpc.ListAddressesResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -31,7 +31,7 @@ func listAddresses() (*walletrpc.ListAddressesResponse, error) {
 //	and return the addresses of only those matching.
 //	@return string
 func listAccounts() (*walletrpc.ListAccountsResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -87,7 +87,7 @@ func FindAccount(name string) string {
 //	@Description: ListLeases lists all currently locked utxos.
 //	@return string
 func ListLeases() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -108,7 +108,7 @@ func ListLeases() string {
 //	Note that these sweeps may not be confirmed yet, as we record sweeps on broadcast, not confirmation.
 //	@return string
 func ListSweeps() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -130,7 +130,7 @@ func ListSweeps() string {
 //	By default, all utxos are listed. To list only the unconfirmed utxos, set the unconfirmed_only to true.
 //	@return string
 func ListUnspent() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -150,7 +150,7 @@ func ListUnspent() string {
 //	@Description: NextAddr returns the next unused address within the wallet.
 //	@return string
 func NextAddr() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

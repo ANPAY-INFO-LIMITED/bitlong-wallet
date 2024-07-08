@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc/assetwalletrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 // AnchorVirtualPsbts
@@ -18,7 +18,7 @@ import (
 //
 // skipped function AnchorVirtualPsbts with unsupported parameter or return types
 func AnchorVirtualPsbts(virtualPsbts []string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -48,7 +48,7 @@ func AnchorVirtualPsbts(virtualPsbts []string) bool {
 //
 // skipped function FundVirtualPsbt with unsupported parameter or return types
 func FundVirtualPsbt(isPsbtNotRaw bool, psbt ...string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -79,7 +79,7 @@ func FundVirtualPsbt(isPsbtNotRaw bool, psbt ...string) bool {
 //	While an internal key can also be used as the internal key of a script key, it is recommended to use the NextScriptKey RPC instead, to make sure the tweaked Taproot output key is also recognized as a local key.
 //	@return string
 func NextInternalKey(keyFamily int) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -102,7 +102,7 @@ func NextInternalKey(keyFamily int) string {
 //	While an internal key can also be used as the internal key of a script key, it is recommended to use the NextScriptKey RPC instead, to make sure the tweaked Taproot output key is also recognized as a local key.
 //	@return string
 func NextScriptKey(keyFamily int) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -125,7 +125,7 @@ func NextScriptKey(keyFamily int) string {
 //	That ownership proof is a signed virtual transaction spending the asset with a valid witness to prove the prover owns the keys that can spend the asset.
 //	@return bool
 func ProveAssetOwnership(assetId, scriptKey string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -200,7 +200,7 @@ func ProveAssetOwnership(assetId, scriptKey string) bool {
 //	@Description:RemoveUTXOLease removes the lease/lock/reservation of the given managed UTXO.
 //	@return bool
 func RemoveUTXOLease() bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -223,7 +223,7 @@ func RemoveUTXOLease() bool {
 //	@Description:SignVirtualPsbt signs the inputs of a virtual transaction and prepares the commitments of the inputs and outputs.
 //	@return bool
 func SignVirtualPsbt(fundedPsbt string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -247,7 +247,7 @@ func SignVirtualPsbt(fundedPsbt string) bool {
 //	@Description:VerifyAssetOwnership verifies the asset ownership proof embedded in the given transition proof of an asset and returns true if the proof is valid.
 //	@return bool
 func VerifyAssetOwnership(proofWithWitness string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

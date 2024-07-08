@@ -1,4 +1,4 @@
-package connect
+package apiConnect
 
 import (
 	"context"
@@ -32,7 +32,7 @@ var connCfg = ConnCfg{
 	isInit: false,
 }
 
-func LoadConfig() {
+func LoadConnectConfig() {
 	connCfg.Lndcfg.grpcHost = base.QueryConfigByKey("lndhost")
 	connCfg.Lndcfg.tlsCertPath = filepath.Join(base.Configure("lnd"), "tls.cert")
 	connCfg.Lndcfg.macaroonPath = filepath.Join(base.Configure("lnd"), "data", "chain", "bitcoin", base.NetWork, "admin.macaroon")
@@ -44,12 +44,11 @@ func LoadConfig() {
 	connCfg.LitdCfg.grpcHost = base.QueryConfigByKey("litdhost")
 	connCfg.LitdCfg.tlsCertPath = filepath.Join(base.Configure("lit"), "tls.cert")
 	connCfg.LitdCfg.macaroonPath = filepath.Join(base.Configure("lit"), base.NetWork, "lit.macaroon")
-	//log.Printf(" grpc config: %s", connCfg)
 }
 
 func GetConnection(grpcTarget string, isNoMacaroon bool) (*grpc.ClientConn, func(), error) {
 	if !connCfg.isInit {
-		LoadConfig()
+		LoadConnectConfig()
 		connCfg.isInit = true
 	}
 	cfg := rpccfg{}

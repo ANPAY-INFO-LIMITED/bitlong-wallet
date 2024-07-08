@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightninglabs/lightning-terminal/litrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 func SubServerStatus() string {
@@ -38,7 +38,7 @@ func GetLitStatus() bool {
 }
 
 func subServerStatus() (*litrpc.SubServerStatusResp, error) {
-	conn, clearUp, err := connect.GetConnection("litd", true)
+	conn, clearUp, err := apiConnect.GetConnection("litd", true)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

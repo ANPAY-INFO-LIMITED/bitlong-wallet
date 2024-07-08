@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"io"
 )
 
@@ -17,7 +17,7 @@ import (
 //	Without a non-zero fee limit only routes without fees will be attempted which often fails with FAILURE_REASON_NO_ROUTE.
 //	@return string
 func SendPaymentV2(invoice string, feelimit int64) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -53,7 +53,7 @@ func SendPaymentV2(invoice string, feelimit int64) string {
 //	@Description: TrackPaymentV2 returns an update stream for the payment identified by the payment hash.
 //	@return string
 func TrackPaymentV2(payhash string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -93,7 +93,7 @@ func TrackPaymentV2(payhash string) string {
 //	@param route
 //	skipped function SendToRouteV2 with unsupported parameter or return types
 func SendToRouteV2(payhash []byte, route *lnrpc.Route) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -115,7 +115,7 @@ func SendToRouteV2(payhash []byte, route *lnrpc.Route) {
 //	@Description: EstimateRouteFee allows callers to obtain a lower bound w.r.t how much it may cost to send an HTLC to the target end destination.
 //	@return string
 func EstimateRouteFee(dest string, amtsat int64) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
