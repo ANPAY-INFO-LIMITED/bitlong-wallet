@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightninglabs/lightning-terminal/litrpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 )
 
 func SubServerStatus() string {

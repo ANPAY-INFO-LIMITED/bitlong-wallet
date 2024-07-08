@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/wallet/api/connect"
-	"github.com/wallet/api/rpcclient"
 	"github.com/wallet/base"
+	"github.com/wallet/service/connect"
+	rpcclient2 "github.com/wallet/service/rpcclient"
 )
 
 func AddFederationServer() {}
@@ -104,11 +104,11 @@ func GetAssetInfo(id string) string {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
 
-	proof, err := rpcclient.DecodeProof(response.Leaves[0].Proof, 0, false, false)
+	proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	block, err := rpcclient.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
+	block, err := rpcclient2.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}

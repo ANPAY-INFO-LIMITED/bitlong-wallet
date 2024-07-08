@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/wallet/api/connect"
-	"github.com/wallet/api/rpcclient"
+	"github.com/wallet/service/connect"
+	"github.com/wallet/service/rpcclient"
 	"strconv"
 	"strings"
 )

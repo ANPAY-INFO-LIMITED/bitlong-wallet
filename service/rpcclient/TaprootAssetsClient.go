@@ -10,8 +10,8 @@ import (
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
-	"github.com/wallet/api/connect"
 	"github.com/wallet/base"
+	"github.com/wallet/service/connect"
 )
 
 const (

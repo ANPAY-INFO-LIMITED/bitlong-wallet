@@ -8,7 +8,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/vincent-petithory/dataurl"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 	"os"
 	"path/filepath"
 	"strings"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 )
 
 func getChainKitClient() (chainrpc.ChainKitClient, func(), error) {

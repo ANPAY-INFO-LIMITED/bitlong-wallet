@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
-	"github.com/wallet/api/connect"
+	"github.com/wallet/service/connect"
 )
 
 // ImportProof
