@@ -14,6 +14,7 @@ import (
 	"github.com/wallet/api/connect"
 	"github.com/wallet/api/rpcclient"
 	"github.com/wallet/base"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"strconv"
@@ -2495,6 +2496,142 @@ func GetAddrReceives(token string) string {
 	response, err := PostToGetAddrReceivesEvents(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAddrReceivesEventsErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+type BatchTransferRequest struct {
+	Encoded            string `json:"encoded"`
+	AssetID            string `json:"asset_id"`
+	Amount             int    `json:"amount"`
+	ScriptKey          string `json:"script_key"`
+	InternalKey        string `json:"internal_key"`
+	TaprootOutputKey   string `json:"taproot_output_key"`
+	ProofCourierAddr   string `json:"proof_courier_addr"`
+	Txid               string `json:"txid"`
+	Index              int    `json:"index"`
+	TransferTimestamp  int    `json:"transfer_timestamp"`
+	AnchorTxHash       string `json:"anchor_tx_hash"`
+	AnchorTxHeightHint int    `json:"anchor_tx_height_hint"`
+	AnchorTxChainFees  int    `json:"anchor_tx_chain_fees"`
+	DeviceID           string `json:"device_id"`
+}
+
+func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferRequest) (err error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/batch_transfer/set_slice"
+	requestJsonBytes, err := json.Marshal(batchTransfers)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+func PostToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/batch_transfer/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetBatchTransfersResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+type GetBatchTransfersResponse struct {
+	Success bool             `json:"success"`
+	Error   string           `json:"error"`
+	Code    ErrCode          `json:"code"`
+	Data    *[]BatchTransfer `json:"data"`
+}
+
+type BatchTransfer struct {
+	gorm.Model
+	Encoded            string `json:"encoded"`
+	AssetID            string `json:"asset_id" gorm:"type:varchar(255)"`
+	Amount             int    `json:"amount"`
+	ScriptKey          string `json:"script_key" gorm:"type:varchar(255)"`
+	InternalKey        string `json:"internal_key" gorm:"type:varchar(255)"`
+	TaprootOutputKey   string `json:"taproot_output_key" gorm:"type:varchar(255)"`
+	ProofCourierAddr   string `json:"proof_courier_addr" gorm:"type:varchar(255)"`
+	Txid               string `json:"txid" gorm:"type:varchar(255)"`
+	Index              int    `json:"index"`
+	TransferTimestamp  int    `json:"transfer_timestamp"`
+	AnchorTxHash       string `json:"anchor_tx_hash" gorm:"type:varchar(255)"`
+	AnchorTxHeightHint int    `json:"anchor_tx_height_hint"`
+	AnchorTxChainFees  int    `json:"anchor_tx_chain_fees"`
+	DeviceID           string `json:"device_id" gorm:"type:varchar(255)"`
+	UserID             int    `json:"user_id"`
+	Status             int    `json:"status" gorm:"default:1"`
+}
+
+func UploadBatchTransfers(token string, batchTransfers *[]BatchTransferRequest) (err error) {
+	return PostToSetBatchTransfers(token, batchTransfers)
+}
+
+func GetBatchTransfers(token string) string {
+	response, err := PostToGetBatchTransfers(token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetBatchTransfersErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
