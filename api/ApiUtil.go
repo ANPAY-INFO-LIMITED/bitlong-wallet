@@ -42,6 +42,7 @@ const (
 	PostToSetAssetAddrErr
 	PostToGetAssetAddrErr
 	ListUtxosAndGetResponseErr
+	ListUnspentAndGetResponseErr
 )
 
 var (
