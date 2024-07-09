@@ -12,7 +12,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/wallet/base"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"gorm.io/gorm"
 	"io"
@@ -1101,7 +1101,7 @@ func GetAllAssetListWithoutProcession() string {
 }
 
 func ListBatchesAndGetResponse() (*mintrpc.ListBatchResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1141,7 +1141,7 @@ type ListBatchesAssetMeta struct {
 }
 
 func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		return nil, err
 	}
@@ -1153,7 +1153,7 @@ func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
 }
 
 func GetTransactionsExcludeLabelTapdAssetMinting() (*[]*lnrpc.Transaction, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

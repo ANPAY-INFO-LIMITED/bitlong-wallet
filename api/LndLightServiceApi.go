@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"io"
 	"strconv"
@@ -20,7 +20,7 @@ import (
 //	all confirmed unspent outputs and all unconfirmed unspent outputs under control of the wallet.
 //	@return string
 func getWalletBalance() (*lnrpc.WalletBalanceResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -42,7 +42,7 @@ func getWalletBalance() (*lnrpc.WalletBalanceResponse, error) {
 //	the chains it is connected to, and information concerning the number of open+pending channels.
 //	@return string
 func getInfoOfLnd() (*lnrpc.GetInfoResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -55,7 +55,7 @@ func getInfoOfLnd() (*lnrpc.GetInfoResponse, error) {
 }
 
 func sendCoins(addr string, amount int64, feeRate uint64, all bool) (*lnrpc.SendCoinsResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -156,7 +156,7 @@ func GetIdentityPubkey() string {
 //	@Description:NewAddress creates a new address under control of the local wallet.
 //	@return string
 func GetNewAddress() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -178,7 +178,7 @@ func GetNewAddress() string {
 //	Any duplicated invoices are rejected, therefore all invoices must have a unique payment preimage.
 //	@return string
 func AddInvoice(value int64, memo string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -205,7 +205,7 @@ func AddInvoice(value int64, memo string) string {
 //	By default, the first 100 invoices created will be returned. Backwards pagination is also supported through the Reversed flag.
 //	@return string
 func ListInvoices() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -299,7 +299,7 @@ type InvoiceAll struct {
 //	The passed payment hash must be exactly 32 bytes, if not, an error is returned.
 //	@return string
 func LookupInvoice(rhash string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -326,7 +326,7 @@ func LookupInvoice(rhash string) string {
 //	Only available for non-externally funded channels in dev build.
 //	@return bool
 func AbandonChannel() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -350,7 +350,7 @@ func AbandonChannel() bool {
 //	This is the safer variant of using PSBTs to manually fund a batch of channels through the OpenChannel RPC.
 //	@return bool
 func BatchOpenChannel() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -373,7 +373,7 @@ func BatchOpenChannel() bool {
 //	This allows node operators to specify their own criteria for accepting inbound channels through a single persistent connection.
 //	@return bool
 func ChannelAcceptor() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -405,7 +405,7 @@ func ChannelAcceptor() bool {
 //	@Description: ChannelBalance returns a report on the total funds across all open channels, categorized in local/remote, pending local/remote and unsettled local/remote balances.
 //	@return string
 func ChannelBalance() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -427,7 +427,7 @@ func ChannelBalance() string {
 //	@Description: CheckMacaroonPermissions checks whether a request follows the constraints imposed on the macaroon and that the macaroon is authorized to follow the provided permissions.
 //	@return bool
 func CheckMacaroonPermissions() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -452,7 +452,7 @@ func CheckMacaroonPermissions() bool {
 //	If neither are specified, then a default lax, block confirmation target is used.
 //	@return bool
 func CloseChannel(fundingTxidStr string, outputIndex int) bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -492,7 +492,7 @@ func CloseChannel(fundingTxidStr string, outputIndex int) bool {
 //	@Description: ClosedChannels returns a description of all the closed channels that this node was a participant in.
 //	@return string
 func ClosedChannels() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -538,7 +538,7 @@ func DecodePayReq(payReq string) string {
 //	Additionally, a multi-channel backup is returned as well, which contains a single encrypted blob containing the backups of each channel.
 //	@return bool
 func ExportAllChannelBackups() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -562,7 +562,7 @@ func ExportAllChannelBackups() bool {
 //	The returned backup can either be restored using the RestoreChannelBackup method once lnd is running, or via the InitWallet and UnlockWallet methods from the WalletUnlocker service.
 //	@return bool
 func ExportChannelBackup() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -584,7 +584,7 @@ func ExportChannelBackup() bool {
 //	@Description:GetChanInfo returns the latest authenticated network announcement for the given channel identified by its channel ID: an 8-byte integer which uniquely identifies the location of transaction's funding output within the blockchain.
 //	@return string
 func GetChanInfo(chanId string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -612,7 +612,7 @@ func GetChanInfo(chanId string) string {
 //	As with all other sync calls, all byte slices are intended to be populated as hex encoded strings.
 //	@return string
 func OpenChannelSync(nodePubkey string, localFundingAmount int64) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -648,7 +648,7 @@ func OpenChannelSync(nodePubkey string, localFundingAmount int64) string {
 //	Depending on the arguments specified in the OpenChannelRequest, this pending channel ID can then be used to manually progress the channel funding flow.
 //	@return bool
 func OpenChannel(nodePubkey string, localFundingAmount int64) bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -685,7 +685,7 @@ func OpenChannel(nodePubkey string, localFundingAmount int64) bool {
 //	@Description: ListChannels returns a description of all the open channels that this node is a participant in.
 //	@return string
 func ListChannels() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -707,7 +707,7 @@ func ListChannels() string {
 //	A channel is pending if it has finished the funding workflow and is waiting for confirmations for the funding txn, or is in the process of closure, either initiated cooperatively or non-cooperatively.
 //	@return string
 func PendingChannels() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -735,7 +735,7 @@ func PendingChannels() string {
 //	NO_FIND: channel not found
 //	ERR: grpc error
 func GetChannelState(chanPoint string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -805,7 +805,7 @@ func GetChannelState(chanPoint string) string {
 //	ERR: grpc error
 //	NO_FIND: channel not found
 func GetChannelInfo(chanPoint string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -834,7 +834,7 @@ func GetChannelInfo(chanPoint string) string {
 //	If we are able to unpack the backup, then the new channel will be shown under listchannels, as well as pending channels.
 //	@return bool
 func RestoreChannelBackups() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -858,7 +858,7 @@ func RestoreChannelBackups() bool {
 //	Each time a channel is closed, we send a new update, which contains new new chan back ups, but the updated set of encrypted multi-chan backups with the closed channel(s) removed.
 //	@return bool
 func SubscribeChannelBackups() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -893,7 +893,7 @@ func SubscribeChannelBackups() bool {
 //	Events include new active channels, inactive channels, and closed channels.
 //	@return bool
 func SubscribeChannelEvents() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -928,7 +928,7 @@ func SubscribeChannelEvents() bool {
 //	Events notified include: new nodes coming online, nodes updating their authenticated attributes, new channels being advertised, updates in the routing policy for a directional channel edge, and when channels are closed on-chain.
 //	@return bool
 func SubscribeChannelGraph() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -962,7 +962,7 @@ func SubscribeChannelGraph() bool {
 //	@Description: UpdateChannelPolicy allows the caller to update the fee schedule and channel policies for all channels globally, or a particular channel.
 //	@return bool
 func UpdateChannelPolicy() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -985,7 +985,7 @@ func UpdateChannelPolicy() bool {
 //	This method will accept either a packed Single or a packed Multi. Specifying both will result in an error.
 //	@return bool
 func VerifyChanBackup() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1008,7 +1008,7 @@ func VerifyChanBackup() bool {
 //	This is distinct from establishing a channel with a peer.
 //	@return bool
 func ConnectPeer(pubkey, host string) bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1041,7 +1041,7 @@ func ConnectPeer(pubkey, host string) bool {
 //	Unfortunately this map type doesn't appear in the REST API documentation because of a bug in the grpc-gateway library.
 //	@return string
 func EstimateFee(addr string, amount int64) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1067,7 +1067,7 @@ func EstimateFee(addr string, amount int64) string {
 //	This RPC is intended to be consumed by clients of the REST proxy. Additionally, this RPC expects the destination's public key and the payment hash (if any) to be encoded as hex strings.
 //	@return string
 func SendPaymentSync(invoice string) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1087,7 +1087,7 @@ func SendPaymentSync(invoice string) string {
 }
 
 func SendPaymentSync0amt(invoice string, amt int64) string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1145,7 +1145,7 @@ func SendMany(jsonAddr string, feeRate int64) string {
 }
 
 func sendMany(addr map[string]int64, feerate uint64) (*lnrpc.SendManyResponse, error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1180,7 +1180,7 @@ func SendAllCoins(addr string) string {
 //	@Description: Stop gracefully shuts down the Pool trader daemon.
 //	@return bool
 func LndStopDaemon() bool {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -1199,7 +1199,7 @@ func LndStopDaemon() bool {
 }
 
 func ListPermissions() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

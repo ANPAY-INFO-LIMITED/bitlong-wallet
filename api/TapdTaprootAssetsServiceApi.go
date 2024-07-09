@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"strconv"
 	"strings"
@@ -97,7 +97,7 @@ func FetchAssetMeta(isHash bool, data string) string {
 //	@Description: GetInfo returns the information for the node.
 //	@return string
 func GetInfoOfTap() string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -235,7 +235,7 @@ func QueryAssetTransfers(assetId string) string {
 //	@Description: ListUtxos lists the UTXOs managed by the target daemon, and the assets they hold.
 //	@return string
 func ListUtxos(includeLeased bool) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -355,7 +355,7 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 // @return string
 // skipped function SendAsset with unsupported parameter or return types
 func sendAssets(addrs []string, feeRate uint32) (*taprpc.SendAssetResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -393,7 +393,7 @@ func VerifyProof() {
 //	@Description: StopDaemon will send a shutdown request to the interrupt handler, triggering a graceful shutdown of the daemon.
 //	@return bool
 func TapStopDaemon() bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -409,7 +409,7 @@ func TapStopDaemon() bool {
 }
 
 func fetchAssetMeta(isHash bool, data string) (*taprpc.AssetMeta, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -431,7 +431,7 @@ func fetchAssetMeta(isHash bool, data string) (*taprpc.AssetMeta, error) {
 }
 
 func listBalances(useGroupKey bool, assetFilter, groupKeyFilter []byte) (*taprpc.ListBalancesResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -531,7 +531,7 @@ func ListBalancesByGroupKey() string {
 }
 
 func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAssetResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/lightningnetwork/lnd/lnrpc/chainrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 func getChainKitClient() (chainrpc.ChainKitClient, func(), error) {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err

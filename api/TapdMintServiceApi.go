@@ -8,7 +8,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
 	"github.com/vincent-petithory/dataurl"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +19,7 @@ import (
 //	@Description: CancelBatch will attempt to cancel the current pending batch.
 //	@return bool
 func CancelBatch() bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -50,7 +50,7 @@ func FinalizeBatch(feeRate int) string {
 //	@Description: ListBatches lists the set of batches submitted to the daemon, including pending and cancelled batches.
 //	@return string
 func ListBatches() string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -213,7 +213,7 @@ func (m *Meta) FetchAssetMeta(isHash bool, data string) string {
 //	@param feeRate
 //	@return string
 func finalizeBatch(shortResponse bool, feeRate int) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -248,7 +248,7 @@ func finalizeBatch(shortResponse bool, feeRate int) string {
 //	@param shortResponse
 //	@return bool
 func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, assetMetaData string, AssetMetaTypeIsJsonNotOpaque bool, amount int, newGroupedAsset bool, groupedAsset bool, groupKey string, groupAnchor string, shortResponse bool) string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/wallet/base"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,7 +19,7 @@ import (
 // @Description:NewAddress creates a new address under control of the local wallet.
 // @return string
 func GetNewAddress_P2TR() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -50,7 +50,7 @@ func GetNewAddress_P2TR() string {
 // @Description:NewAddress creates a new address under control of the local wallet.
 // @return string
 func GetNewAddress_P2WKH() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -80,7 +80,7 @@ func GetNewAddress_P2WKH() string {
 // @Description: NewAddress creates a new address under control of the local wallet.
 // @return string
 func GetNewAddress_NP2WKH() string {
-	conn, clearUp, err := connect.GetConnection("lnd", false)
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

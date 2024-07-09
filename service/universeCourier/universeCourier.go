@@ -8,6 +8,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/wallet/base"
+	"path/filepath"
 )
 
 const (
@@ -127,9 +129,13 @@ func AutoReceiveProof(assetId, GroupKey, ScriptKey, op string) {
 		return
 	}
 	// Import proofs into the proof directory.
-	err = ImportProofs(defaultProofPath, false, addrProof)
+	err = ImportProofs(false, addrProof)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+}
+
+func LoadUniverseCourierConfig() {
+	defaultProofPath = filepath.Join(base.Configure("tapd"), "data", base.NetWork, "proofs")
 }

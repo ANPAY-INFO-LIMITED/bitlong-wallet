@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc/tapdevrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 // ImportProof
@@ -14,7 +14,7 @@ import (
 //	If successful, a new asset will be inserted on disk, spendable using the specified target script key, and internal key.
 //	@return bool
 func ImportProof(proofFile, genesisPoint string) bool {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

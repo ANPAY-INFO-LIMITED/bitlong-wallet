@@ -8,14 +8,14 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/base"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 	rpcclient2 "github.com/wallet/service/rpcclient"
 )
 
 func AddFederationServer() {}
 
 func assetLeafKeys(id string, proofType universerpc.ProofType) (*universerpc.AssetLeafKeyResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -172,7 +172,7 @@ func DeleteFederationServer() {}
 //	@Description: Info returns a set of information about the current state of the Universe.
 //	@return string
 func UniverseInfo() string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -196,7 +196,7 @@ func InsertProof() {}
 //	This servers are used to push out new proofs, and also periodically call sync new proofs from the remote server.
 //	@return string
 func ListFederationServers() string {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -272,7 +272,7 @@ func SyncUniverse(universeHost string, assetId string) string {
 func UniverseStats() {}
 
 func queryAssetRoot(id string) (*universerpc.QueryRootResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -291,7 +291,7 @@ func queryAssetRoot(id string) (*universerpc.QueryRootResponse, error) {
 }
 
 func assetLeaves(isGroup bool, id string, proofType universerpc.ProofType) (*universerpc.AssetLeafResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -322,7 +322,7 @@ func AssetLeavesAndGetResponse(isGroup bool, id string, proofType universerpc.Pr
 }
 
 func queryAssetStats(assetId string) (*universerpc.UniverseAssetStats, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
@@ -337,7 +337,7 @@ func queryAssetStats(assetId string) (*universerpc.UniverseAssetStats, error) {
 }
 
 func syncUniverse(universeHost string, syncTargets []*universerpc.SyncTarget, syncMode universerpc.UniverseSyncMode) (*universerpc.SyncResponse, error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	terminal "github.com/lightninglabs/lightning-terminal"
 	"github.com/lightninglabs/lightning-terminal/litrpc"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 func LitdStopDaemon() bool {
@@ -18,7 +18,7 @@ func LitdStopDaemon() bool {
 }
 
 func litdStopDaemon() (*litrpc.StopDaemonResponse, error) {
-	conn, clearUp, err := connect.GetConnection("litd", false)
+	conn, clearUp, err := apiConnect.GetConnection("litd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}

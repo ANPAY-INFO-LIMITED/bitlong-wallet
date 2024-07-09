@@ -11,7 +11,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/wallet/base"
-	"github.com/wallet/service/connect"
+	"github.com/wallet/service/apiConnect"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 )
 
 func getTaprootAssetsClient() (taprpc.TaprootAssetsClient, func(), error) {
-	conn, clearUp, err := connect.GetConnection("tapd", false)
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Println(err)
 		return nil, nil, err
@@ -170,7 +170,7 @@ func DecodeProof(proof []byte, depth uint32, withMetaReveal bool, withPrevWitnes
 		WithPrevWitnesses: withPrevWitnesses,
 	}
 	if withMetaReveal || withPrevWitnesses {
-		conn, clearUp, err := connect.GetConnection("tapd", false)
+		conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 		if err != nil {
 			fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 		}

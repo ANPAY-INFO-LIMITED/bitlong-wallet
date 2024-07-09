@@ -3,6 +3,7 @@ package universeCourier
 import (
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/wire"
@@ -16,7 +17,9 @@ import (
 	"strings"
 )
 
-var defaultProofPath = "/home/en/tapdtest/.tapd/data/regtest/proofs"
+var defaultProofPath = ""
+
+var ErrNoDefaultProofPath = errors.New("no default proof path set")
 
 func serverDialOpts() ([]grpc.DialOption, error) {
 	var opts []grpc.DialOption
@@ -31,6 +34,9 @@ func serverDialOpts() ([]grpc.DialOption, error) {
 
 // FetchProofs retrieves all proofs for a given asset ID from the proof
 func FetchProofs(id asset.ID) ([]*proof.AnnotatedProof, error) {
+	if defaultProofPath == "" {
+		return nil, ErrNoDefaultProofPath
+	}
 	assetID := hex.EncodeToString(id[:])
 	assetPath := filepath.Join(defaultProofPath, assetID)
 	entries, err := os.ReadDir(assetPath)
@@ -77,6 +83,9 @@ func FetchProof(id proof.Locator) (proof.Blob, error) {
 	// All our on-disk storage is based on asset IDs, so to look up a path,
 	// we just need to compute the full file path and see if it exists on
 	// disk.
+	if defaultProofPath == "" {
+		return nil, ErrNoDefaultProofPath
+	}
 	proofPath, err := lookupProofFilePath(defaultProofPath, id)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make proof file path: %w",
@@ -142,11 +151,14 @@ func NewProofLoc(assetId, groupKey, scriptKey, outpoint string) *proof.Locator {
 	}
 }
 
-func ImportProofs(proofPath string, replace bool,
+func ImportProofs(replace bool,
 	proofs ...*proof.AnnotatedProof) error {
+	if defaultProofPath == "" {
+		return ErrNoDefaultProofPath
+	}
 	for _, p := range proofs {
 		proofPath, err := genProofFileStoragePath(
-			proofPath, p.Locator,
+			defaultProofPath, p.Locator,
 		)
 		if err != nil {
 			return err
@@ -224,6 +236,7 @@ func lookupProofFilePath(rootPath string, loc proof.Locator) (string, error) {
 		return "", proof.ErrMultipleProofs
 	}
 }
+
 func genProofFileStoragePath(rootPath string, loc proof.Locator) (string, error) {
 	var emptyKey btcec.PublicKey
 	switch {
