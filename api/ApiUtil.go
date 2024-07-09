@@ -44,6 +44,8 @@ const (
 	ListUtxosAndGetResponseErr
 	ListUnspentAndGetResponseErr
 	ListNftAssetsAndGetResponseErr
+	PostToSetAssetLockErr
+	PostToGetAssetLockErr
 )
 
 var (
