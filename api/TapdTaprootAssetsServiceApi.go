@@ -73,7 +73,6 @@ func DecodeAddr(addr string) string {
 	// make result struct
 	result := jsonResultAddr{}
 	result.getData(response)
-
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
@@ -257,14 +256,27 @@ func ListUtxos(includeLeased bool) string {
 //
 //	@Description:NewAddr makes a new address from the set of request params.
 //	@return string
-func NewAddr(assetId string, amt int) string {
+func NewAddr(assetId string, amt int, token string, deviceId string) string {
 	response, err := rpcclient.NewAddr(assetId, amt)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
 	result := jsonResultAddr{}
 	result.getData(response)
-
+	UploadAssetAddr(token, &AssetAddrSetRequest{
+		Encoded:          result.Encoded,
+		AssetId:          result.AssetId,
+		AssetType:        result.AssetType,
+		Amount:           result.Amount,
+		GroupKey:         result.GroupKey,
+		ScriptKey:        result.ScriptKey,
+		InternalKey:      result.InternalKey,
+		TapscriptSibling: result.TapscriptSibling,
+		TaprootOutputKey: result.TaprootOutputKey,
+		ProofCourierAddr: result.ProofCourierAddr,
+		AssetVersion:     result.AssetVersion,
+		DeviceID:         deviceId,
+	})
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 

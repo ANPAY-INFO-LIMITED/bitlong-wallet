@@ -39,6 +39,8 @@ const (
 	sendAssetsErr
 	UploadBatchTransfersErr
 	PostToGetBatchTransfersErr
+	PostToSetAssetAddrErr
+	PostToGetAssetAddrErr
 )
 
 var (

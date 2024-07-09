@@ -2635,3 +2635,139 @@ func GetBatchTransfers(token string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
+
+type AssetAddr struct {
+	gorm.Model
+	Encoded          string `json:"encoded"`
+	AssetId          string `json:"asset_id" gorm:"type:varchar(255)"`
+	AssetType        int    `json:"asset_type"`
+	Amount           int    `json:"amount"`
+	GroupKey         string `json:"group_key" gorm:"type:varchar(255)"`
+	ScriptKey        string `json:"script_key" gorm:"type:varchar(255)"`
+	InternalKey      string `json:"internal_key" gorm:"type:varchar(255)"`
+	TapscriptSibling string `json:"tapscript_sibling" gorm:"type:varchar(255)"`
+	TaprootOutputKey string `json:"taproot_output_key" gorm:"type:varchar(255)"`
+	ProofCourierAddr string `json:"proof_courier_addr" gorm:"type:varchar(255)"`
+	AssetVersion     int    `json:"asset_version"`
+	DeviceID         string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId           int    `json:"user_id"`
+	Status           int    `json:"status" gorm:"default:1"`
+}
+
+type AssetAddrSetRequest struct {
+	Encoded          string `json:"encoded"`
+	AssetId          string `json:"asset_id"`
+	AssetType        int    `json:"asset_type"`
+	Amount           int    `json:"amount"`
+	GroupKey         string `json:"group_key"`
+	ScriptKey        string `json:"script_key"`
+	InternalKey      string `json:"internal_key"`
+	TapscriptSibling string `json:"tapscript_sibling"`
+	TaprootOutputKey string `json:"taproot_output_key"`
+	ProofCourierAddr string `json:"proof_courier_addr"`
+	AssetVersion     int    `json:"asset_version"`
+	DeviceID         string `json:"device_id"`
+}
+
+type GetAssetAddrResponse struct {
+	Success bool         `json:"success"`
+	Error   string       `json:"error"`
+	Code    ErrCode      `json:"code"`
+	Data    *[]AssetAddr `json:"data"`
+}
+
+func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) (err error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_addr/set"
+	requestJsonBytes, err := json.Marshal(assetAddrSetRequest)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+func PostToGetAssetAddr(token string) (*[]AssetAddr, error) {
+	serverDomainOrSocket := "132.232.109.84:8090"
+	url := "http://" + serverDomainOrSocket + "/asset_addr/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetAddrResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func UploadAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) string {
+	err := PostToSetAssetAddr(token, assetAddrSetRequest)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetAssetAddrErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
+
+func GetAssetAddrs(token string) string {
+	response, err := PostToGetAssetAddr(token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetAssetAddrErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}

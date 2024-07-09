@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
@@ -106,24 +105,13 @@ func GetWalletBalance() string {
 }
 
 func ProcessGetWalletBalanceResult(walletBalanceResponse *lnrpc.WalletBalanceResponse) (*lnrpc.WalletBalanceResponse, error) {
-	addresses, err := ListAddressesAndGetResponse()
-	if err != nil {
-		return nil, err
-	}
-	lockAmount := CalculateImportedTapAddressBalanceAmount(addresses)
-	walletBalanceResponse.ConfirmedBalance -= lockAmount
-	if walletBalanceResponse.ConfirmedBalance < 0 {
-		err = errors.New("confirmed wallet balance is negative")
-		return nil, err
-	}
-	walletBalanceResponse.LockedBalance += lockAmount
-	if walletBalanceResponse.LockedBalance < 0 {
-		err = errors.New("locked wallet balance is negative")
-		return nil, err
-	}
+	importedConfirmedBalance := walletBalanceResponse.AccountBalance["imported"].ConfirmedBalance
+	walletBalanceResponse.ConfirmedBalance -= importedConfirmedBalance
+	walletBalanceResponse.LockedBalance += importedConfirmedBalance
 	return walletBalanceResponse, nil
 }
 
+// Deprecated
 func CalculateImportedTapAddressBalanceAmount(listAddressesResponse *walletrpc.ListAddressesResponse) (imported int64) {
 	if listAddressesResponse == nil {
 		return 0

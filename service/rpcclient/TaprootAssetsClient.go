@@ -106,7 +106,6 @@ func NewAddr(assetId string, amt int) (*taprpc.Addr, error) {
 		return nil, err
 	}
 	defer clearUp()
-
 	var ProofCourierAddr string
 	switch base.NetWork {
 	case "mainnet":
