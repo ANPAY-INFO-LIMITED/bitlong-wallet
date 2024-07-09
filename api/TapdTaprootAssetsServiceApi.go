@@ -879,6 +879,34 @@ func ListAssetsProcessed(withWitness, includeSpent, includeLeased bool) (*[]List
 	return &listAssetsResponse, nil
 }
 
+func ListNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
+	processed, err := ListAssetsProcessed(false, false, false)
+	if err != nil {
+		return nil, err
+	}
+	var result []ListAssetsResponse
+	for index, pr := range *processed {
+		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
+			result = append(result, (*processed)[index])
+		}
+	}
+	return &result, nil
+}
+
+func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
+	listNftAssets, err := ListNftAssetsAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	var result []ListAssetsResponse
+	for _, asset := range *listNftAssets {
+		if asset.AssetGroup.RawGroupKey == groupKey {
+			result = append(result, asset)
+		}
+	}
+	return &result, nil
+}
+
 func ListAssetsAll() string {
 	response, err := ListAssetsProcessed(true, true, false)
 	if err != nil {
@@ -942,7 +970,10 @@ func ListNFTAssets() string {
 	return MakeJsonErrorResult(SUCCESS, "", &result)
 }
 
-func QueryAllNFTByGroup() string {
-
-	return ""
+func QueryAllNFTByGroup(groupKey string) string {
+	response, err := GetGroupAssets(groupKey)
+	if err != nil {
+		return MakeJsonErrorResult(ListNftAssetsAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }

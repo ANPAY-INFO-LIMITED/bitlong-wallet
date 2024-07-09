@@ -43,6 +43,7 @@ const (
 	PostToGetAssetAddrErr
 	ListUtxosAndGetResponseErr
 	ListUnspentAndGetResponseErr
+	ListNftAssetsAndGetResponseErr
 )
 
 var (
