@@ -22,7 +22,7 @@ const (
 
 // AutoDeliverProof It's a test function to auto deliver proofs to the courier service.
 func AutoDeliverProof() {
-	addr, err := proof.ParseCourierAddress(UniverseHostMainnet)
+	addr, err := proof.ParseCourierAddress("universerpc://132.232.109.84:8444")
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -346,3 +346,11 @@ func syncUniverse(universeHost string, syncTargets []*universerpc.SyncTarget, sy
 	response, err := client.SyncUniverse(context.Background(), request)
 	return response, err
 }
+
+func DeliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) string {
+	response, err := deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
