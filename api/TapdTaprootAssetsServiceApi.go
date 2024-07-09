@@ -230,6 +230,163 @@ func QueryAssetTransfers(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", transfers)
 }
 
+type ManagedUtxo struct {
+	Op                 string             `json:"op"`
+	OutPoint           string             `json:"out_point"`
+	AmtSat             int                `json:"amt_sat"`
+	InternalKey        string             `json:"internal_key"`
+	TaprootAssetRoot   string             `json:"taproot_asset_root"`
+	MerkleRoot         string             `json:"merkle_root"`
+	ManagedUtxosAssets []ManagedUtxoAsset `json:"assets"`
+}
+
+type ManagedUtxoAsset struct {
+	Version          string                      `json:"version"`
+	AssetGenesis     ManagedUtxoAssetGenesis     `json:"asset_genesis"`
+	Amount           int                         `json:"amount"`
+	LockTime         int                         `json:"lock_time"`
+	RelativeLockTime int                         `json:"relative_lock_time"`
+	ScriptVersion    int                         `json:"script_version"`
+	ScriptKey        string                      `json:"script_key"`
+	ScriptKeyIsLocal bool                        `json:"script_key_is_local"`
+	AssetGroup       ManagedUtxoAssetGroup       `json:"asset_group"`
+	ChainAnchor      ManagedUtxoAssetChainAnchor `json:"chain_anchor"`
+	IsSpent          bool                        `json:"is_spent"`
+	LeaseOwner       string                      `json:"lease_owner"`
+	LeaseExpiry      int                         `json:"lease_expiry"`
+	IsBurn           bool                        `json:"is_burn"`
+}
+
+type ManagedUtxoAssetGenesis struct {
+	GenesisPoint string `json:"genesis_point"`
+	Name         string `json:"name"`
+	MetaHash     string `json:"meta_hash"`
+	AssetID      string `json:"asset_id"`
+	AssetType    string `json:"asset_type"`
+	OutputIndex  int    `json:"output_index"`
+	Version      int    `json:"version"`
+}
+
+type ManagedUtxoAssetGroup struct {
+	RawGroupKey     string `json:"raw_group_key"`
+	TweakedGroupKey string `json:"tweaked_group_key"`
+	AssetWitness    string `json:"asset_witness"`
+}
+
+type ManagedUtxoAssetChainAnchor struct {
+	AnchorTx         string `json:"anchor_tx"`
+	AnchorBlockHash  string `json:"anchor_block_hash"`
+	AnchorOutpoint   string `json:"anchor_outpoint"`
+	InternalKey      string `json:"internal_key"`
+	MerkleRoot       string `json:"merkle_root"`
+	TapscriptSibling string `json:"tapscript_sibling"`
+	BlockHeight      int    `json:"block_height"`
+}
+
+func ListUtxosResponseToManagedUtxos(listUtxosResponse *taprpc.ListUtxosResponse) *[]ManagedUtxo {
+	var managedUtxos []ManagedUtxo
+	for op, utxo := range listUtxosResponse.ManagedUtxos {
+		var managedUtxo ManagedUtxo
+		var managedUtxosAssets []ManagedUtxoAsset
+		for _, asset := range utxo.Assets {
+			var managedUtxoAssetGroup ManagedUtxoAssetGroup
+			if asset.AssetGroup == nil {
+				managedUtxoAssetGroup = ManagedUtxoAssetGroup{}
+			} else {
+				managedUtxoAssetGroup = ManagedUtxoAssetGroup{
+					RawGroupKey:     hex.EncodeToString(asset.AssetGroup.RawGroupKey),
+					TweakedGroupKey: hex.EncodeToString(asset.AssetGroup.TweakedGroupKey),
+					AssetWitness:    hex.EncodeToString(asset.AssetGroup.AssetWitness),
+				}
+			}
+			managedUtxosAssets = append(managedUtxosAssets, ManagedUtxoAsset{
+				Version: asset.Version.String(),
+				AssetGenesis: ManagedUtxoAssetGenesis{
+					GenesisPoint: asset.AssetGenesis.GenesisPoint,
+					Name:         asset.AssetGenesis.Name,
+					MetaHash:     hex.EncodeToString(asset.AssetGenesis.MetaHash),
+					AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
+					AssetType:    asset.AssetGenesis.AssetType.String(),
+					OutputIndex:  int(asset.AssetGenesis.OutputIndex),
+					Version:      int(asset.AssetGenesis.Version),
+				},
+				Amount:           int(asset.Amount),
+				LockTime:         int(asset.LockTime),
+				RelativeLockTime: int(asset.RelativeLockTime),
+				ScriptVersion:    int(asset.ScriptVersion),
+				ScriptKey:        hex.EncodeToString(asset.ScriptKey),
+				ScriptKeyIsLocal: asset.ScriptKeyIsLocal,
+				AssetGroup:       managedUtxoAssetGroup,
+				ChainAnchor: ManagedUtxoAssetChainAnchor{
+					AnchorTx:         hex.EncodeToString(asset.ChainAnchor.AnchorTx),
+					AnchorBlockHash:  asset.ChainAnchor.AnchorBlockHash,
+					AnchorOutpoint:   asset.ChainAnchor.AnchorOutpoint,
+					InternalKey:      hex.EncodeToString(asset.ChainAnchor.InternalKey),
+					MerkleRoot:       hex.EncodeToString(asset.ChainAnchor.MerkleRoot),
+					TapscriptSibling: hex.EncodeToString(asset.ChainAnchor.TapscriptSibling),
+					BlockHeight:      int(asset.ChainAnchor.BlockHeight),
+				},
+				IsSpent:     asset.IsSpent,
+				LeaseOwner:  hex.EncodeToString(asset.LeaseOwner),
+				LeaseExpiry: int(asset.LeaseExpiry),
+				IsBurn:      asset.IsBurn,
+			})
+		}
+		managedUtxo = ManagedUtxo{
+			Op:                 op,
+			OutPoint:           utxo.OutPoint,
+			AmtSat:             int(utxo.AmtSat),
+			InternalKey:        hex.EncodeToString(utxo.InternalKey),
+			TaprootAssetRoot:   hex.EncodeToString(utxo.TaprootAssetRoot),
+			MerkleRoot:         hex.EncodeToString(utxo.MerkleRoot),
+			ManagedUtxosAssets: managedUtxosAssets,
+		}
+		managedUtxos = append(managedUtxos, managedUtxo)
+	}
+	return &managedUtxos
+}
+
+func ManagedUtxosFilterByAssetId(utxos *[]ManagedUtxo, assetId string) *[]ManagedUtxo {
+	var managedUtxos []ManagedUtxo
+	for _, utxo := range *utxos {
+		var assets []ManagedUtxoAsset
+		for _, asset := range utxo.ManagedUtxosAssets {
+			if assetId == asset.AssetGenesis.AssetID {
+				assets = append(assets, asset)
+			}
+		}
+		if len(assets) == 0 {
+			continue
+		}
+		utxo.ManagedUtxosAssets = assets
+		managedUtxos = append(managedUtxos, utxo)
+	}
+	return &managedUtxos
+}
+
+func AssetUtxos(assetId string) string {
+	response, err := ListUtxosAndGetResponse(true)
+	if err != nil {
+		return MakeJsonErrorResult(ListUtxosAndGetResponseErr, err.Error(), nil)
+	}
+	managedUtxos := ListUtxosResponseToManagedUtxos(response)
+	managedUtxos = ManagedUtxosFilterByAssetId(managedUtxos, assetId)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, managedUtxos)
+}
+
+func ListUtxosAndGetResponse(includeLeased bool) (*taprpc.ListUtxosResponse, error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+	}
+	defer clearUp()
+	client := taprpc.NewTaprootAssetsClient(conn)
+	request := &taprpc.ListUtxosRequest{
+		IncludeLeased: includeLeased,
+	}
+	return client.ListUtxos(context.Background(), request)
+}
+
 // ListUtxos
 //
 //	@Description: ListUtxos lists the UTXOs managed by the target daemon, and the assets they hold.

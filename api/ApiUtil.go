@@ -41,6 +41,7 @@ const (
 	PostToGetBatchTransfersErr
 	PostToSetAssetAddrErr
 	PostToGetAssetAddrErr
+	ListUtxosAndGetResponseErr
 )
 
 var (

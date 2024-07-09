@@ -103,7 +103,6 @@ func GetAssetInfo(id string) string {
 	if response.Leaves == nil {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
-
 	proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
@@ -112,14 +111,12 @@ func GetAssetInfo(id string) string {
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-
 	msgBlock := &wire.MsgBlock{}
 	blockReader := bytes.NewReader(block.RawBlock)
 	err = msgBlock.Deserialize(blockReader)
 	timeStamp := msgBlock.Header.Timestamp
 	createTime := timeStamp.Unix()
 	createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
-
 	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
 	assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
 	assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
@@ -128,7 +125,6 @@ func GetAssetInfo(id string) string {
 	fmt.Println(proof)
 	var newMeta Meta
 	newMeta.FetchAssetMeta(false, id)
-
 	var assetInfo = struct {
 		AssetId      string  `json:"asset_Id"`
 		Name         string  `json:"name"`
@@ -157,7 +153,6 @@ func GetAssetInfo(id string) string {
 		groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
 		assetInfo.GroupKey = &groupKey
 	}
-
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
 
