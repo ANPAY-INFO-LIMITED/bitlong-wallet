@@ -14,9 +14,20 @@ const (
 	defaultlndpath  = ".lnd"
 	defaultlitpath  = ".lit"
 	defaulttapdpath = ".tapd"
-
-	defaultbitcoinpath = "data/chain/bitcoin"
 )
+
+const (
+	UniverseHostMainnet = "universerpc://132.232.109.84:8444"
+	UniverseHostTestnet = "universerpc://127.0.0.1:1235"
+	UniverseHostRegtest = "universerpc://132.232.109.84:8443"
+)
+
+type Config struct {
+	Network        string `json:"network"`
+	PostServiceUrl string `json:"postServiceUrl"`
+}
+
+var Cfg Config
 
 func SetPath(path string, network string) error {
 	err := base.SetFilePath(path)
@@ -27,14 +38,36 @@ func SetPath(path string, network string) error {
 		return errors.New("network not exist")
 	}
 	base.SetNetwork(network)
-	err = LoadServiceConfig()
+
+	err = Cfg.loadConfig()
 	if err != nil {
 		return errors.New("load config error ")
 	}
 	return nil
 }
+func (c *Config) loadConfig() error {
+	//load service config
+	err := c.loadServiceConfig()
+	if err != nil {
+		return errors.New("load config error ")
+	}
+	//load config from file
+	c.Network = base.NetWork
+	//load config other
+	switch {
+	case base.NetWork == "mainnet":
+		c.PostServiceUrl = UniverseHostMainnet
+	case base.NetWork == "testnet":
+		c.PostServiceUrl = UniverseHostTestnet
+	case base.NetWork == "regtest":
+		c.PostServiceUrl = UniverseHostRegtest
+	default:
+		return errors.New("network not exist")
+	}
+	return nil
+}
 
-func LoadServiceConfig() error {
+func (c *Config) loadServiceConfig() error {
 	apiConnect.LoadConnectConfig()
 	universeCourier.LoadUniverseCourierConfig()
 	return nil
@@ -43,6 +76,8 @@ func LoadServiceConfig() error {
 func GetPath() string {
 	return base.GetFilePath()
 }
+
+const defaultbitcoinpath = "data/chain/bitcoin"
 
 // CheckDir Check the integrity of the directory
 func CheckDir(dir string) error {

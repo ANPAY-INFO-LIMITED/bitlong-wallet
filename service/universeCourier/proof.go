@@ -79,7 +79,7 @@ func FetchProofs(id asset.ID) ([]*proof.AnnotatedProof, error) {
 }
 
 // todo: add a function to fetch the proof
-func FetchProof(id proof.Locator) (proof.Blob, error) {
+func FetchProof(id proof.Locator) (*proof.AnnotatedProof, error) {
 	// All our on-disk storage is based on asset IDs, so to look up a path,
 	// we just need to compute the full file path and see if it exists on
 	// disk.
@@ -100,7 +100,9 @@ func FetchProof(id proof.Locator) (proof.Blob, error) {
 		return nil, fmt.Errorf("unable to find proof: %w", err)
 	}
 
-	return proofFile, nil
+	return &proof.AnnotatedProof{
+		Blob: proofFile,
+	}, nil
 }
 
 func NewProofLoc(assetId, groupKey, scriptKey, outpoint string) *proof.Locator {
