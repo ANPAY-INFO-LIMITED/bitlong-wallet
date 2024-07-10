@@ -461,11 +461,17 @@ func QueryAddrs(assetId string) string {
 
 // jsonAddrs : ["addrs1","addrs2",...]
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
+	isTokenValid, err := IsTokenValid(token)
+	if err != nil {
+		return MakeJsonErrorResult(IsTokenValidErr, err.Error(), "")
+	} else if !isTokenValid {
+		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", jsonAddrs)
+	}
 	var addrs []string
-	err := json.Unmarshal([]byte(jsonAddrs), &addrs)
+	err = json.Unmarshal([]byte(jsonAddrs), &addrs)
 	if err != nil {
 		fmt.Printf("%s json.Unmarshal Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "Please use the correct json format", "")
+		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", "")
 	}
 	response, err := sendAssets(addrs, uint32(feeRate))
 	if err != nil {

@@ -46,6 +46,8 @@ const (
 	ListNftAssetsAndGetResponseErr
 	PostToSetAssetLockErr
 	PostToGetAssetLockErr
+	IsTokenValidErr
+	JsonUnmarshalErr
 )
 
 var (

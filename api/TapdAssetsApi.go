@@ -2901,3 +2901,55 @@ func GetAssetLocks(token string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
+
+type ValidateTokenResponse struct {
+	Error string `json:"error"`
+}
+
+func GetValidateTokenResult(token string) (*ValidateTokenResponse, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/validate_token/ping"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response ValidateTokenResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func IsTokenValid(token string) (bool, error) {
+	response, err := GetValidateTokenResult(token)
+	if err != nil {
+		return false, err
+	}
+	if response.Error != "" {
+		return false, errors.New(response.Error)
+	}
+	return true, nil
+}
