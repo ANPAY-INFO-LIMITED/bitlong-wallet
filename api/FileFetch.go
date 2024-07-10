@@ -21,10 +21,16 @@ const (
 	UniverseHostTestnet = "universerpc://127.0.0.1:1235"
 	UniverseHostRegtest = "universerpc://132.232.109.84:8443"
 )
+const (
+	BtlServerMainnet = "132.232.109.84:8095"
+	BtlServerTestNet = ""
+	BtlServerRegTest = "132.232.109.84:8090"
+)
 
 type Config struct {
 	Network        string `json:"network"`
 	PostServiceUrl string `json:"postServiceUrl"`
+	BtlServerHost  string `json:"btlServerHost"`
 }
 
 var Cfg Config
@@ -57,10 +63,13 @@ func (c *Config) loadConfig() error {
 	switch {
 	case base.NetWork == "mainnet":
 		c.PostServiceUrl = UniverseHostMainnet
+		c.BtlServerHost = BtlServerMainnet
 	case base.NetWork == "testnet":
 		c.PostServiceUrl = UniverseHostTestnet
+		c.BtlServerHost = BtlServerTestNet
 	case base.NetWork == "regtest":
 		c.PostServiceUrl = UniverseHostRegtest
+		c.BtlServerHost = BtlServerRegTest
 	default:
 		return errors.New("network not exist")
 	}
