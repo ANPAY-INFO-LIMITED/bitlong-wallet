@@ -1578,7 +1578,7 @@ type DecodeRawTransactionsResponse struct {
 }
 
 func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
 	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
@@ -1613,7 +1613,7 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 }
 
 func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
 	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/query/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
@@ -2018,7 +2018,7 @@ type AssetTransferProcessedOutput struct {
 }
 
 func PostToSetAssetTransfer(token string, assetTransferSetRequest *[]AssetTransferProcessed) (*JsonResult, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/set"
 	requestJsonBytes, err := json.Marshal(assetTransferSetRequest)
 	if err != nil {
@@ -2065,7 +2065,7 @@ type PostToGetAssetTransferTxidsResponse struct {
 }
 
 func PostToGetAssetTransferTxids(token string) (txids []string, err error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/txids"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
@@ -2127,7 +2127,7 @@ func GetAllOutPointsOfListTransfersResponse(listTransfersResponse *taprpc.ListTr
 }
 
 func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string) (*GetAddressesByOutpointSliceResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
 	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/address/outpoints"
 	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
@@ -2250,7 +2250,7 @@ type GetAssetTransferResponse struct {
 }
 
 func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
@@ -2394,7 +2394,7 @@ func AddrReceivesAndGetEvents(deviceId string) (*[]AddrReceiveEvent, error) {
 }
 
 func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveEvent) error {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/addr_receive/set"
 	requestJsonBytes, err := json.Marshal(addrReceiveEvents)
 	if err != nil {
@@ -2441,7 +2441,7 @@ type GetAddrReceivesEventsResponse struct {
 }
 
 func PostToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/addr_receive/get/origin"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
@@ -2518,7 +2518,7 @@ type BatchTransferRequest struct {
 }
 
 func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferRequest) (err error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/batch_transfer/set_slice"
 	requestJsonBytes, err := json.Marshal(batchTransfers)
 	if err != nil {
@@ -2558,7 +2558,7 @@ func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferReques
 }
 
 func PostToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/batch_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
@@ -2677,7 +2677,7 @@ type GetAssetAddrResponse struct {
 }
 
 func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) (err error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_addr/set"
 	requestJsonBytes, err := json.Marshal(assetAddrSetRequest)
 	if err != nil {
@@ -2717,7 +2717,7 @@ func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) 
 }
 
 func PostToGetAssetAddr(token string) (*[]AssetAddr, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_addr/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
@@ -2807,7 +2807,7 @@ type GetAssetLockResponse struct {
 }
 
 func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) (err error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_lock/set"
 	requestJsonBytes, err := json.Marshal(assetLockSetRequest)
 	if err != nil {
@@ -2847,7 +2847,7 @@ func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) 
 }
 
 func PostToGetAssetLock(token string) (*[]AssetLock, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_lock/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {

@@ -131,8 +131,7 @@ type ServerOwnSetFairLaunchInfoResponse struct {
 }
 
 func GetServerOwnSetFairLaunchInfos(token string) (fairLaunchInfos *[]models.FairLaunchInfo, err error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
-	//serverDomainOrSocket := "127.0.0.1:8080"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/own_set"
 	client := &http.Client{}
 	var jsonData []byte
@@ -205,8 +204,7 @@ type ServerFeeRateResponse struct {
 }
 
 func GetServerFeeRate(token string) (*ServerFeeRateResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
-	//serverDomainOrSocket := "127.0.0.1:8080"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/v1/fee/query/rate"
 	client := &http.Client{}
 	var jsonData []byte
@@ -253,8 +251,7 @@ type ServerQueryMintResponse struct {
 }
 
 func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintResponse, error) {
-	serverDomainOrSocket := "132.232.109.84:8090"
-	//serverDomainOrSocket := "127.0.0.1:8080"
+	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/mint"
 	client := &http.Client{}
 	requestJson := struct {
