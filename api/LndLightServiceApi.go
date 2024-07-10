@@ -105,7 +105,11 @@ func GetWalletBalance() string {
 }
 
 func ProcessGetWalletBalanceResult(walletBalanceResponse *lnrpc.WalletBalanceResponse) (*lnrpc.WalletBalanceResponse, error) {
-	importedConfirmedBalance := walletBalanceResponse.AccountBalance["imported"].ConfirmedBalance
+	imported, ok := walletBalanceResponse.AccountBalance["imported"]
+	if !ok {
+		return walletBalanceResponse, nil
+	}
+	importedConfirmedBalance := imported.ConfirmedBalance
 	walletBalanceResponse.ConfirmedBalance -= importedConfirmedBalance
 	walletBalanceResponse.LockedBalance += importedConfirmedBalance
 	return walletBalanceResponse, nil
