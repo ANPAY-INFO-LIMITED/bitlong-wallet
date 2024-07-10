@@ -1,13 +1,55 @@
 package api
 
 import (
-	"context"
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/service/universeCourier"
 	"net/url"
 )
+
+func DeliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint string) string {
+	response, err := deliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+func DeliverIssuanceProof(assetId string) string {
+	err := deliverIssuanceProof(Cfg.PostServiceUrl, assetId, "")
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", nil)
+}
+
+func ReceiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) string {
+	err := receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", nil)
+}
+
+func receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) error {
+	if assetId == "" || scriptkey == "" || outpoint == "" {
+		return errors.New("assetId or scriptkey or outpoint is empty")
+	}
+	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
+	addrs := newAddrsMap()
+	if universeUrl != "" {
+		addrs[universeUrl] = nil
+	}
+	for key := range addrs {
+		err := universeCourier.ReceiveProof(key, loc)
+		if err == nil {
+			return nil
+		}
+	}
+	return errors.New("receive proof failed")
+}
 
 func deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) (string, error) {
 	if assetId == "" || scriptkey == "" || outpoint == "" {
@@ -22,35 +64,57 @@ func deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) (s
 	if universeUrl != "" {
 		addrs[universeUrl] = nil
 	}
-	var total, complelte = len(addrs), 0
+	var total, complete = len(addrs), 0
 	for key := range addrs {
-		addr, err := proof.ParseCourierAddress(key)
+		err := universeCourier.DeliverProof(key, fetchProof)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("deliver proof failed, url:", key, "err:", err)
 			continue
 		}
-		NewCourier, err := universeCourier.NewCourier(addr)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		defer func(NewCourier *universeCourier.Courier) {
-			err := NewCourier.Close()
-			if err != nil {
-				fmt.Println(err)
-			}
-		}(NewCourier)
-		err = NewCourier.DeliverProof(context.Background(), fetchProof)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		complelte++
+		complete++
 	}
-	if complelte == 0 {
+	if complete == 0 {
 		return "", errors.New("deliver proof failed")
 	}
-	return fmt.Sprintf("deliver proof success, total:%d, complete:%d", total, complelte), nil
+	return fmt.Sprintf("deliver proof success, total:%d, complete:%d", total, complete), nil
+}
+
+func deliverIssuanceProof(universeUrl, assetId, groupKey string) error {
+	if assetId == "" {
+		return errors.New("assetId is empty")
+	}
+	var (
+		res *universerpc.AssetLeafResponse
+		err error
+	)
+	if groupKey == "" {
+		//TODO
+	}
+	res, err = assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+	if err != nil {
+		return errors.New("get asset leaves failed")
+	}
+	var blob = proof.Blob{}
+	blob = res.Leaves[0].Proof
+
+	file, err := blob.AsFile()
+	if err != nil {
+		fmt.Println("as file failed")
+		return errors.New("as file failed")
+	}
+
+	var buf bytes.Buffer
+	if err := file.Encode(&buf); err != nil {
+		fmt.Println("encode failed")
+		return errors.New("encode failed")
+	}
+	err = universeCourier.DeliverProof(universeUrl, &proof.AnnotatedProof{
+		Blob: buf.Bytes(),
+	})
+	if err != nil {
+		return errors.New("deliver proof failed")
+	}
+	return nil
 }
 
 func newAddrsMap() map[string]*url.URL {

@@ -12,7 +12,7 @@ import (
 	"net/url"
 )
 
-type Courier struct {
+type courier struct {
 	proof.Courier
 
 	// client is the RPC client that the courier will use to interact with
@@ -24,7 +24,7 @@ type Courier struct {
 	rawConn *grpc.ClientConn
 }
 
-func (c *Courier) DeliverProof(ctx context.Context,
+func (c *courier) DeliverProof(ctx context.Context,
 	annotatedProof *proof.AnnotatedProof) error {
 	// Decode annotated proof into proof file.
 	proofFile := &proof.File{}
@@ -97,7 +97,7 @@ func (c *Courier) DeliverProof(ctx context.Context,
 	}
 	return err
 }
-func (c *Courier) ReceiveProof(ctx context.Context,
+func (c *courier) ReceiveProof(ctx context.Context,
 	originLocator proof.Locator) (*proof.AnnotatedProof, error) {
 
 	fetchProof := func(ctx context.Context, loc proof.Locator) (proof.Blob, error) {
@@ -167,7 +167,7 @@ func (c *Courier) ReceiveProof(ctx context.Context,
 	}, nil
 }
 
-func (c *Courier) Close() error {
+func (c *courier) Close() error {
 	err := c.rawConn.Close()
 	if err != nil {
 		return err
@@ -175,7 +175,7 @@ func (c *Courier) Close() error {
 	return nil
 }
 
-func (c *Courier) QueryAssetKey() {
+func (c *courier) QueryAssetKey() {
 	i := unirpc.ID{
 		Id: &unirpc.ID_AssetIdStr{
 			AssetIdStr: "47ed120d4b173eb79ba46cd1959bb9c881cb69332cf8a21336110bda05402308",
@@ -191,7 +191,7 @@ func (c *Courier) QueryAssetKey() {
 	fmt.Println(root)
 }
 
-func NewCourier(addr *url.URL) (*Courier, error) {
+func newCourier(addr *url.URL) (*courier, error) {
 	switch addr.Scheme {
 	case proof.HashmailCourierType:
 	case proof.UniverseRpcCourierType:
@@ -210,7 +210,7 @@ func NewCourier(addr *url.URL) (*Courier, error) {
 
 		client := unirpc.NewUniverseClient(conn)
 
-		return &Courier{
+		return &courier{
 			rawConn: conn,
 			client:  client,
 		}, nil

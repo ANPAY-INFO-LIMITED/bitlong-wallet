@@ -1,15 +1,14 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcd/wire"
+	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
-	rpcclient2 "github.com/wallet/service/rpcclient"
+	"github.com/wallet/service/rpcclient"
 )
 
 func AddFederationServer() {}
@@ -95,7 +94,18 @@ func AssetLeaves(id string) string {
 }
 
 func GetAssetInfo(id string) string {
-	response, err := assetLeaves(false, id, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+	root := rpcclient.QueryAssetRoots(id)
+	if root == nil {
+		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+	}
+	queryId := id
+	isGroup := false
+	if groupKey, ok := root.IssuanceRoot.Id.Id.(*universerpc.ID_GroupKey); ok {
+		isGroup = true
+		queryId = hex.EncodeToString(groupKey.GroupKey)
+
+	}
+	response, err := assetLeaves(isGroup, queryId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
 		fmt.Printf("%s universerpc AssetLeaves Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
@@ -103,28 +113,51 @@ func GetAssetInfo(id string) string {
 	if response.Leaves == nil {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
-	proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
-	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	var blob proof.Blob
+	for index, leaf := range response.Leaves {
+		if hex.EncodeToString(leaf.Asset.AssetGenesis.GetAssetId()) == id {
+			blob = response.Leaves[index].Proof
+			break
+		}
 	}
-	block, err := rpcclient2.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
-	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	if len(blob) == 0 {
+		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
-	msgBlock := &wire.MsgBlock{}
-	blockReader := bytes.NewReader(block.RawBlock)
-	err = msgBlock.Deserialize(blockReader)
-	timeStamp := msgBlock.Header.Timestamp
-	createTime := timeStamp.Unix()
-	createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
-	assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
-	assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
-	assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
-	amount := proof.DecodedProof.Asset.Amount
-	assetName := proof.DecodedProof.Asset.AssetGenesis.Name
-	fmt.Println(proof)
+	p, _ := blob.AsSingleProof()
+	assetId := p.Asset.ID().String()
+	assetName := p.Asset.Tag
+	assetPoint := p.Asset.FirstPrevOut.String()
+	assetType := p.Asset.Type.String()
+	amount := p.Asset.Amount
+	createHeight := p.BlockHeight
+	createTime := p.BlockHeader.Timestamp
 	var newMeta Meta
-	newMeta.FetchAssetMeta(false, id)
+	//m := hex.EncodeToString(p.MetaReveal.Data)
+	m := string(p.MetaReveal.Data)
+	newMeta.GetMetaFromStr(m)
+
+	//proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
+	//if err != nil {
+	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	//}
+	//block, err := rpcclient2.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
+	//if err != nil {
+	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	//}
+	//msgBlock := &wire.MsgBlock{}
+	//blockReader := bytes.NewReader(block.RawBlock)
+	//err = msgBlock.Deserialize(blockReader)
+	//timeStamp := msgBlock.Header.Timestamp
+	//createTime := timeStamp.Unix()
+	//createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
+	//assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
+	//assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
+	//assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
+	//amount := proof.DecodedProof.Asset.Amount
+	//assetName := proof.DecodedProof.Asset.AssetGenesis.Name
+	//fmt.Println(proof)
+	//var newMeta Meta
+	//newMeta.FetchAssetMeta(false, id)
 	var assetInfo = struct {
 		AssetId      string  `json:"asset_Id"`
 		Name         string  `json:"name"`
@@ -146,12 +179,20 @@ func GetAssetInfo(id string) string {
 		Amount:       amount,
 		Meta:         &newMeta.Description,
 		CreateHeight: int64(createHeight),
-		CreateTime:   createTime,
+		CreateTime:   createTime.Unix(),
 		Universe:     "localhost",
 	}
-	if proof.DecodedProof.Asset.AssetGroup != nil {
-		groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
-		assetInfo.GroupKey = &groupKey
+	//if proof.DecodedProof.Asset.AssetGroup != nil {
+	//	groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
+	//	assetInfo.GroupKey = &groupKey
+	//}
+	//if p.Asset.GroupKey != nil {
+	//	groupKeyBytes := p.Asset.GroupKey.RawKey.PubKey.SerializeUncompressed()
+	//	groupKey := hex.EncodeToString(groupKeyBytes)
+	//	assetInfo.GroupKey = &groupKey
+	//}
+	if isGroup {
+		assetInfo.GroupKey = &queryId
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
@@ -345,12 +386,4 @@ func syncUniverse(universeHost string, syncTargets []*universerpc.SyncTarget, sy
 	client := universerpc.NewUniverseClient(conn)
 	response, err := client.SyncUniverse(context.Background(), request)
 	return response, err
-}
-
-func DeliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) string {
-	response, err := deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint)
-	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
-	}
-	return MakeJsonErrorResult(SUCCESS, "", response)
 }

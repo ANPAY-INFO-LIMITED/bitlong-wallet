@@ -2,11 +2,7 @@ package universeCourier
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/wallet/base"
 	"path/filepath"
@@ -14,126 +10,53 @@ import (
 
 const (
 	UniverseHostMainnet = "universerpc://132.232.109.84:8444"
-	UniverseHostTestnet = "universerpc://127.0.0.1:1235"
-	UniverseHostRegtest = "universerpc://132.232.109.84:8443"
 )
 
-//todo:send a specified proof to universe
-
-// AutoDeliverProof It's a test function to auto deliver proofs to the courier service.
-func AutoDeliverProof() {
-	addr, err := proof.ParseCourierAddress("universerpc://132.232.109.84:8444")
+func DeliverProof(universeHost string, proofFile *proof.AnnotatedProof) error {
+	addr, err := proof.ParseCourierAddress(universeHost)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
-	courier, _ := NewCourier(addr)
-	if courier == nil {
-		return
+	c, err := newCourier(addr)
+	if err != nil {
+		return err
 	}
-	defer func(courier proof.Courier) {
-		err := courier.Close()
+	defer func(c *courier) {
+		err := c.Close()
 		if err != nil {
-			return
+			fmt.Println(err)
 		}
-	}(courier)
-
-	id := "1f8c52ffd0c88e6f9584d50206496769acf6aa1ba9e12a0abd661ac4a949c57b"
-	b, err := hex.DecodeString(id)
+	}(c)
+	err = c.DeliverProof(context.Background(), proofFile)
 	if err != nil {
-		fmt.Println("id erro")
-		return
+		return err
 	}
-
-	var assetId asset.ID
-	copy(assetId[:], b)
-	p, err := FetchProofs(assetId)
-	if err != nil {
-		fmt.Println("fetch proofs error")
-		return
-	}
-	for index, useproof := range p {
-		err := courier.DeliverProof(context.Background(), useproof)
-
-		if err != nil {
-			fmt.Println(index)
-			return
-		}
-	}
-
+	return nil
 }
-
-// AutoReceiveProof It's a test function to auto deliver proofs to the courier service.
-func AutoReceiveProof(assetId, GroupKey, ScriptKey, op string) {
-	// Attempt to receive proof via proof courier service.
-
-	// Parse locator from arguments.
-	var (
-		_assetId   asset.ID
-		_scriptKey btcec.PublicKey
-		_op        *wire.OutPoint
-		err        error
-	)
-	if assetId == "" || ScriptKey == "" {
-		return
-	}
-	a, _ := hex.DecodeString(assetId)
-	copy(_assetId[:], a)
-	b, err := hex.DecodeString(ScriptKey)
-	p, err := btcec.ParsePubKey(b)
+func ReceiveProof(universeHost string, loc *proof.Locator) error {
+	addr, err := proof.ParseCourierAddress(universeHost)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	_scriptKey = *p
-
-	_op, err = wire.NewOutPointFromString(op)
+	c, err := newCourier(addr)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	loc := proof.Locator{
-		AssetID:   &_assetId,
-		ScriptKey: _scriptKey,
-		OutPoint:  _op,
-	}
-
-	if GroupKey != "" {
-		_groupKey, err := btcec.ParsePubKey([]byte(GroupKey))
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		loc.GroupKey = _groupKey
-	}
-
-	// Parse courier address.
-	addr, err := proof.ParseCourierAddress(UniverseHostRegtest)
-	if err != nil {
-		fmt.Println(err)
-	}
-	// Create a new courier instance.
-	courier, _ := NewCourier(addr)
-	if courier == nil {
-		return
-	}
-	defer func(courier proof.Courier) {
-		err := courier.Close()
+	defer func(c *courier) {
+		err := c.Close()
 		if err != nil {
 			fmt.Println(err)
 		}
-	}(courier)
-	// Retrieve proof from courier.
-	addrProof, err := courier.ReceiveProof(context.Background(), loc)
+	}(c)
+	p, err := c.ReceiveProof(context.Background(), *loc)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	// Import proofs into the proof directory.
-	err = ImportProofs(false, addrProof)
+	err = ImportProofs(false, p)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
+	return nil
 }
 
 func LoadUniverseCourierConfig() {
