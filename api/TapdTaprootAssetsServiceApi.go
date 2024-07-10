@@ -463,7 +463,7 @@ func QueryAddrs(assetId string) string {
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
 	isTokenValid, err := IsTokenValid(token)
 	if err != nil {
-		return MakeJsonErrorResult(IsTokenValidErr, err.Error(), "")
+		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", "")
 	} else if !isTokenValid {
 		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", jsonAddrs)
 	}
@@ -506,7 +506,7 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	// @dev: Upload
 	err = UploadBatchTransfers(token, &batchTransfersRequest)
 	if err != nil {
-		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error(), nil)
+		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error()+"; Assets sent, but upload failed.", nil)
 	}
 	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
