@@ -42,6 +42,10 @@ const (
 	PostToSetAssetAddrErr
 	PostToGetAssetAddrErr
 	ListUtxosAndGetResponseErr
+	ListUnspentAndGetResponseErr
+	ListNftAssetsAndGetResponseErr
+	PostToSetAssetLockErr
+	PostToGetAssetLockErr
 )
 
 var (

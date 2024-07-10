@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/service/apiConnect"
+	"strconv"
 )
 
 // ListAddress
@@ -49,6 +50,32 @@ func ListAddresses() string {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func GetAllDefaultAddresses() ([]string, error) {
+	var result []string
+	listAddress, err := ListAddressesAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	for _, accountWithAddresse := range listAddress.AccountWithAddresses {
+		if accountWithAddresse.Name == "default" {
+			addresses := accountWithAddresse.Addresses
+			for _, address := range addresses {
+				result = append(result, address.Address)
+			}
+		}
+	}
+	return result, nil
+}
+
+func IsIncludeAddress(addresses []string, address string) bool {
+	for _, _address := range addresses {
+		if _address == address {
+			return true
+		}
+	}
+	return false
 }
 
 func ListAddressesAndGetResponse() (*walletrpc.ListAddressesResponse, error) {
@@ -123,12 +150,78 @@ func ListSweeps() string {
 	return response.String()
 }
 
+func ListUnspentAndGetResponse() (*walletrpc.ListUnspentResponse, error) {
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+	if err != nil {
+		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+	}
+	defer clearUp()
+	client := walletrpc.NewWalletKitClient(conn)
+	request := &walletrpc.ListUnspentRequest{}
+	return client.ListUnspent(context.Background(), request)
+}
+
+type ListUnspentUtxo struct {
+	AddressType   string `json:"address_type"`
+	Address       string `json:"address"`
+	AmountSat     int    `json:"amount_sat"`
+	PkScript      string `json:"pk_script"`
+	Outpoint      string `json:"outpoint"`
+	Confirmations int    `json:"confirmations"`
+}
+
+func ListUnspentResponseToListUnspentUtxos(listUnspentResponse *walletrpc.ListUnspentResponse) *[]ListUnspentUtxo {
+	var listUnspentUtxos []ListUnspentUtxo
+	for _, utxo := range listUnspentResponse.Utxos {
+		listUnspentUtxos = append(listUnspentUtxos, ListUnspentUtxo{
+			AddressType:   utxo.AddressType.String(),
+			Address:       utxo.Address,
+			AmountSat:     int(utxo.AmountSat),
+			PkScript:      utxo.PkScript,
+			Outpoint:      utxo.Outpoint.TxidStr + ":" + strconv.Itoa(int(utxo.Outpoint.OutputIndex)),
+			Confirmations: int(utxo.Confirmations),
+		})
+	}
+	return &listUnspentUtxos
+}
+
+func ListUnspentUtxoFilterByDefaultAddress(utxos *[]ListUnspentUtxo) *[]ListUnspentUtxo {
+	var listUnspentUtxos []ListUnspentUtxo
+	addresses, err := GetAllDefaultAddresses()
+	if err != nil {
+		return utxos
+	}
+	for _, utxo := range *utxos {
+		address := utxo.Address
+		if IsIncludeAddress(addresses, address) {
+			listUnspentUtxos = append(listUnspentUtxos, utxo)
+		}
+	}
+	return &listUnspentUtxos
+}
+
+func ListUnspentAndProcess() (*[]ListUnspentUtxo, error) {
+	response, err := ListUnspentAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	btcUtxos := ListUnspentResponseToListUnspentUtxos(response)
+	btcUtxos = ListUnspentUtxoFilterByDefaultAddress(btcUtxos)
+	return btcUtxos, nil
+}
+
+func BtcUtxos() string {
+	response, err := ListUnspentAndProcess()
+	if err != nil {
+		return MakeJsonErrorResult(ListUnspentAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
 // ListUnspent
-//
-//	@Description: ListUnspent returns a list of all utxos spendable by the wallet
-//	with a number of confirmations between the specified minimum and maximum.
-//	By default, all utxos are listed. To list only the unconfirmed utxos, set the unconfirmed_only to true.
-//	@return string
+// @Description: ListUnspent returns a list of all utxos spendable by the wallet
+// with a number of confirmations between the specified minimum and maximum.
+// By default, all utxos are listed. To list only the unconfirmed utxos, set the unconfirmed_only to true.
 func ListUnspent() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
@@ -146,9 +239,7 @@ func ListUnspent() string {
 }
 
 // NextAddr
-//
-//	@Description: NextAddr returns the next unused address within the wallet.
-//	@return string
+// @Description: NextAddr returns the next unused address within the wallet.
 func NextAddr() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
