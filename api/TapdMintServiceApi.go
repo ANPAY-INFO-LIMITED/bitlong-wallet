@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
@@ -42,6 +43,10 @@ func CancelBatch() bool {
 //	@param feeRate
 //	@return bool
 func FinalizeBatch(feeRate int) string {
+	if feeRate > FeeRateSatPerBToSatPerKw(500) {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
 	return finalizeBatch(false, feeRate)
 }
 

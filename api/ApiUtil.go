@@ -50,6 +50,7 @@ const (
 	JsonUnmarshalErr
 	ListBalancesAndProcessErr
 	PostToSetAssetBalanceInfoErr
+	FeeRateExceedMaxErr
 )
 
 var (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
@@ -1118,6 +1119,10 @@ func SendPaymentSync0amt(invoice string, amt int64) string {
 //	If neither target_conf, or sat_per_vbyte are set, then the internal wallet will consult its fee model to determine a fee for the default confirmation target.
 //	@return string
 func SendCoins(addr string, amount int64, feeRate int64, sendAll bool) string {
+	if feeRate > 500 {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
 	response, err := sendCoins(addr, amount, uint64(feeRate), sendAll)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
@@ -1127,6 +1132,10 @@ func SendCoins(addr string, amount int64, feeRate int64, sendAll bool) string {
 
 // jsonaddr :{"bcrt1pq83tk5uu0lpwk2gd7f736ttrmexed8xazfz3jmwj0ml26cwyurast4xk3w":1111,"bcrt1pra9w5dphnx75n0pjzcxlc5e8k9vg9sdupttyr36prn2t6ullr9eq0utvac":2222}
 func SendMany(jsonAddr string, feeRate int64) string {
+	if feeRate > 500 {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
 	var addrs []struct {
 		Address string `json:"address"`
 		Amount  int64  `json:"btcSum"`
@@ -1170,8 +1179,12 @@ func sendMany(addr map[string]int64, feerate uint64) (*lnrpc.SendManyResponse, e
 }
 
 // Deprecated: Please Use SendCoins
-func SendAllCoins(addr string) string {
-	response, err := sendCoins(addr, 0, 0, true)
+func SendAllCoins(addr string, feeRate int) string {
+	if feeRate > 500 {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
+	response, err := sendCoins(addr, 0, uint64(feeRate), true)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}

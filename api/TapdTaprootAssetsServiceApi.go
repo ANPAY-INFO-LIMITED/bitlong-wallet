@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
@@ -461,6 +462,10 @@ func QueryAddrs(assetId string) string {
 
 // jsonAddrs : ["addrs1","addrs2",...]
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
+	if int(feeRate) > FeeRateSatPerBToSatPerKw(500) {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
 	isTokenValid, err := IsTokenValid(token)
 	if err != nil {
 		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", nil)
