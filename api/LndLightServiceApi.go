@@ -59,9 +59,7 @@ func sendCoins(addr string, amount int64, feeRate uint64, all bool) (*lnrpc.Send
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
-
 	defer clearUp()
-
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.SendCoinsRequest{
 		Addr: addr,
@@ -1156,9 +1154,7 @@ func sendMany(addr map[string]int64, feerate uint64) (*lnrpc.SendManyResponse, e
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
-
 	defer clearUp()
-
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.SendManyRequest{
 		AddrToAmount: addr,

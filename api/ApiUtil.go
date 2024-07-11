@@ -48,6 +48,8 @@ const (
 	PostToGetAssetLockErr
 	IsTokenValidErr
 	JsonUnmarshalErr
+	ListBalancesAndProcessErr
+	PostToSetAssetBalanceInfoErr
 )
 
 var (
