@@ -22,7 +22,7 @@ func setServerHost(server string) string {
 }
 
 func GetServerHost() string {
-	return HttpsUrl + Cfg.PostServiceUrl
+	return HttpsUrl + Cfg.BtlServerHost
 }
 
 func Login(username, password string) (string, error) {

@@ -18,7 +18,7 @@ func DeliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint string) st
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 func DeliverIssuanceProof(assetId string) string {
-	err := deliverIssuanceProof(Cfg.PostServiceUrl, assetId, "")
+	err := deliverIssuanceProof(Cfg.UniverseUrl, assetId, "")
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
@@ -119,7 +119,7 @@ func deliverIssuanceProof(universeUrl, assetId, groupKey string) error {
 
 func newAddrsMap() map[string]*url.URL {
 	addrs := make(map[string]*url.URL)
-	addrs[Cfg.PostServiceUrl] = nil
+	addrs[Cfg.UniverseUrl] = nil
 	if Cfg.Network == "mainnet" {
 		addrs["mainnet.universe.lightning.finance:10029"] = nil
 	}

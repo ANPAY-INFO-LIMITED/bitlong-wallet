@@ -28,9 +28,9 @@ const (
 )
 
 type Config struct {
-	Network        string `json:"network"`
-	PostServiceUrl string `json:"postServiceUrl"`
-	BtlServerHost  string `json:"btlServerHost"`
+	Network       string `json:"network"`
+	UniverseUrl   string `json:"postServiceUrl"`
+	BtlServerHost string `json:"btlServerHost"`
 }
 
 var Cfg Config
@@ -62,13 +62,13 @@ func (c *Config) loadConfig() error {
 	//load config other
 	switch {
 	case base.NetWork == "mainnet":
-		c.PostServiceUrl = UniverseHostMainnet
+		c.UniverseUrl = UniverseHostMainnet
 		c.BtlServerHost = BtlServerMainnet
 	case base.NetWork == "testnet":
-		c.PostServiceUrl = UniverseHostTestnet
+		c.UniverseUrl = UniverseHostTestnet
 		c.BtlServerHost = BtlServerTestNet
 	case base.NetWork == "regtest":
-		c.PostServiceUrl = UniverseHostRegtest
+		c.UniverseUrl = UniverseHostRegtest
 		c.BtlServerHost = BtlServerRegTest
 	default:
 		return errors.New("network not exist")
