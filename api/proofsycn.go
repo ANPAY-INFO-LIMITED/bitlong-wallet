@@ -5,9 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/wallet/service/rpcclient"
 	"github.com/wallet/service/universeCourier"
 	"net/url"
+)
+
+var (
+	InputErr      = errors.New("assetId or scriptkey or outpoint is empty")
+	FetchProofErr = errors.New("fetch proof failed")
 )
 
 func DeliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint string) string {
@@ -35,7 +42,7 @@ func ReceiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) st
 
 func receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) error {
 	if assetId == "" || scriptkey == "" || outpoint == "" {
-		return errors.New("assetId or scriptkey or outpoint is empty")
+		return InputErr
 	}
 	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
 	addrs := newAddrsMap()
@@ -53,12 +60,12 @@ func receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) er
 
 func deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) (string, error) {
 	if assetId == "" || scriptkey == "" || outpoint == "" {
-		return "", errors.New("assetId or scriptkey or outpoint is empty")
+		return "", InputErr
 	}
 	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
 	fetchProof, err := universeCourier.FetchProof(*loc)
 	if err != nil {
-		return "", errors.New("fetch proof failed")
+		return "", FetchProofErr
 	}
 	addrs := newAddrsMap()
 	if universeUrl != "" {
@@ -77,6 +84,42 @@ func deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) (s
 		return "", errors.New("deliver proof failed")
 	}
 	return fmt.Sprintf("deliver proof success, total:%d, complete:%d", total, complete), nil
+}
+
+func ReadProof(assetId, groupKey, scriptkey, outpoint string) string {
+	p, err := readProof(assetId, groupKey, scriptkey, outpoint)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", p)
+}
+
+type Jstr struct {
+	Jsonstr string `json:"jsonstr"`
+}
+
+func readProof(assetId, groupKey, scriptkey, outpoint string) (*Jstr, error) {
+	if assetId == "" || scriptkey == "" || outpoint == "" {
+		return nil, InputErr
+	}
+	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
+	fetchProof, err := universeCourier.FetchProof(*loc)
+	if err != nil {
+		return nil, FetchProofErr
+	}
+	p, err := rpcclient.DecodeProof(fetchProof.Blob, 0, false, false)
+	if err != nil {
+		return nil, errors.New("read proof failed")
+	}
+
+	json, err := taprpc.ProtoJSONMarshalOpts.Marshal(p)
+	if err != nil {
+		return nil, errors.New("json unmarshal failed")
+	}
+	str := string(json)
+	js := Jstr{Jsonstr: str}
+	//fmt.Println(str)
+	return &js, nil
 }
 
 func deliverIssuanceProof(universeUrl, assetId, groupKey string) error {
