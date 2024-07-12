@@ -104,6 +104,42 @@ func GetNewAddress_NP2WKH() string {
 	})
 }
 
+func GetNewAddress_P2TR_Example() string {
+	address := "bc1pxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+	return MakeJsonErrorResult(SUCCESS, SuccessError, Addr{
+		Name:           "default",
+		Address:        address,
+		Balance:        0,
+		AddressType:    lnrpc.AddressType_TAPROOT_PUBKEY.String(),
+		DerivationPath: AddressTypeToDerivationPath(lnrpc.AddressType_TAPROOT_PUBKEY.String()),
+		IsInternal:     false,
+	})
+}
+
+func GetNewAddress_P2WKH_Example() string {
+	address := "bc1qxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+	return MakeJsonErrorResult(SUCCESS, SuccessError, Addr{
+		Name:           "default",
+		Address:        address,
+		Balance:        0,
+		AddressType:    lnrpc.AddressType_WITNESS_PUBKEY_HASH.String(),
+		DerivationPath: AddressTypeToDerivationPath(lnrpc.AddressType_WITNESS_PUBKEY_HASH.String()),
+		IsInternal:     false,
+	})
+}
+
+func GetNewAddress_NP2WKH_Example() string {
+	address := "3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+	return MakeJsonErrorResult(SUCCESS, SuccessError, Addr{
+		Name:           "default",
+		Address:        address,
+		Balance:        0,
+		AddressType:    lnrpc.AddressType_NESTED_PUBKEY_HASH.String(),
+		DerivationPath: AddressTypeToDerivationPath(lnrpc.AddressType_NESTED_PUBKEY_HASH.String()),
+		IsInternal:     false,
+	})
+}
+
 // StoreAddr
 // @Description: Store Addr after being chosen.
 // @param address
