@@ -513,12 +513,12 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	for i, _ := range batchTransfersRequest {
 		batchTransfersRequest[i].TxTotalAmount = totalAmount
 	}
+	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
 	// @dev: Upload
 	err = UploadBatchTransfers(token, &batchTransfersRequest)
 	if err != nil {
-		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error()+"; Assets sent, but upload failed.", nil)
+		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error()+"; Assets sent, but upload failed.", txid)
 	}
-	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 

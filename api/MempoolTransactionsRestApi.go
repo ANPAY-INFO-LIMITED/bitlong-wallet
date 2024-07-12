@@ -54,7 +54,6 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	switch base.NetWork {
 	case base.UseMainNet:
 		targetUrl = "https://mempool.space/api/tx/" + transaction
-
 	case base.UseTestNet:
 		targetUrl = "https://mempool.space/testnet/api/tx/" + transaction
 	}
@@ -72,12 +71,48 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	return &transactionsResponse, nil
 }
 
-func GetTransactionByMempool(transaction string) string {
-	response, err := getTransactionByMempool(transaction)
-	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", "")
+func TransactionsResponseToTransactionsSimplified(transactionsResponse *TransactionsResponse) *TransactionsSimplified {
+	var transactionsSimplified TransactionsSimplified
+	confirmedBlocks := BlockTipHeight() - transactionsResponse.Status.BlockHeight
+	if confirmedBlocks < 0 {
+		confirmedBlocks = 0
 	}
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	var vin []TransactionsSimplifiedVin
+	for _, in := range transactionsResponse.Vin {
+		vin = append(vin, TransactionsSimplifiedVin{
+			ScriptpubkeyAddress: in.Prevout.ScriptpubkeyAddress,
+			Value:               in.Prevout.Value,
+		})
+	}
+	var vout []TransactionsSimplifiedVout
+	var balanceResult int
+	for _, out := range transactionsResponse.Vout {
+		balanceResult += out.Value
+		vout = append(vout, TransactionsSimplifiedVout{
+			ScriptpubkeyAddress: out.ScriptpubkeyAddress,
+			Value:               out.Value,
+		})
+	}
+	transactionsSimplified.Txid = transactionsResponse.Txid
+	transactionsSimplified.Vin = vin
+	transactionsSimplified.Vout = vout
+	transactionsSimplified.BlockTime = transactionsResponse.Status.BlockTime
+	transactionsSimplified.BalanceResult = balanceResult
+	transactionsSimplified.FeeRate = RoundToDecimalPlace(float64(transactionsResponse.Fee)/(float64(transactionsResponse.Weight)/4), 2)
+	transactionsSimplified.Fee = transactionsResponse.Fee
+	transactionsSimplified.ConfirmedBlocks = confirmedBlocks
+	return &transactionsSimplified
+}
+
+// GetTransactionByMempool
+// @Description: Get transactions simplified info by txid
+func GetTransactionByMempool(txid string) string {
+	response, err := getTransactionByMempool(txid)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", nil)
+	}
+	result := TransactionsResponseToTransactionsSimplified(response)
+	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
 func GetTransactionHexByMempool() {}
