@@ -13,23 +13,24 @@ var serverHost string = "http://132.232.109.84:8090"
 const (
 	LoginUrl   = "/login"
 	RefreshUrl = "/refresh"
+	HttpsUrl   = "https://"
 )
 
-func SetServerHost(server string) string {
+func setServerHost(server string) string {
 	serverHost = server
 	return serverHost
 }
 
 func GetServerHost() string {
-	return serverHost
+	return Cfg.PostServiceUrl
 }
 
 func Login(username, password string) (string, error) {
-	url := serverHost + LoginUrl
+	url := HttpsUrl + Cfg.PostServiceUrl + LoginUrl
 	return login(url, username, password)
 }
 func Refresh(username, password string) (string, error) {
-	url := serverHost + RefreshUrl
+	url := HttpsUrl + Cfg.PostServiceUrl + RefreshUrl
 	return refresh(url, username, password)
 }
 
