@@ -22,15 +22,15 @@ func setServerHost(server string) string {
 }
 
 func GetServerHost() string {
-	return Cfg.PostServiceUrl
+	return HttpsUrl + Cfg.PostServiceUrl
 }
 
 func Login(username, password string) (string, error) {
-	url := HttpsUrl + Cfg.PostServiceUrl + LoginUrl
+	url := GetServerHost() + LoginUrl
 	return login(url, username, password)
 }
 func Refresh(username, password string) (string, error) {
-	url := HttpsUrl + Cfg.PostServiceUrl + RefreshUrl
+	url := GetServerHost() + RefreshUrl
 	return refresh(url, username, password)
 }
 

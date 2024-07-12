@@ -10,21 +10,21 @@ import (
 
 // Deprecated
 func GetOwnSet(token string) (string, error) {
-	url := serverHost + "/v1/fair_launch/query/own_set"
+	url := GetServerHost() + "/v1/fair_launch/query/own_set"
 	// Create an HTTP request
 	responce, err := SendGetReq(url, token, nil)
 	return responce, err
 }
 
 func GetRate(token string) (string, error) {
-	url := serverHost + "/v1/fee/query/rate"
+	url := GetServerHost() + "/v1/fee/query/rate"
 	responce, err := SendGetReq(url, token, nil)
 	return responce, err
 
 }
 
 func GetAssetQueryMint(token string, FairLaunchInfoId string, MintedNumber int) (string, error) {
-	url := serverHost + "/v1/fee/query/rate"
+	url := GetServerHost() + "/v1/fee/query/rate"
 	resquest := struct {
 		FairLaunchInfoId string `json:"fair_launch_info_id"`
 		MintedNumber     int    `json:"minted_number"`
