@@ -51,6 +51,8 @@ const (
 	ListBalancesAndProcessErr
 	PostToSetAssetBalanceInfoErr
 	FeeRateExceedMaxErr
+	QueryAllAddrAndGetResponseErr
+	UpdateAllAddrByAccountWithAddressesErr
 )
 
 var (

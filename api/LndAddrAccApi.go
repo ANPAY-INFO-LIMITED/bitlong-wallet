@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"path/filepath"
@@ -174,6 +176,39 @@ func StoreAddr(name string, address string, balance int, addressType string, der
 	return MakeJsonErrorResult(SUCCESS, "", address)
 }
 
+func StoreAddrAndGetResponse(name string, address string, balance int, addressType string, derivationPath string, isInternal bool) (string, error) {
+	_ = InitAddrDB()
+	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Printf("%s bolt.Open :%v\n", GetTimeNow(), err)
+		return "", err
+	}
+	defer func(db *bolt.DB) {
+		err := db.Close()
+		if err != nil {
+			fmt.Printf("%s db.Close :%v\n", GetTimeNow(), err)
+		}
+	}(db)
+	s := &AddrStore{DB: db}
+	err = s.CreateOrUpdateAddr("addresses", &Addr{
+		Name:           name,
+		Address:        address,
+		Balance:        balance,
+		AddressType:    addressType,
+		DerivationPath: derivationPath,
+		IsInternal:     isInternal,
+	})
+	if err != nil {
+		return "", err
+	}
+	return address, nil
+}
+
+func StoreAddrAndGetResponseByAddr(addr Addr) (string, error) {
+	return StoreAddrAndGetResponse(addr.Name, addr.Address, addr.Balance, addr.AddressType, addr.DerivationPath, addr.IsInternal)
+}
+
 // RemoveAddr
 // @Description: Remove a addr in all addresses
 // @param address
@@ -252,6 +287,27 @@ func QueryAllAddr() string {
 	return MakeJsonErrorResult(SUCCESS, "", addresses)
 }
 
+func QueryAllAddrAndGetResponse() (*[]Addr, error) {
+	_ = InitAddrDB()
+	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Printf("%s bolt.Open :%v\n", GetTimeNow(), err)
+	}
+	defer func(db *bolt.DB) {
+		err := db.Close()
+		if err != nil {
+			fmt.Printf("%s db.Close :%v\n", GetTimeNow(), err)
+		}
+	}(db)
+	s := &AddrStore{DB: db}
+	addresses, err := s.AllAddresses("addresses")
+	if err != nil || len(addresses) == 0 {
+		return nil, errors.New("Addresses is NULL or read fail.")
+	}
+	return &addresses, nil
+}
+
 //	 QueryAddresses
 //	 @Description:  Use listAddresses to query the non-zero balance address, exported.
 //					List of non-zero balance addresses constitutes the Total balance.
@@ -290,13 +346,23 @@ func GetNonZeroBalanceAddresses() string {
 func UpdateAllAddressesByGNZBA() string {
 	listAddrResp, err := listAddresses()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), "")
+		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), nil)
 	}
 	var addresses []string
 	listAddrs := listAddrResp.GetAccountWithAddresses()
 	if len(listAddrs) == 0 {
-		return MakeJsonErrorResult(DefaultErr, "Queried non-zero balance addresses NULL.", "")
+		return MakeJsonErrorResult(DefaultErr, "Queried non-zero balance addresses NULL.", nil)
 	}
+	allAddr, err := QueryAllAddrAndGetResponse()
+	if err != nil {
+		return MakeJsonErrorResult(QueryAllAddrAndGetResponseErr, err.Error(), nil)
+	}
+	// @dev: Update allAddr balance
+	err = UpdateAllAddrByAccountWithAddresses(allAddr, &listAddrs)
+	if err != nil {
+		return MakeJsonErrorResult(UpdateAllAddrByAccountWithAddressesErr, err.Error(), nil)
+	}
+	// @dev: UpdateNoneZeroAddress
 	for _, accWithAddr := range listAddrs {
 		if accWithAddr.Name != "default" {
 			continue
@@ -305,19 +371,50 @@ func UpdateAllAddressesByGNZBA() string {
 		for _, _address := range _addresses {
 			if _address.Balance != 0 && !_address.IsInternal {
 				var result JsonResult
+				// @dev: Store
 				_re := StoreAddr(accWithAddr.Name, _address.Address, int(_address.Balance), accWithAddr.AddressType.String(), accWithAddr.DerivationPath, _address.IsInternal)
-				err := json.Unmarshal([]byte(_re), &result)
+				err = json.Unmarshal([]byte(_re), &result)
 				if err != nil {
-					return MakeJsonErrorResult(DefaultErr, "Store address Unmarshal fail. "+err.Error(), "")
+					return MakeJsonErrorResult(DefaultErr, "Store address Unmarshal fail. "+err.Error(), nil)
 				}
 				if !result.Success {
-					return MakeJsonErrorResult(DefaultErr, "Store address result false", "")
+					return MakeJsonErrorResult(DefaultErr, "Store address result false", nil)
 				}
 				addresses = append(addresses, _address.Address)
 			}
 		}
 	}
-	return MakeJsonErrorResult(SUCCESS, "", addresses)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
+
+func UpdateAllAddrByAccountWithAddresses(addrs *[]Addr, accountWithAddresses *[]*walletrpc.AccountWithAddresses) error {
+	addressToAddr := AddrToAddressMapAddr(addrs)
+	for _, accWithAddr := range *accountWithAddresses {
+		if accWithAddr.Name != "default" {
+			continue
+		}
+		_addresses := accWithAddr.Addresses
+		for _, _address := range _addresses {
+			addr, ok := (*addressToAddr)[_address.Address]
+			if !ok {
+				continue
+			}
+			(*addr).Balance = int(_address.Balance)
+			_, err := StoreAddrAndGetResponseByAddr(*addr)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func AddrToAddressMapAddr(addrs *[]Addr) *map[string]*Addr {
+	addressToAddr := make(map[string]*Addr)
+	for _, addr := range *addrs {
+		addressToAddr[addr.Address] = &addr
+	}
+	return &addressToAddr
 }
 
 // @dev: Acc
