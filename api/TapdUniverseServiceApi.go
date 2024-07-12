@@ -95,7 +95,7 @@ func AssetLeaves(id string) string {
 
 func GetAssetInfo(id string) string {
 	root := rpcclient.QueryAssetRoots(id)
-	if root.IssuanceRoot == nil {
+	if root.IssuanceRoot.Id == nil {
 		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
 	}
 	queryId := id
