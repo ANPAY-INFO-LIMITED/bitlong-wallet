@@ -13,7 +13,7 @@ var serverHost string = "http://132.232.109.84:8090"
 const (
 	LoginUrl   = "/login"
 	RefreshUrl = "/refresh"
-	HttpsUrl   = "https://"
+	HttpsUrl   = "http://"
 )
 
 func setServerHost(server string) string {
@@ -22,7 +22,7 @@ func setServerHost(server string) string {
 }
 
 func GetServerHost() string {
-	return HttpsUrl + Cfg.PostServiceUrl
+	return HttpsUrl + Cfg.BtlServerHost
 }
 
 func Login(username, password string) (string, error) {
