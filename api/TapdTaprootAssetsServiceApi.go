@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
@@ -461,17 +462,21 @@ func QueryAddrs(assetId string) string {
 
 // jsonAddrs : ["addrs1","addrs2",...]
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
+	if int(feeRate) > FeeRateSatPerBToSatPerKw(500) {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
 	isTokenValid, err := IsTokenValid(token)
 	if err != nil {
-		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", "")
+		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", nil)
 	} else if !isTokenValid {
-		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", jsonAddrs)
+		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
 	}
 	var addrs []string
 	err = json.Unmarshal([]byte(jsonAddrs), &addrs)
 	if err != nil {
 		fmt.Printf("%s json.Unmarshal Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", "")
+		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", nil)
 	}
 	response, err := sendAssets(addrs, uint32(feeRate))
 	if err != nil {
@@ -480,11 +485,13 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	// @dev: decode addrs
 	var batchTransfersRequest []BatchTransferRequest
 	var decodedAddr *taprpc.Addr
+	var totalAmount int
 	for index, addr := range addrs {
 		decodedAddr, err = rpcclient.DecodeAddr(addr)
 		if err != nil {
-			return MakeJsonErrorResult(DecodeAddrErr, err.Error(), "")
+			return MakeJsonErrorResult(DecodeAddrErr, err.Error(), nil)
 		}
+		totalAmount += int(decodedAddr.Amount)
 		txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
 		batchTransfersRequest = append(batchTransfersRequest, BatchTransferRequest{
 			Encoded:            decodedAddr.Encoded,
@@ -502,6 +509,9 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			AnchorTxChainFees:  int(response.Transfer.AnchorTxChainFees),
 			DeviceID:           deviceId,
 		})
+	}
+	for i, _ := range batchTransfersRequest {
+		batchTransfersRequest[i].TxTotalAmount = totalAmount
 	}
 	// @dev: Upload
 	err = UploadBatchTransfers(token, &batchTransfersRequest)
