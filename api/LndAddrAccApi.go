@@ -369,7 +369,8 @@ func UpdateAllAddressesByGNZBA() string {
 		}
 		_addresses := accWithAddr.Addresses
 		for _, _address := range _addresses {
-			if _address.Balance != 0 && !_address.IsInternal {
+			// @dev: remove is_internal check
+			if _address.Balance != 0 {
 				var result JsonResult
 				// @dev: Store
 				_re := StoreAddr(accWithAddr.Name, _address.Address, int(_address.Balance), accWithAddr.AddressType.String(), accWithAddr.DerivationPath, _address.IsInternal)
