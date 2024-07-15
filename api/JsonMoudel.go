@@ -18,6 +18,7 @@ type jsonResultAddr struct {
 	TaprootOutputKey string `json:"taproot_output_key"`
 	ProofCourierAddr string `json:"proof_courier_addr"`
 	AssetVersion     int    `json:"asset_version"`
+	ReceiveNum       int    `json:"receive_num"`
 }
 
 func (r *jsonResultAddr) getData(response *taprpc.Addr) {
