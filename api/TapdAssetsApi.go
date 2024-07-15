@@ -2234,6 +2234,9 @@ func ListAndPostToSetAssetTransfers(token string, deviceId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(ListTransfersAndGetProcessedResponseErr, err.Error(), nil)
 	}
+	if transfers == nil || len(*transfers) == 0 {
+		return MakeJsonErrorResult(SUCCESS, "", nil)
+	}
 	_, err = PostToSetAssetTransfer(token, transfers)
 	if err != nil {
 		return MakeJsonErrorResult(PostToSetAssetTransferErr, err.Error(), nil)
