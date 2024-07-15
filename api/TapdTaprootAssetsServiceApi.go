@@ -439,19 +439,31 @@ func NewAddr(assetId string, amt int, token string, deviceId string) string {
 }
 
 func QueryAddrs(assetId string) string {
-	addrRcv, err := rpcclient.QueryAddr()
+	addrRcv, err := rpcclient.AddrReceives()
+	if err != nil {
+		fmt.Printf("%s taprpc QueryAddrs Error: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	}
+
+	addrMap := make(map[string]int)
+	for _, events := range addrRcv.Events {
+		addrMap[events.Addr.Encoded]++
+	}
+
+	_addrs, err := rpcclient.QueryAddr()
 	if err != nil {
 		fmt.Printf("%s taprpc QueryAddrs Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
 
 	var addrs []jsonResultAddr
-	for _, a := range addrRcv.Addrs {
+	for _, a := range _addrs.Addrs {
 		if assetId != "" && assetId != hex.EncodeToString(a.AssetId) {
 			continue
 		}
 		addrTemp := jsonResultAddr{}
 		addrTemp.getData(a)
+		addrTemp.ReceiveNum = addrMap[addrTemp.Encoded]
 		addrs = append(addrs, addrTemp)
 	}
 	if len(addrs) == 0 {
