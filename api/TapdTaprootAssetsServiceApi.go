@@ -24,6 +24,7 @@ func AddrReceives(assetId string) string {
 		Addr                    *jsonResultAddr `json:"addr"`
 		Status                  string          `json:"status"`
 		Outpoint                string          `json:"outpoint"`
+		Txid                    string          `json:"txid"`
 		UtxoAmtSat              int64           `json:"utxo_amt_sat"`
 		TaprootSibling          string          `json:"taproot_sibling"`
 		ConfirmationHeight      int64           `json:"confirmation_height"`
@@ -41,6 +42,7 @@ func AddrReceives(assetId string) string {
 		e.Addr = &a
 		e.Status = event.Status.String()
 		e.Outpoint = event.Outpoint
+		e.Txid, _ = outpointToTransactionAndIndex(event.Outpoint)
 		e.UtxoAmtSat = int64(event.UtxoAmtSat)
 		e.TaprootSibling = hex.EncodeToString(event.TaprootSibling)
 		e.ConfirmationHeight = int64(event.ConfirmationHeight)

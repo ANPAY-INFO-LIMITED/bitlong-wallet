@@ -2292,10 +2292,58 @@ func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferRespon
 	return &response, nil
 }
 
+func PostToGetAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*GetAssetTransferResponse, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetTransferResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
 func PostToGetAssetTransfer(token string) string {
 	response, err := PostToGetAssetTransferAndGetResponse(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetTransferAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
+}
+
+func PostToGetAssetTransferByAssetId(token string, assetId string) string {
+	response, err := PostToGetAssetTransferByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
 }
@@ -2311,6 +2359,10 @@ func UploadAssetTransfer(token string, deviceId string) string {
 
 func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
+}
+
+func GetAssetTransferByAssetId(token string, assetId string) string {
+	return PostToGetAssetTransferByAssetId(token, assetId)
 }
 
 func outpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
@@ -3172,4 +3224,8 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 
 func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
+}
+
+func QueryAssetTransfersByAssetId(token string, assetId string) string {
+	return GetAssetTransferByAssetId(token, assetId)
 }
