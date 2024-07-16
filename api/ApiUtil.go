@@ -30,6 +30,7 @@ const (
 	NotFoundData ErrCode = iota + 599
 )
 
+// Errtype:Unkonwn
 const (
 	GetBtcTransferOutInfosErr ErrCode = iota + 300
 	ListTransfersAndGetProcessedResponseErr
