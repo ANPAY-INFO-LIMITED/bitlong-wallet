@@ -23,11 +23,15 @@ import (
 
 type ErrCode int
 
+// Errtype:Normal
 const (
-	DefaultErr                ErrCode = -1
-	SUCCESS                   ErrCode = 200
-	NotFoundData              ErrCode = 601
-	GetBtcTransferOutInfosErr         = iota
+	DefaultErr   ErrCode = -1
+	SUCCESS      ErrCode = 200
+	NotFoundData ErrCode = iota + 599
+)
+
+const (
+	GetBtcTransferOutInfosErr ErrCode = iota + 300
 	ListTransfersAndGetProcessedResponseErr
 	PostToSetAssetTransferErr
 	PostToGetAssetTransferAndGetResponseErr
@@ -57,6 +61,15 @@ const (
 	PostToGetAssetTransferByAssetIdAndGetResponseErr
 	QueryAssetTransferSimplifiedErr
 )
+
+var ErrMsgMap = map[ErrCode]error{
+	NotFoundData: errors.New("not found Data"),
+	SUCCESS:      errors.New(""),
+}
+
+func GetErrMsg(code ErrCode) string {
+	return ErrMsgMap[code].Error()
+}
 
 var (
 	SuccessErr   = errors.New("")
@@ -93,6 +106,9 @@ func MakeJsonResult(success bool, error string, data any) string {
 }
 
 func MakeJsonErrorResult(code ErrCode, errorString string, data any) string {
+	if errorString == "" {
+		errorString = GetErrMsg(code)
+	}
 	jsr := JsonResult{
 		Error: errorString,
 		Code:  code,

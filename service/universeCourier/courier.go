@@ -175,20 +175,20 @@ func (c *courier) Close() error {
 	return nil
 }
 
-func (c *courier) QueryAssetKey() {
+func (c *courier) QueryAssetKey(assetId string) (*unirpc.AssetLeafKeyResponse, error) {
 	i := unirpc.ID{
 		Id: &unirpc.ID_AssetIdStr{
-			AssetIdStr: "47ed120d4b173eb79ba46cd1959bb9c881cb69332cf8a21336110bda05402308",
+			AssetIdStr: assetId,
 		},
-		ProofType: unirpc.ProofType_PROOF_TYPE_ISSUANCE,
+		ProofType: unirpc.ProofType_PROOF_TYPE_TRANSFER,
 	}
-	root, err := c.client.AssetLeafKeys(context.Background(), &unirpc.AssetLeafKeysRequest{
+	keys, err := c.client.AssetLeafKeys(context.Background(), &unirpc.AssetLeafKeysRequest{
 		Id: &i,
 	})
 	if err != nil {
-		return
+		return nil, err
 	}
-	fmt.Println(root)
+	return keys, nil
 }
 
 func newCourier(addr *url.URL) (*courier, error) {

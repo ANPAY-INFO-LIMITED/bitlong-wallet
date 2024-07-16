@@ -4,12 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/proof"
+	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/base"
 	"path/filepath"
-)
-
-const (
-	UniverseHostMainnet = "universerpc://132.232.109.84:8444"
 )
 
 func DeliverProof(universeHost string, proofFile *proof.AnnotatedProof) error {
@@ -57,6 +54,28 @@ func ReceiveProof(universeHost string, loc *proof.Locator) error {
 		return err
 	}
 	return nil
+}
+
+func QueryAssetProof(universeHost string, asset string) (*unirpc.AssetLeafKeyResponse, error) {
+	addr, err := proof.ParseCourierAddress(universeHost)
+	if err != nil {
+		return nil, err
+	}
+	c, err := newCourier(addr)
+	if err != nil {
+		return nil, err
+	}
+	defer func(c *courier) {
+		err := c.Close()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}(c)
+	keys, err := c.QueryAssetKey(asset)
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
 
 func LoadUniverseCourierConfig() {
