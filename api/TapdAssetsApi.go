@@ -2179,7 +2179,7 @@ type PostToGetAssetTransferTxidsResponse struct {
 	Data    []string `json:"data"`
 }
 
-func PostToGetAssetTransferTxids(token string) (txids []string, err error) {
+func RequestToGetAssetTransferTxids(token string) (txids []string, err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/txids"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -2383,7 +2383,7 @@ type GetAssetTransferResponse struct {
 	Data    *[]AssetTransferProcessed `json:"data"`
 }
 
-func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferResponse, error) {
+func RequestToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -2423,7 +2423,7 @@ func PostToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferRespon
 	return &response, nil
 }
 
-func PostToGetAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*GetAssetTransferResponse, error) {
+func RequestToGetAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*GetAssetTransferResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
@@ -2464,7 +2464,7 @@ func PostToGetAssetTransferByAssetIdAndGetResponse(token string, assetId string)
 }
 
 func PostToGetAssetTransfer(token string) string {
-	response, err := PostToGetAssetTransferAndGetResponse(token)
+	response, err := RequestToGetAssetTransferAndGetResponse(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetTransferAndGetResponseErr, err.Error(), nil)
 	}
@@ -2472,7 +2472,7 @@ func PostToGetAssetTransfer(token string) string {
 }
 
 func PostToGetAssetTransferByAssetId(token string, assetId string) string {
-	response, err := PostToGetAssetTransferByAssetIdAndGetResponse(token, assetId)
+	response, err := RequestToGetAssetTransferByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
@@ -2626,7 +2626,7 @@ type GetAddrReceivesEventsResponse struct {
 	Data    *[]AddrReceiveEvent `json:"data"`
 }
 
-func PostToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
+func RequestToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/addr_receive/get/origin"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -2679,7 +2679,7 @@ func UploadAddrReceives(token string, deviceId string) string {
 }
 
 func GetAddrReceives(token string) string {
-	response, err := PostToGetAddrReceivesEvents(token)
+	response, err := RequestToGetAddrReceivesEvents(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAddrReceivesEventsErr, err.Error(), nil)
 	}
@@ -2744,7 +2744,7 @@ func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferReques
 	return nil
 }
 
-func PostToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
+func RequestToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/batch_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -2817,7 +2817,7 @@ func UploadBatchTransfers(token string, batchTransfers *[]BatchTransferRequest) 
 }
 
 func GetUserAllBatchTransfers(token string) string {
-	response, err := PostToGetBatchTransfers(token)
+	response, err := RequestToGetBatchTransfers(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetBatchTransfersErr, err.Error(), nil)
 	}
@@ -2882,7 +2882,7 @@ func SplitBatchTransfersByTxid(batchTransfers *[]BatchTransfer) *map[string]*[]B
 }
 
 func GetBatchTransfers(token string) string {
-	response, err := PostToGetBatchTransfers(token)
+	response, err := RequestToGetBatchTransfers(token)
 	result := BatchTransfersToBatchTransferInfos(response)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetBatchTransfersErr, err.Error(), nil)
@@ -2970,7 +2970,7 @@ func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) 
 	return nil
 }
 
-func PostToGetAssetAddr(token string) (*[]AssetAddr, error) {
+func RequestToGetAssetAddr(token string) (*[]AssetAddr, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_addr/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -3010,7 +3010,7 @@ func PostToGetAssetAddr(token string) (*[]AssetAddr, error) {
 	return response.Data, nil
 }
 
-func PostToGetAssetAddrByScriptKey(token string, scriptKey string) (*[]AssetAddr, error) {
+func RequestToGetAssetAddrByScriptKey(token string, scriptKey string) (*[]AssetAddr, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_addr/get/script_key/" + scriptKey
 	requestJsonBytes, err := json.Marshal(nil)
@@ -3059,7 +3059,7 @@ func UploadAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) str
 }
 
 func GetAssetAddrs(token string) string {
-	response, err := PostToGetAssetAddr(token)
+	response, err := RequestToGetAssetAddr(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetAddrErr, err.Error(), nil)
 	}
@@ -3067,7 +3067,7 @@ func GetAssetAddrs(token string) string {
 }
 
 func GetAssetAddrsByScriptKey(token string, scriptKey string) string {
-	response, err := PostToGetAssetAddrByScriptKey(token, scriptKey)
+	response, err := RequestToGetAssetAddrByScriptKey(token, scriptKey)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetAddrErr, err.Error(), nil)
 	}
@@ -3148,7 +3148,7 @@ func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) 
 	return nil
 }
 
-func PostToGetAssetLock(token string) (*[]AssetLock, error) {
+func RequestToGetAssetLock(token string) (*[]AssetLock, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_lock/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -3197,7 +3197,7 @@ func UploadAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) str
 }
 
 func GetAssetLocks(token string) string {
-	response, err := PostToGetAssetLock(token)
+	response, err := RequestToGetAssetLock(token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetLockErr, err.Error(), nil)
 	}
@@ -3404,6 +3404,67 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
+
+type GetAssetBalanceResponse struct {
+	Success bool            `json:"success"`
+	Error   string          `json:"error"`
+	Code    ErrCode         `json:"code"`
+	Data    *[]AssetBalance `json:"data"`
+}
+
+// TODO: Assembly the asset balance info need to update whose balance is zero
+func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetBalanceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetNonZeroAssetBalanceInfo(token string) string {
+	response, err := RequestToGetNonZeroAssetBalance(token)
+	if err != nil {
+		return MakeJsonErrorResult(RequestToGetNonZeroAssetBalanceErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+// TODO:Update Asset Balance Record:
+// 		Get the asset record of the server,
+//		if the asset ID of the obtained asset balance info with non-zero balance does not exist in listBalance,
+//		update the asset balance info with the asset ID and zero balance
 
 func QueryAssetTransfersByAssetIdFromServer(token string, assetId string) string {
 	return GetAssetTransferByAssetIdFromServer(token, assetId)

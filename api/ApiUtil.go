@@ -60,6 +60,7 @@ const (
 	UpdateAllAddrByAccountWithAddressesErr
 	PostToGetAssetTransferByAssetIdAndGetResponseErr
 	QueryAssetTransferSimplifiedErr
+	RequestToGetNonZeroAssetBalanceErr
 )
 
 var ErrMsgMap = map[ErrCode]error{
