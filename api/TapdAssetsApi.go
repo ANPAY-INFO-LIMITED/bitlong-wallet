@@ -1796,14 +1796,37 @@ type GetAddressesByOutpointSliceResponse struct {
 	Data    map[string]string `json:"data"`
 }
 
-func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token string) (*[]PostGetRawTransactionResultSat, error) {
+func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingOut(token string) (*[]PostGetRawTransactionResultSat, error) {
 	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
 	if err != nil {
 		return nil, err
 	}
 	var rawTransactions []string
 	for _, transaction := range *getTransactions {
-		rawTransactions = append(rawTransactions, transaction.RawTxHex)
+		if transaction.Amount < 0 {
+			rawTransactions = append(rawTransactions, transaction.RawTxHex)
+		}
+	}
+	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
+	if err != nil {
+		return nil, err
+	}
+	// @note: maybe cause nil pointer
+	btcResult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
+	result := ProcessPostGetRawTransactionResultToUseSat(btcResult)
+	return result, nil
+}
+
+func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingIn(token string) (*[]PostGetRawTransactionResultSat, error) {
+	getTransactions, err := GetTransactionsWhoseLabelIsNotTapdAssetMinting()
+	if err != nil {
+		return nil, err
+	}
+	var rawTransactions []string
+	for _, transaction := range *getTransactions {
+		if transaction.Amount >= 0 {
+			rawTransactions = append(rawTransactions, transaction.RawTxHex)
+		}
 	}
 	decodedAndQueryTransactions, err := DecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token, rawTransactions)
 	if err != nil {
@@ -1823,6 +1846,20 @@ type BtcTransferOutInfo struct {
 }
 
 type BtcTransferOutInfoSimplified struct {
+	Address string                  `json:"address"`
+	Value   int                     `json:"value"`
+	Time    int                     `json:"time"`
+	Detail  *TransactionsSimplified `json:"detail"`
+}
+
+type BtcTransferInInfo struct {
+	Address string                          `json:"address"`
+	Value   int                             `json:"value"`
+	Time    int                             `json:"time"`
+	Detail  *PostGetRawTransactionResultSat `json:"detail"`
+}
+
+type BtcTransferInInfoSimplified struct {
 	Address string                  `json:"address"`
 	Value   int                     `json:"value"`
 	Time    int                     `json:"time"`
@@ -1850,7 +1887,7 @@ func GetBtcTransferOutInfos(token string) (*[]BtcTransferOutInfoSimplified, erro
 	if err != nil {
 		return nil, err
 	}
-	transactions, err := GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMinting(token)
+	transactions, err := GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingOut(token)
 	if err != nil {
 		return nil, err
 	}
@@ -1870,6 +1907,35 @@ func GetBtcTransferOutInfos(token string) (*[]BtcTransferOutInfoSimplified, erro
 		}
 	}
 	transactionsSimplified := BtcTransferOutInfoToBtcTransferOutInfoSimplified(&btcTransferOutInfos)
+	return transactionsSimplified, nil
+}
+
+func GetBtcTransferInInfos(token string) (*[]BtcTransferInInfoSimplified, error) {
+	var btcTransferInInfos []BtcTransferInInfo
+	addresses, err := GetAllAddresses()
+	if err != nil {
+		return nil, err
+	}
+	transactions, err := GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingIn(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, transaction := range *transactions {
+		for _, out := range transaction.Vout {
+			voutAddress := out.ScriptPubKey.Address
+			for _, address := range addresses {
+				if voutAddress == address {
+					btcTransferInInfos = append(btcTransferInInfos, BtcTransferInInfo{
+						Address: voutAddress,
+						Value:   out.Value,
+						Time:    transaction.Time,
+						Detail:  &transaction,
+					})
+				}
+			}
+		}
+	}
+	transactionsSimplified := BtcTransferOutInfoToBtcTransferInInfoSimplified(&btcTransferInInfos)
 	return transactionsSimplified, nil
 }
 
@@ -1946,8 +2012,57 @@ func BtcTransferOutInfoToBtcTransferOutInfoSimplified(btcTransferOutInfos *[]Btc
 	return &btcTransferOutInfoSimplified
 }
 
+func BtcTransferOutInfoToBtcTransferInInfoSimplified(btcTransferInInfos *[]BtcTransferInInfo) *[]BtcTransferInInfoSimplified {
+	var btcTransferOutInfoSimplified []BtcTransferInInfoSimplified
+	for _, btcTransferOutInfo := range *btcTransferInInfos {
+		var transactionsSimplified TransactionsSimplified
+		var postGetRawTransactionResultSat PostGetRawTransactionResultSat
+		postGetRawTransactionResultSat = *btcTransferOutInfo.Detail
+		feeRate := RoundToDecimalPlace(float64(postGetRawTransactionResultSat.Fee)/float64(postGetRawTransactionResultSat.Vsize), 2)
+		var transactionsSimplifiedVin []TransactionsSimplifiedVin
+		var transactionsSimplifiedVout []TransactionsSimplifiedVout
+		for _, vin := range postGetRawTransactionResultSat.Vin {
+			transactionsSimplifiedVin = append(transactionsSimplifiedVin, TransactionsSimplifiedVin{
+				ScriptpubkeyAddress: vin.Prevout.ScriptPubKey.Address,
+				Value:               vin.Prevout.Value,
+			})
+		}
+		for _, vout := range postGetRawTransactionResultSat.Vout {
+			transactionsSimplifiedVout = append(transactionsSimplifiedVout, TransactionsSimplifiedVout{
+				ScriptpubkeyAddress: vout.ScriptPubKey.Address,
+				Value:               vout.Value,
+			})
+		}
+		transactionsSimplified = TransactionsSimplified{
+			Txid:            postGetRawTransactionResultSat.Txid,
+			Vin:             transactionsSimplifiedVin,
+			Vout:            transactionsSimplifiedVout,
+			BlockTime:       postGetRawTransactionResultSat.Blocktime,
+			BalanceResult:   +(btcTransferOutInfo.Value),
+			FeeRate:         feeRate,
+			Fee:             postGetRawTransactionResultSat.Fee,
+			ConfirmedBlocks: postGetRawTransactionResultSat.Confirmations,
+		}
+		btcTransferOutInfoSimplified = append(btcTransferOutInfoSimplified, BtcTransferInInfoSimplified{
+			Address: btcTransferOutInfo.Address,
+			Value:   btcTransferOutInfo.Value,
+			Time:    btcTransferOutInfo.Time,
+			Detail:  &transactionsSimplified,
+		})
+	}
+	return &btcTransferOutInfoSimplified
+}
+
 func GetBtcTransferOutInfosJsonResult(token string) string {
 	response, err := GetBtcTransferOutInfos(token)
+	if err != nil {
+		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func GetBtcTransferInInfosJsonResult(token string) string {
+	response, err := GetBtcTransferInInfos(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
 	}
@@ -2895,6 +3010,46 @@ func PostToGetAssetAddr(token string) (*[]AssetAddr, error) {
 	return response.Data, nil
 }
 
+func PostToGetAssetAddrByScriptKey(token string, scriptKey string) (*[]AssetAddr, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_addr/get/script_key/" + scriptKey
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetAddrResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
 func UploadAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) string {
 	err := PostToSetAssetAddr(token, assetAddrSetRequest)
 	if err != nil {
@@ -2905,6 +3060,14 @@ func UploadAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) str
 
 func GetAssetAddrs(token string) string {
 	response, err := PostToGetAssetAddr(token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToGetAssetAddrErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+func GetAssetAddrsByScriptKey(token string, scriptKey string) string {
+	response, err := PostToGetAssetAddrByScriptKey(token, scriptKey)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetAddrErr, err.Error(), nil)
 	}
@@ -3274,18 +3437,9 @@ type AssetTransferSimplified struct {
 	Detail      *Transfer `json:"detail"`
 }
 
-func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransferSimplified, error) {
+func ProcessAssetTransferByBitcoind(token string, allOutpoints []string, assetTransfers *[]Transfer) (*[]AssetTransferSimplified, error) {
 	var assetTransferSimplified []AssetTransferSimplified
-	assetTransfers, err := QueryAssetTransfersAndGetResponse(assetId)
-	if err != nil {
-		return nil, err
-	}
-	if assetTransfers == nil {
-		return nil, nil
-	}
-	allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
-	var response *GetAddressesByOutpointSliceResponse
-	response, err = PostCallBitcoindToQueryAddressByOutpoints(token, allOutpoints)
+	response, err := PostCallBitcoindToQueryAddressByOutpoints(token, allOutpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -3308,4 +3462,39 @@ func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransfe
 		})
 	}
 	return &assetTransferSimplified, nil
+}
+
+func ProcessAssetTransfer(assetTransfers *[]Transfer) (*[]AssetTransferSimplified, error) {
+	var assetTransferSimplified []AssetTransferSimplified
+	for _, assetTransfer := range *assetTransfers {
+		var totalAmount int
+		for _, output := range assetTransfer.Outputs {
+			totalAmount += int(output.Amount)
+		}
+		assetTransferSimplified = append(assetTransferSimplified, AssetTransferSimplified{
+			Txid:        assetTransfer.Txid,
+			AssetID:     assetTransfer.Inputs[0].AssetID,
+			TotalAmount: totalAmount,
+			Time:        int(assetTransfer.TransferTimestamp),
+			Detail:      &assetTransfer,
+		})
+	}
+	return &assetTransferSimplified, nil
+}
+
+func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransferSimplified, error) {
+	var assetTransferSimplified *[]AssetTransferSimplified
+	assetTransfers, err := QueryAssetTransfersAndGetResponse(assetId)
+	if err != nil {
+		return nil, err
+	}
+	if assetTransfers == nil {
+		return nil, nil
+	}
+	// reserved
+	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
+	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
+	_ = token
+	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
+	return assetTransferSimplified, nil
 }
