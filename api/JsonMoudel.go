@@ -6,7 +6,7 @@ import (
 )
 
 // Tapdroot Addr
-type jsonResultAddr struct {
+type JsonResultAddr struct {
 	Encoded          string `json:"encoded"`
 	AssetId          string `json:"asset_id"`
 	AssetType        int    `json:"asset_type"`
@@ -21,7 +21,7 @@ type jsonResultAddr struct {
 	ReceiveNum       int    `json:"receive_num"`
 }
 
-func (r *jsonResultAddr) getData(response *taprpc.Addr) {
+func (r *JsonResultAddr) GetData(response *taprpc.Addr) {
 	r.Encoded = response.Encoded
 	r.AssetId = hex.EncodeToString(response.AssetId)
 	r.AssetType = int(response.AssetType)
@@ -38,13 +38,15 @@ func (r *jsonResultAddr) getData(response *taprpc.Addr) {
 // Tapdroot AssetTransfer
 type Inputs struct {
 	AnchorPoint string `json:"anchor_point"`
+	Address     string `json:"address"`
 	AssetID     string `json:"asset_id"`
 	ScriptKey   string `json:"script_key"`
 	Amount      int64  `json:"amount"`
 }
 
-type anchor struct {
+type Anchor struct {
 	Outpoint         string `json:"outpoint"`
+	Address          string `json:"address"`
 	Value            int64  `json:"value"`
 	InternalKey      string `json:"internal_key"`
 	TaprootAssetRoot string `json:"taproot_asset_root"`
@@ -53,8 +55,8 @@ type anchor struct {
 	NumPassiveAssets int    `json:"num_passive_assets"`
 }
 
-type outputs struct {
-	Anchor              anchor `json:"anchor"`
+type Outputs struct {
+	Anchor              Anchor `json:"anchor"`
 	ScriptKey           string `json:"script_key"`
 	ScriptKeyIsLocal    bool   `json:"script_key_is_local"`
 	Amount              int64  `json:"amount"`
@@ -64,17 +66,17 @@ type outputs struct {
 	AssetVersion        string `json:"asset_version"`
 }
 
-type transfer struct {
+type Transfer struct {
 	Txid               string     `json:"txid"`
 	TransferTimestamp  int64      `json:"transfer_timestamp"`
 	AnchorTxHash       string     `json:"anchor_tx_hash"`
 	AnchorTxHeightHint int        `json:"anchor_tx_height_hint"`
 	AnchorTxChainFees  int64      `json:"anchor_tx_chain_fees"`
 	Inputs             []*Inputs  `json:"inputs"`
-	Outputs            []*outputs `json:"outputs"`
+	Outputs            []*Outputs `json:"outputs"`
 }
 
-func (r *transfer) geData(response *taprpc.AssetTransfer) {
+func (r *Transfer) GetData(response *taprpc.AssetTransfer) {
 	r.TransferTimestamp = response.TransferTimestamp
 	r.AnchorTxHash = hex.EncodeToString(response.AnchorTxHash)
 	r.AnchorTxHeightHint = int(response.AnchorTxHeightHint)
@@ -89,7 +91,7 @@ func (r *transfer) geData(response *taprpc.AssetTransfer) {
 		r.Inputs = append(r.Inputs, newInput)
 	}
 	for _, output := range response.Outputs {
-		newOutput := &outputs{}
+		newOutput := &Outputs{}
 		newOutput.Anchor.Outpoint = output.Anchor.Outpoint
 		newOutput.Anchor.Value = output.Anchor.Value
 		newOutput.Anchor.InternalKey = hex.EncodeToString(output.Anchor.InternalKey)

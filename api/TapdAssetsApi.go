@@ -2126,6 +2126,22 @@ func GetAllOutPointsOfListTransfersResponse(listTransfersResponse *taprpc.ListTr
 	return allOutPoints
 }
 
+func GetAllOutPointsOfAssetTransfersResponse(assetTransfersResponse *[]Transfer) []string {
+	var allOutPoints []string
+	if assetTransfersResponse == nil {
+		return allOutPoints
+	}
+	for _, assetTransfer := range *assetTransfersResponse {
+		for _, input := range assetTransfer.Inputs {
+			allOutPoints = append(allOutPoints, input.AnchorPoint)
+		}
+		for _, output := range assetTransfer.Outputs {
+			allOutPoints = append(allOutPoints, output.Anchor.Outpoint)
+		}
+	}
+	return allOutPoints
+}
+
 func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string) (*GetAddressesByOutpointSliceResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
@@ -2361,7 +2377,7 @@ func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
 }
 
-func GetAssetTransferByAssetId(token string, assetId string) string {
+func GetAssetTransferByAssetIdFromServer(token string, assetId string) string {
 	return PostToGetAssetTransferByAssetId(token, assetId)
 }
 
@@ -3226,6 +3242,70 @@ func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
 
-func QueryAssetTransfersByAssetId(token string, assetId string) string {
-	return GetAssetTransferByAssetId(token, assetId)
+func QueryAssetTransfersByAssetIdFromServer(token string, assetId string) string {
+	return GetAssetTransferByAssetIdFromServer(token, assetId)
+}
+
+func QueryAssetTransfersAndGetResponse(assetId string) (*[]Transfer, error) {
+	response, err := rpcclient.ListTransfers()
+	if err != nil {
+		return nil, err
+	}
+	var transfers []Transfer
+	for _, t := range response.Transfers {
+		if assetId != "" && assetId != hex.EncodeToString(t.Inputs[0].AssetId) {
+			continue
+		}
+		newTransfer := Transfer{}
+		newTransfer.GetData(t)
+		transfers = append(transfers, newTransfer)
+	}
+	if len(transfers) == 0 {
+		return nil, err
+	}
+	return &transfers, nil
+}
+
+type AssetTransferSimplified struct {
+	AssetID     string    `json:"asset_id"`
+	Txid        string    `json:"txid"`
+	TotalAmount int       `json:"totalAmount"`
+	Time        int       `json:"time"`
+	Detail      *Transfer `json:"detail"`
+}
+
+func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransferSimplified, error) {
+	var assetTransferSimplified []AssetTransferSimplified
+	assetTransfers, err := QueryAssetTransfersAndGetResponse(assetId)
+	if err != nil {
+		return nil, err
+	}
+	if assetTransfers == nil {
+		return nil, nil
+	}
+	allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
+	var response *GetAddressesByOutpointSliceResponse
+	response, err = PostCallBitcoindToQueryAddressByOutpoints(token, allOutpoints)
+	if err != nil {
+		return nil, err
+	}
+	addressMap := response.Data
+	for _, assetTransfer := range *assetTransfers {
+		for _, input := range assetTransfer.Inputs {
+			(*input).Address = addressMap[input.AnchorPoint]
+		}
+		var totalAmount int
+		for _, output := range assetTransfer.Outputs {
+			(*output).Anchor.Address = addressMap[output.Anchor.Outpoint]
+			totalAmount += int(output.Amount)
+		}
+		assetTransferSimplified = append(assetTransferSimplified, AssetTransferSimplified{
+			Txid:        assetTransfer.Txid,
+			AssetID:     assetTransfer.Inputs[0].AssetID,
+			TotalAmount: totalAmount,
+			Time:        int(assetTransfer.TransferTimestamp),
+			Detail:      &assetTransfer,
+		})
+	}
+	return &assetTransferSimplified, nil
 }

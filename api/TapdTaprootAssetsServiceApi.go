@@ -21,7 +21,7 @@ func AddrReceives(assetId string) string {
 	}
 	type addrEvent struct {
 		CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
-		Addr                    *jsonResultAddr `json:"addr"`
+		Addr                    *JsonResultAddr `json:"addr"`
 		Status                  string          `json:"status"`
 		Outpoint                string          `json:"outpoint"`
 		Txid                    string          `json:"txid"`
@@ -37,8 +37,8 @@ func AddrReceives(assetId string) string {
 		}
 		e := addrEvent{}
 		e.CreationTimeUnixSeconds = int64(event.CreationTimeUnixSeconds)
-		a := jsonResultAddr{}
-		a.getData(event.Addr)
+		a := JsonResultAddr{}
+		a.GetData(event.Addr)
 		e.Addr = &a
 		e.Status = event.Status.String()
 		e.Outpoint = event.Outpoint
@@ -74,8 +74,8 @@ func DecodeAddr(addr string) string {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
 	// make result struct
-	result := jsonResultAddr{}
-	result.getData(response)
+	result := JsonResultAddr{}
+	result.GetData(response)
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
@@ -208,23 +208,29 @@ func ListGroups() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// ListTransfers
-//
-//	@Description: ListTransfers lists outbound asset transfer tracked by the target daemon.
-//	@return string
-func QueryAssetTransfers(assetId string) string {
+// QueryAssetTransfers
+// @Description: ListTransfers lists outbound asset transfer tracked by the target daemon.
+func QueryAssetTransfers(token string, assetId string) string {
+	response, err := QueryAssetTransferSimplified(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+func queryAssetTransfers(assetId string) string {
 	response, err := rpcclient.ListTransfers()
 	if err != nil {
 		fmt.Printf("%s taprpc ListTransfers Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	var transfers []transfer
+	var transfers []Transfer
 	for _, t := range response.Transfers {
 		if assetId != "" && assetId != hex.EncodeToString(t.Inputs[0].AssetId) {
 			continue
 		}
-		newTransfer := transfer{}
-		newTransfer.geData(t)
+		newTransfer := Transfer{}
+		newTransfer.GetData(t)
 		transfers = append(transfers, newTransfer)
 	}
 	if len(transfers) == 0 {
@@ -421,8 +427,8 @@ func NewAddr(assetId string, amt int, token string, deviceId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
-	result := jsonResultAddr{}
-	result.getData(response)
+	result := JsonResultAddr{}
+	result.GetData(response)
 	UploadAssetAddr(token, &AssetAddrSetRequest{
 		Encoded:          result.Encoded,
 		AssetId:          result.AssetId,
@@ -458,13 +464,13 @@ func QueryAddrs(assetId string) string {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
 
-	var addrs []jsonResultAddr
+	var addrs []JsonResultAddr
 	for _, a := range _addrs.Addrs {
 		if assetId != "" && assetId != hex.EncodeToString(a.AssetId) {
 			continue
 		}
-		addrTemp := jsonResultAddr{}
-		addrTemp.getData(a)
+		addrTemp := JsonResultAddr{}
+		addrTemp.GetData(a)
 		addrTemp.ReceiveNum = addrMap[addrTemp.Encoded]
 		addrs = append(addrs, addrTemp)
 	}

@@ -55,6 +55,7 @@ const (
 	QueryAllAddrAndGetResponseErr
 	UpdateAllAddrByAccountWithAddressesErr
 	PostToGetAssetTransferByAssetIdAndGetResponseErr
+	QueryAssetTransferSimplifiedErr
 )
 
 var (
