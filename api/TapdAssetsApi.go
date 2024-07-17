@@ -3389,11 +3389,18 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 	} else if !isTokenValid {
 		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
 	}
-	response, err := ListBalancesAndProcess()
+	balances, err := ListBalancesAndProcess()
 	if err != nil {
 		return MakeJsonErrorResult(ListBalancesAndProcessErr, err.Error(), nil)
 	}
-	requests := ListBalanceInfosToAssetBalanceSetRequests(response, deviceId)
+	// @dev: Update the asset balance info with the asset ID and zero balance
+	zeroBalances, err := GetZeroBalanceAssetBalanceSlice(token, balances)
+	if err != nil {
+		return MakeJsonErrorResult(GetZeroBalanceAssetBalanceSliceErr, err.Error(), nil)
+	}
+	zeroListBalance := AssetBalanceInfosToListBalanceInfos(zeroBalances)
+	setBalances := append(*balances, *zeroListBalance...)
+	requests := ListBalanceInfosToAssetBalanceSetRequests(&setBalances, deviceId)
 	result, err := PostToSetAssetBalanceInfo(requests, token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToSetAssetBalanceInfoErr, err.Error(), nil)
@@ -3405,15 +3412,15 @@ func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
 
-type GetAssetBalanceResponse struct {
-	Success bool            `json:"success"`
-	Error   string          `json:"error"`
-	Code    ErrCode         `json:"code"`
-	Data    *[]AssetBalance `json:"data"`
+type GetAssetBalanceInfoResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AssetBalanceInfo `json:"data"`
 }
 
 // TODO: Assembly the asset balance info need to update whose balance is zero
-func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalance, error) {
+func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalanceInfo, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_balance/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -3442,7 +3449,7 @@ func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalance, error) {
 	if err != nil {
 		return nil, err
 	}
-	var response GetAssetBalanceResponse
+	var response GetAssetBalanceInfoResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
@@ -3459,6 +3466,64 @@ func GetNonZeroAssetBalanceInfo(token string) string {
 		return MakeJsonErrorResult(RequestToGetNonZeroAssetBalanceErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+func GetNonZeroBalanceAssetBalanceSlice(token string) (*[]AssetBalanceInfo, error) {
+	var assetBalances []AssetBalanceInfo
+	response, err := RequestToGetNonZeroAssetBalance(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, assetBalance := range *response {
+		assetBalances = append(assetBalances, assetBalance)
+	}
+	return &assetBalances, nil
+}
+
+func CompareToGetZeroBalanceAssetIdWithListBalance(listBalanceInfos []ListBalanceInfo, assetBalances []AssetBalanceInfo) *[]AssetBalanceInfo {
+	isAssetIdsOfListBalanceInfosExists := make(map[string]bool)
+	for _, listBalanceInfo := range listBalanceInfos {
+		isAssetIdsOfListBalanceInfosExists[listBalanceInfo.AssetID] = true
+	}
+	var zeroAssetBalances []AssetBalanceInfo
+	for _, assetBalance := range assetBalances {
+		isExists, ok := isAssetIdsOfListBalanceInfosExists[assetBalance.AssetID]
+		if !ok || isExists == false {
+			assetBalance.Balance = 0
+			zeroAssetBalances = append(zeroAssetBalances, assetBalance)
+		}
+	}
+	return &zeroAssetBalances
+}
+
+func GetZeroBalanceAssetBalanceSlice(token string, listBalanceInfos *[]ListBalanceInfo) (*[]AssetBalanceInfo, error) {
+	assetBalances, err := GetNonZeroBalanceAssetBalanceSlice(token)
+	if err != nil {
+		return nil, err
+	}
+	zeroAssetIds := CompareToGetZeroBalanceAssetIdWithListBalance(*listBalanceInfos, *assetBalances)
+	return zeroAssetIds, nil
+}
+
+func AssetBalanceInfoToListBalanceInfo(assetBalanceInfo *AssetBalanceInfo) *ListBalanceInfo {
+	return &ListBalanceInfo{
+		GenesisPoint: assetBalanceInfo.GenesisPoint,
+		Name:         assetBalanceInfo.Name,
+		MetaHash:     assetBalanceInfo.MetaHash,
+		AssetID:      assetBalanceInfo.AssetID,
+		AssetType:    assetBalanceInfo.AssetType,
+		OutputIndex:  assetBalanceInfo.OutputIndex,
+		Version:      assetBalanceInfo.Version,
+		Balance:      assetBalanceInfo.Balance,
+	}
+}
+
+func AssetBalanceInfosToListBalanceInfos(assetBalanceInfos *[]AssetBalanceInfo) *[]ListBalanceInfo {
+	var istBalanceInfos []ListBalanceInfo
+	for _, assetBalanceInfo := range *assetBalanceInfos {
+		istBalanceInfos = append(istBalanceInfos, *AssetBalanceInfoToListBalanceInfo(&assetBalanceInfo))
+	}
+	return &istBalanceInfos
 }
 
 // TODO:Update Asset Balance Record:
