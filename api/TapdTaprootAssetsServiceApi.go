@@ -751,6 +751,7 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 		BatchTxid string `json:"batch_txid"`
 		Amount    int64  `json:"amount"`
 		Timestamp int64  `json:"timestamp"`
+		ScriptKey string `json:"script_key"`
 	}{
 		IsLocal: false,
 		AssetId: assetId,
@@ -781,7 +782,10 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 					}
 				}
 				result.IsLocal = true
-				result.BatchTxid = batch.BatchTxid
+				result.BatchTxid = o.OpStr
+				if s, _ok := keys.AssetKeys[0].ScriptKey.(*universerpc.AssetKey_ScriptKeyBytes); _ok {
+					result.ScriptKey = "02" + hex.EncodeToString(s.ScriptKeyBytes)
+				}
 				break
 			}
 		}
