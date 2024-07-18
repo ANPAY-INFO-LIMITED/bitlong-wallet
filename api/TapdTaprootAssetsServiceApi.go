@@ -17,7 +17,7 @@ import (
 func AddrReceives(assetId string) string {
 	response, err := rpcclient.AddrReceives()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
 	}
 	type addrEvent struct {
 		CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
@@ -58,7 +58,7 @@ func AddrReceives(assetId string) string {
 func BurnAsset(AssetIdStr string, amountToBurn int64) string {
 	response, err := rpcclient.BurnAsset(AssetIdStr, uint64(amountToBurn))
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(BurnAssetErr, err.Error(), nil)
 	}
 	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
 	return MakeJsonErrorResult(SUCCESS, "", txHash)
@@ -71,7 +71,7 @@ func DebugLevel() {
 func DecodeAddr(addr string) string {
 	response, err := rpcclient.DecodeAddr(addr)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(DecodeAddrErr, err.Error(), nil)
 	}
 	// make result struct
 	result := JsonResultAddr{}
@@ -90,7 +90,7 @@ func ExportProof() {
 func FetchAssetMeta(isHash bool, data string) string {
 	response, err := fetchAssetMeta(isHash, data)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(fetchAssetMetaErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", string(response.Data))
 }
@@ -102,15 +102,14 @@ func FetchAssetMeta(isHash bool, data string) string {
 func GetInfoOfTap() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
 	request := &taprpc.GetInfoRequest{}
 	response, err := client.GetInfo(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s taprpc GetInfo Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetInfoErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }

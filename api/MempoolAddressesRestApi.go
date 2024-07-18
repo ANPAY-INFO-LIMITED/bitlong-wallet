@@ -95,7 +95,9 @@ func SimplifyTransactions(address string, responses *GetAddressTransactionsRespo
 		simplifiedTx.FeeRate = RoundToDecimalPlace(float64(transaction.Fee)/(float64(transaction.Weight)/4), 2)
 		simplifiedTx.Fee = transaction.Fee
 		blockHeight := BlockTipHeight()
-		if blockHeight == 0 {
+		if !transaction.Status.Confirmed {
+			simplifiedTx.ConfirmedBlocks = 0
+		} else if blockHeight == 0 {
 			fmt.Println("block height is zero")
 			simplifiedTx.ConfirmedBlocks = 0
 		} else {

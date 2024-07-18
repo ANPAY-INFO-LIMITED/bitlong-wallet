@@ -90,7 +90,7 @@ func GetWalletBalance() string {
 		fmt.Printf("%s lnrpc WalletBalance err: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
 	}
-	//@dev: mark imported tap addresses as locked
+	// @dev: mark imported tap addresses as locked
 	response, err = ProcessGetWalletBalanceResult(response)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)

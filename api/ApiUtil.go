@@ -66,6 +66,11 @@ const (
 	GetZeroBalanceAssetBalanceSliceErr
 	GetAssetHolderNumberByAssetBalancesInfoErr
 	GetAssetHolderBalanceByAssetBalancesInfoErr
+	AddrReceivesErr
+	BurnAssetErr
+	fetchAssetMetaErr
+	GetInfoErr
+	GetConnectionErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

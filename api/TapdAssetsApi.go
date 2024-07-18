@@ -1251,7 +1251,7 @@ func ListAssetAndGetResponseByFlags(withWitness, includeSpent, includeLeased boo
 	return listAssets(withWitness, includeSpent, includeLeased)
 }
 
-//@dev
+// @dev
 
 func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 	response, err := ListBatchesAndGetResponse()
