@@ -63,6 +63,9 @@ const (
 	PostToGetAssetTransferByAssetIdAndGetResponseErr
 	QueryAssetTransferSimplifiedErr
 	RequestToGetNonZeroAssetBalanceErr
+	GetZeroBalanceAssetBalanceSliceErr
+	GetAssetHolderNumberByAssetBalancesInfoErr
+	GetAssetHolderBalanceByAssetBalancesInfoErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

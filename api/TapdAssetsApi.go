@@ -3389,11 +3389,18 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 	} else if !isTokenValid {
 		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
 	}
-	response, err := ListBalancesAndProcess()
+	balances, err := ListBalancesAndProcess()
 	if err != nil {
 		return MakeJsonErrorResult(ListBalancesAndProcessErr, err.Error(), nil)
 	}
-	requests := ListBalanceInfosToAssetBalanceSetRequests(response, deviceId)
+	// @dev: Update the asset balance info with the asset ID and zero balance
+	zeroBalances, err := GetZeroBalanceAssetBalanceSlice(token, balances)
+	if err != nil {
+		return MakeJsonErrorResult(GetZeroBalanceAssetBalanceSliceErr, err.Error(), nil)
+	}
+	zeroListBalance := AssetBalanceInfosToListBalanceInfos(zeroBalances)
+	setBalances := append(*balances, *zeroListBalance...)
+	requests := ListBalanceInfosToAssetBalanceSetRequests(&setBalances, deviceId)
 	result, err := PostToSetAssetBalanceInfo(requests, token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToSetAssetBalanceInfoErr, err.Error(), nil)
@@ -3405,15 +3412,14 @@ func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
 
-type GetAssetBalanceResponse struct {
-	Success bool            `json:"success"`
-	Error   string          `json:"error"`
-	Code    ErrCode         `json:"code"`
-	Data    *[]AssetBalance `json:"data"`
+type GetAssetBalanceInfoResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AssetBalanceInfo `json:"data"`
 }
 
-// TODO: Assembly the asset balance info need to update whose balance is zero
-func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalance, error) {
+func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalanceInfo, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_balance/get"
 	requestJsonBytes, err := json.Marshal(nil)
@@ -3442,7 +3448,7 @@ func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalance, error) {
 	if err != nil {
 		return nil, err
 	}
-	var response GetAssetBalanceResponse
+	var response GetAssetBalanceInfoResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
@@ -3461,10 +3467,63 @@ func GetNonZeroAssetBalanceInfo(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
 
-// TODO:Update Asset Balance Record:
-// 		Get the asset record of the server,
-//		if the asset ID of the obtained asset balance info with non-zero balance does not exist in listBalance,
-//		update the asset balance info with the asset ID and zero balance
+func GetNonZeroBalanceAssetBalanceSlice(token string) (*[]AssetBalanceInfo, error) {
+	var assetBalances []AssetBalanceInfo
+	response, err := RequestToGetNonZeroAssetBalance(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, assetBalance := range *response {
+		assetBalances = append(assetBalances, assetBalance)
+	}
+	return &assetBalances, nil
+}
+
+func CompareToGetZeroBalanceAssetIdWithListBalance(listBalanceInfos []ListBalanceInfo, assetBalances []AssetBalanceInfo) *[]AssetBalanceInfo {
+	isAssetIdsOfListBalanceInfosExists := make(map[string]bool)
+	for _, listBalanceInfo := range listBalanceInfos {
+		isAssetIdsOfListBalanceInfosExists[listBalanceInfo.AssetID] = true
+	}
+	var zeroAssetBalances []AssetBalanceInfo
+	for _, assetBalance := range assetBalances {
+		isExists, ok := isAssetIdsOfListBalanceInfosExists[assetBalance.AssetID]
+		if !ok || isExists == false {
+			assetBalance.Balance = 0
+			zeroAssetBalances = append(zeroAssetBalances, assetBalance)
+		}
+	}
+	return &zeroAssetBalances
+}
+
+func GetZeroBalanceAssetBalanceSlice(token string, listBalanceInfos *[]ListBalanceInfo) (*[]AssetBalanceInfo, error) {
+	assetBalances, err := GetNonZeroBalanceAssetBalanceSlice(token)
+	if err != nil {
+		return nil, err
+	}
+	zeroAssetIds := CompareToGetZeroBalanceAssetIdWithListBalance(*listBalanceInfos, *assetBalances)
+	return zeroAssetIds, nil
+}
+
+func AssetBalanceInfoToListBalanceInfo(assetBalanceInfo *AssetBalanceInfo) *ListBalanceInfo {
+	return &ListBalanceInfo{
+		GenesisPoint: assetBalanceInfo.GenesisPoint,
+		Name:         assetBalanceInfo.Name,
+		MetaHash:     assetBalanceInfo.MetaHash,
+		AssetID:      assetBalanceInfo.AssetID,
+		AssetType:    assetBalanceInfo.AssetType,
+		OutputIndex:  assetBalanceInfo.OutputIndex,
+		Version:      assetBalanceInfo.Version,
+		Balance:      assetBalanceInfo.Balance,
+	}
+}
+
+func AssetBalanceInfosToListBalanceInfos(assetBalanceInfos *[]AssetBalanceInfo) *[]ListBalanceInfo {
+	var istBalanceInfos []ListBalanceInfo
+	for _, assetBalanceInfo := range *assetBalanceInfos {
+		istBalanceInfos = append(istBalanceInfos, *AssetBalanceInfoToListBalanceInfo(&assetBalanceInfo))
+	}
+	return &istBalanceInfos
+}
 
 func QueryAssetTransfersByAssetIdFromServer(token string, assetId string) string {
 	return GetAssetTransferByAssetIdFromServer(token, assetId)
@@ -3558,4 +3617,137 @@ func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransfe
 	_ = token
 	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
 	return assetTransferSimplified, nil
+}
+
+type GetAssetHolderNumberByAssetBalancesInfoResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetAssetHolderNumberByAssetBalancesInfo(token string, assetId string) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/number/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetHolderNumberByAssetBalancesInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderNumberByAssetBalancesInfo(token string, assetId string) (int, error) {
+	holderNumber, err := RequestToGetAssetHolderNumberByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return 0, err
+	}
+	return holderNumber, nil
+}
+
+// GetAssetHolderNumber
+// @Description: Use asset balances to statistics
+func GetAssetHolderNumber(token string, assetId string) string {
+	holderNumber, err := GetAssetHolderNumberByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderNumberByAssetBalancesInfoErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, holderNumber)
+}
+
+type AssetIdAndBalance struct {
+	AssetId       string              `json:"asset_id"`
+	AssetBalances *[]AssetBalanceInfo `json:"asset_balances"`
+}
+
+type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
+	Success bool               `json:"success"`
+	Error   string             `json:"error"`
+	Code    ErrCode            `json:"code"`
+	Data    *AssetIdAndBalance `json:"data"`
+}
+
+func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetHolderBalanceByAssetBalancesInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
+	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return nil, err
+	}
+	return holderBalance, nil
+}
+
+func GetAssetHolderBalance(token string, assetId string) string {
+	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, holderBalance)
 }
