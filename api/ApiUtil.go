@@ -64,6 +64,7 @@ const (
 	RequestToGetNonZeroAssetBalanceErr
 	GetZeroBalanceAssetBalanceSliceErr
 	GetAssetHolderNumberByAssetBalancesInfoErr
+	GetAssetHolderBalanceByAssetBalancesInfoErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

@@ -3683,3 +3683,71 @@ func GetAssetHolderNumber(token string, assetId string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, holderNumber)
 }
+
+type AssetIdAndBalance struct {
+	AssetId       string              `json:"asset_id"`
+	AssetBalances *[]AssetBalanceInfo `json:"asset_balances"`
+}
+
+type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
+	Success bool               `json:"success"`
+	Error   string             `json:"error"`
+	Code    ErrCode            `json:"code"`
+	Data    *AssetIdAndBalance `json:"data"`
+}
+
+func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetHolderBalanceByAssetBalancesInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
+	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return nil, err
+	}
+	return holderBalance, nil
+}
+
+func GetAssetHolderBalance(token string, assetId string) string {
+	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, holderBalance)
+}
