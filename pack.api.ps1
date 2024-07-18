@@ -10,6 +10,7 @@ if ($currentFolderName -eq $specificString) {
     $end_time = Get-Date
     $time_taken = $end_time - $start_time
     Write-Host "Time cost: $($time_taken.TotalSeconds) seconds."
+    pause
 } else {
 	Write-Output "Wrong current directory, please run script in wallet."
     pause

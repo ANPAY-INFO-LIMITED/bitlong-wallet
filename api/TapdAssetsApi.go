@@ -2471,12 +2471,141 @@ func PostToGetAssetTransfer(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
 }
 
+type AssetTransferProcessedSimplified struct {
+	Txid               string                                    `json:"txid"`
+	AssetID            string                                    `json:"asset_id"`
+	TransferTimestamp  int                                       `json:"transfer_timestamp"`
+	AnchorTxHeightHint int                                       `json:"anchor_tx_height_hint"`
+	AnchorTxChainFees  int                                       `json:"anchor_tx_chain_fees"`
+	Inputs             *[]AssetTransferProcessedInputSimplified  `json:"inputs"`
+	Outputs            *[]AssetTransferProcessedOutputSimplified `json:"outputs"`
+	DeviceID           string                                    `json:"device_id"`
+}
+
+type AssetTransferProcessedInputSimplified struct {
+	Address     string `json:"address"`
+	Amount      int    `json:"amount"`
+	AnchorPoint string `json:"anchor_point"`
+	ScriptKey   string `json:"script_key"`
+}
+
+type AssetTransferProcessedOutputSimplified struct {
+	Address          string `json:"address"`
+	Amount           int    `json:"amount"`
+	AnchorOutpoint   string `json:"anchor_outpoint"`
+	AnchorValue      int    `json:"anchor_value"`
+	ScriptKey        string `json:"script_key"`
+	ScriptKeyIsLocal bool   `json:"script_key_is_local"`
+	OutputType       string `json:"output_type"`
+	AssetVersion     string `json:"asset_version"`
+}
+
+type AssetTransferProcessedOutputSimplifiedAndTotalAmount struct {
+	OutputSimplified *[]AssetTransferProcessedOutputSimplified `json:"output_simplified"`
+	TotalAmount      int                                       `json:"total_amount"`
+}
+
+type AssetTransferProcessedSimplifiedResponse struct {
+	AssetID     string                            `json:"asset_id"`
+	Txid        string                            `json:"txid"`
+	TotalAmount int                               `json:"totalAmount"`
+	Time        int                               `json:"time"`
+	Detail      *AssetTransferProcessedSimplified `json:"detail"`
+}
+
+func SimplifyAssetTransferProcessedInput(assetTransferProcessedInput *[]AssetTransferProcessedInput) *[]AssetTransferProcessedInputSimplified {
+	var assetTransferProcessedInputSimplified []AssetTransferProcessedInputSimplified
+	for _, processedInput := range *assetTransferProcessedInput {
+		assetTransferProcessedInputSimplified = append(assetTransferProcessedInputSimplified, AssetTransferProcessedInputSimplified{
+			Address:     processedInput.Address,
+			Amount:      processedInput.Amount,
+			AnchorPoint: processedInput.AnchorPoint,
+			ScriptKey:   processedInput.ScriptKey,
+		})
+	}
+	return &assetTransferProcessedInputSimplified
+}
+
+func SimplifyAssetTransferProcessedOutput(assetTransferProcessedOutput *[]AssetTransferProcessedOutput) *[]AssetTransferProcessedOutputSimplified {
+	var assetTransferProcessedOutputSimplified []AssetTransferProcessedOutputSimplified
+	for _, processedOutput := range *assetTransferProcessedOutput {
+		assetTransferProcessedOutputSimplified = append(assetTransferProcessedOutputSimplified, AssetTransferProcessedOutputSimplified{
+			Address:          processedOutput.Address,
+			Amount:           processedOutput.Amount,
+			AnchorOutpoint:   processedOutput.AnchorOutpoint,
+			AnchorValue:      processedOutput.AnchorValue,
+			ScriptKey:        processedOutput.ScriptKey,
+			ScriptKeyIsLocal: processedOutput.ScriptKeyIsLocal,
+			OutputType:       processedOutput.OutputType,
+			AssetVersion:     processedOutput.AssetVersion,
+		})
+	}
+	return &assetTransferProcessedOutputSimplified
+}
+
+func SimplifyAssetTransferProcessedOutputAndTotalAmount(assetTransferProcessedOutput *[]AssetTransferProcessedOutput) *AssetTransferProcessedOutputSimplifiedAndTotalAmount {
+	var assetTransferProcessedOutputSimplified []AssetTransferProcessedOutputSimplified
+	var totalAmount int
+	for _, processedOutput := range *assetTransferProcessedOutput {
+		assetTransferProcessedOutputSimplified = append(assetTransferProcessedOutputSimplified, AssetTransferProcessedOutputSimplified{
+			Address:          processedOutput.Address,
+			Amount:           processedOutput.Amount,
+			AnchorOutpoint:   processedOutput.AnchorOutpoint,
+			AnchorValue:      processedOutput.AnchorValue,
+			ScriptKey:        processedOutput.ScriptKey,
+			ScriptKeyIsLocal: processedOutput.ScriptKeyIsLocal,
+			OutputType:       processedOutput.OutputType,
+			AssetVersion:     processedOutput.AssetVersion,
+		})
+		totalAmount += processedOutput.Amount
+	}
+	return &AssetTransferProcessedOutputSimplifiedAndTotalAmount{
+		OutputSimplified: &assetTransferProcessedOutputSimplified,
+		TotalAmount:      totalAmount,
+	}
+}
+
+func AssetTransferProcessedToSimplifiedResponse(assetTransferProcessed *[]AssetTransferProcessed) *[]AssetTransferProcessedSimplifiedResponse {
+	if assetTransferProcessed == nil {
+		return nil
+	}
+	var assetTransferProcessedSimplifiedResponse []AssetTransferProcessedSimplifiedResponse
+	for _, transferProcessed := range *assetTransferProcessed {
+		inputs := SimplifyAssetTransferProcessedInput(&(transferProcessed.Inputs))
+		outputs := SimplifyAssetTransferProcessedOutputAndTotalAmount(&(transferProcessed.Outputs))
+		assetTransferProcessedSimplified := AssetTransferProcessedSimplified{
+			Txid:               transferProcessed.Txid,
+			AssetID:            transferProcessed.AssetID,
+			TransferTimestamp:  transferProcessed.TransferTimestamp,
+			AnchorTxHeightHint: transferProcessed.AnchorTxHeightHint,
+			AnchorTxChainFees:  transferProcessed.AnchorTxChainFees,
+			Inputs:             inputs,
+			Outputs:            outputs.OutputSimplified,
+			DeviceID:           transferProcessed.DeviceID,
+		}
+		assetTransferProcessedSimplifiedResponse = append(assetTransferProcessedSimplifiedResponse, AssetTransferProcessedSimplifiedResponse{
+			AssetID:     assetTransferProcessedSimplified.AssetID,
+			Txid:        assetTransferProcessedSimplified.Txid,
+			TotalAmount: outputs.TotalAmount,
+			Time:        assetTransferProcessedSimplified.TransferTimestamp,
+			Detail:      &assetTransferProcessedSimplified,
+		})
+	}
+	return &assetTransferProcessedSimplifiedResponse
+}
+
 func PostToGetAssetTransferByAssetId(token string, assetId string) string {
 	response, err := RequestToGetAssetTransferByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
+	var result *[]AssetTransferProcessedSimplifiedResponse
+	if response == nil {
+		result = nil
+	} else {
+		result = AssetTransferProcessedToSimplifiedResponse(response.Data)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
 // UploadAssetTransfer
@@ -3744,10 +3873,42 @@ func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*As
 	return holderBalance, nil
 }
 
+type AssetBalanceInfoSimplified struct {
+	Version  int    `json:"version"`
+	Balance  int    `json:"balance"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId   int    `json:"user_id"`
+}
+
+type AssetIdAndBalanceSimplified struct {
+	AssetId       string                        `json:"asset_id"`
+	AssetBalances *[]AssetBalanceInfoSimplified `json:"asset_balances"`
+}
+
+func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAndBalance) *AssetIdAndBalanceSimplified {
+	if assetIdAndBalance == nil {
+		return nil
+	}
+	assetIdAndBalanceSimplified := &AssetIdAndBalanceSimplified{}
+	assetIdAndBalanceSimplified.AssetId = assetIdAndBalance.AssetId
+	var assetBalanceInfoSimplified []AssetBalanceInfoSimplified
+	for _, assetBalanceInfo := range *(assetIdAndBalance.AssetBalances) {
+		assetBalanceInfoSimplified = append(assetBalanceInfoSimplified, AssetBalanceInfoSimplified{
+			Version:  assetBalanceInfo.Version,
+			Balance:  assetBalanceInfo.Balance,
+			DeviceId: assetBalanceInfo.DeviceId,
+			UserId:   assetBalanceInfo.UserId,
+		})
+	}
+	assetIdAndBalanceSimplified.AssetBalances = &assetBalanceInfoSimplified
+	return assetIdAndBalanceSimplified
+}
+
 func GetAssetHolderBalance(token string, assetId string) string {
 	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, holderBalance)
+	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
