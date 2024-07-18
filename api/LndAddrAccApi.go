@@ -10,6 +10,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/rpcclient"
 	"path/filepath"
 	"strings"
 	"time"
@@ -313,7 +314,7 @@ func QueryAllAddrAndGetResponse() (*[]Addr, error) {
 //					List of non-zero balance addresses constitutes the Total balance.
 //	 @return string
 func GetNonZeroBalanceAddresses() string {
-	listAddrResp, err := listAddresses()
+	listAddrResp, err := rpcclient.ListAddresses()
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), "")
 	}
@@ -344,7 +345,7 @@ func GetNonZeroBalanceAddresses() string {
 // @Description: Update all addresses by query non zero balance addresses
 // @return string
 func UpdateAllAddressesByGNZBA() string {
-	listAddrResp, err := listAddresses()
+	listAddrResp, err := rpcclient.ListAddresses()
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, "Query addresses fail. "+err.Error(), nil)
 	}

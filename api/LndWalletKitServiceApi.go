@@ -5,25 +5,9 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/rpcclient"
 	"strconv"
 )
-
-// ListAddress
-//
-//	@Description: ListAddresses retrieves all the addresses along with their balance.
-//	An account name filter can be provided to filter through all the wallet accounts and return the addresses of only those matching.
-//	@return string
-func listAddresses() (*walletrpc.ListAddressesResponse, error) {
-	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-	defer clearUp()
-	client := walletrpc.NewWalletKitClient(conn)
-	request := &walletrpc.ListAddressesRequest{}
-	response, err := client.ListAddresses(context.Background(), request)
-	return response, err
-}
 
 // ListAccounts
 //
@@ -44,7 +28,7 @@ func listAccounts() (*walletrpc.ListAccountsResponse, error) {
 }
 
 func ListAddresses() string {
-	response, err := listAddresses()
+	response, err := rpcclient.ListAddresses()
 	if err != nil {
 		fmt.Printf("%s walletrpc ListAddresses err: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
@@ -79,7 +63,7 @@ func IsIncludeAddress(addresses []string, address string) bool {
 }
 
 func ListAddressesAndGetResponse() (*walletrpc.ListAddressesResponse, error) {
-	return listAddresses()
+	return rpcclient.ListAddresses()
 }
 
 func ListAccounts() string {
@@ -254,4 +238,15 @@ func NextAddr() string {
 		return ""
 	}
 	return response.String()
+}
+
+func BumpFee(txId string, fee int) string {
+	if txId == "" || fee == 0 {
+		return MakeJsonErrorResult(RequestError, ErrMsgMap[RequestError].Error()+":txId or fee is empty", nil)
+	}
+	_, err := rpcclient.BumpFee(txId, fee)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", nil)
 }

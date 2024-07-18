@@ -20,6 +20,40 @@ import (
 //	Once the cipherseed is obtained and verified by the user, the InitWallet method should be used to commit the newly generated seed, and create the wallet.
 //	@return string
 func GenSeed() string {
+	return genSeed()
+}
+
+// InitWallet
+//
+//	@Description:InitWallet is used when lnd is starting up for the first time to fully initialize the daemon and its internal wallet. At the very least a wallet password must be provided.
+//	This will be used to encrypt sensitive material on disk.
+//	In the case of a recovery scenario, the user can also specify their aezeed mnemonic and passphrase.
+//	If set, then the daemon will use this prior state to initialize its internal wallet.
+//	Alternatively, this can be used along with the GenSeed RPC to obtain a seed, then present it to the user.
+//	Once it has been verified by the user, the seed can be fed into this RPC in order to commit the new wallet.
+//	@return bool
+func InitWallet(seed, password string) bool {
+	return initWallet(seed, password)
+}
+
+// UnlockWallet
+//
+//	@Description: UnlockWallet is used at startup of lnd to provide a password to unlock the wallet database.
+//	@return bool
+func UnlockWallet(password string) bool {
+	return unlockWallet(password)
+}
+
+// ChangePassword
+//
+//	@Description:ChangePassword changes the password of the encrypted wallet.
+//	This will automatically unlock the wallet database if successful.
+//	@return bool
+func ChangePassword(currentPassword, newPassword string) bool {
+	return changePassword(currentPassword, newPassword)
+}
+
+func genSeed() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -44,16 +78,7 @@ func GenSeed() string {
 	return strings.Join(response.CipherSeedMnemonic, ",")
 }
 
-// InitWallet
-//
-//	@Description:InitWallet is used when lnd is starting up for the first time to fully initialize the daemon and its internal wallet. At the very least a wallet password must be provided.
-//	This will be used to encrypt sensitive material on disk.
-//	In the case of a recovery scenario, the user can also specify their aezeed mnemonic and passphrase.
-//	If set, then the daemon will use this prior state to initialize its internal wallet.
-//	Alternatively, this can be used along with the GenSeed RPC to obtain a seed, then present it to the user.
-//	Once it has been verified by the user, the seed can be fed into this RPC in order to commit the new wallet.
-//	@return bool
-func InitWallet(seed, password string) bool {
+func initWallet(seed, password string) bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -120,11 +145,7 @@ func InitWallet(seed, password string) bool {
 	return true
 }
 
-// UnlockWallet
-//
-//	@Description: UnlockWallet is used at startup of lnd to provide a password to unlock the wallet database.
-//	@return bool
-func UnlockWallet(password string) bool {
+func unlockWallet(password string) bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -143,12 +164,7 @@ func UnlockWallet(password string) bool {
 	return true
 }
 
-// ChangePassword
-//
-//	@Description:ChangePassword changes the password of the encrypted wallet.
-//	This will automatically unlock the wallet database if successful.
-//	@return bool
-func ChangePassword(currentPassword, newPassword string) bool {
+func changePassword(currentPassword, newPassword string) bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -167,4 +183,8 @@ func ChangePassword(currentPassword, newPassword string) bool {
 	}
 	fmt.Printf("%s ChangePassword Successfully\n", GetTimeNow())
 	return true
+}
+
+func recoverWallet(mnemonic, passphrase string) bool {
+	return false
 }

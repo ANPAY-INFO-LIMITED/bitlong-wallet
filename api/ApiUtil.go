@@ -28,6 +28,7 @@ const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
 	NotFoundData ErrCode = iota + 599
+	RequestError
 )
 
 // Errtype:Unkonwn
@@ -67,6 +68,7 @@ const (
 var ErrMsgMap = map[ErrCode]error{
 	NotFoundData: errors.New("not found Data"),
 	SUCCESS:      errors.New(""),
+	RequestError: errors.New("request error"),
 }
 
 func GetErrMsg(code ErrCode) string {
