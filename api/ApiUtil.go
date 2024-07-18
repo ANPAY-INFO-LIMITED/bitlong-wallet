@@ -71,6 +71,18 @@ const (
 	fetchAssetMetaErr
 	GetInfoErr
 	GetConnectionErr
+	syncUniverseErr
+	ProcessListAllAssetsSimplifiedErr
+	allAssetBalancesErr
+	allAssetGroupBalancesErr
+	assetKeysTransferErr
+	AssetLeavesSpecifiedErr
+	assetLeavesIssuanceErr
+	DecodeRawProofStringErr
+	allAssetListErr
+	GetAssetHoldInfosIncludeSpentErr
+	GetAssetHoldInfosExcludeSpentErr
+	GetAssetTransactionInfosErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

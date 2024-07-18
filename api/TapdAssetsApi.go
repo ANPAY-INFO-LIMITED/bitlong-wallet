@@ -224,7 +224,7 @@ func SyncUniverseFullSpecified(universeHost string, id string, proofType string)
 	})
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -305,7 +305,7 @@ func allAssetBalances() *[]AssetBalance {
 func GetAllAssetBalances() string {
 	result := allAssetBalances()
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Balances", nil)
+		return MakeJsonErrorResult(allAssetBalancesErr, "Null Balances", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -329,7 +329,7 @@ func allAssetGroupBalances() *[]AssetGroupBalance {
 func GetAllAssetGroupBalances() string {
 	result := allAssetGroupBalances()
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Group Balances", nil)
+		return MakeJsonErrorResult(allAssetGroupBalancesErr, "Null Group Balances", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -385,7 +385,7 @@ func assetKeysTransfer(id string) *[]AssetKey {
 func AssetKeysTransfer(id string) string {
 	result := assetKeysTransfer(id)
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Asset Keys", nil)
+		return MakeJsonErrorResult(assetKeysTransferErr, "Null Asset Keys", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -462,8 +462,7 @@ func ProcessAssetTransferLeave(response *universerpc.AssetLeafResponse) *[]Asset
 func AssetLeavesTransfer(id string) string {
 	response := AssetLeavesSpecified(id, universerpc.ProofType_PROOF_TYPE_TRANSFER.String())
 	if response == nil {
-		fmt.Printf("%s universerpc AssetLeaves Error.\n", GetTimeNow())
-		return MakeJsonErrorResult(DefaultErr, errors.New("null asset leaves").Error(), nil)
+		return MakeJsonErrorResult(AssetLeavesSpecifiedErr, errors.New("null asset leaves").Error(), nil)
 	}
 	assetTransferLeaves := ProcessAssetTransferLeave(response)
 	return MakeJsonErrorResult(SUCCESS, "", assetTransferLeaves)
@@ -548,8 +547,7 @@ func assetLeavesIssuance(id string) *AssetIssuanceLeave {
 func GetAssetInfoByIssuanceLeaf(id string) string {
 	response := assetLeavesIssuance(id)
 	if response == nil {
-		fmt.Printf("%s Universerpc asset leaves issuance error.\n", GetTimeNow())
-		return MakeJsonErrorResult(DefaultErr, errors.New("Null asset leaves").Error(), nil)
+		return MakeJsonErrorResult(assetLeavesIssuanceErr, errors.New("Null asset leaves").Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -608,7 +606,7 @@ func ProcessProof(response *taprpc.DecodeProofResponse) *DecodedProof {
 func DecodeRawProof(proof string) string {
 	response := DecodeRawProofString(proof)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "null raw proof", nil)
+		return MakeJsonErrorResult(DecodeRawProofStringErr, "null raw proof", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessProof(response))
 }
@@ -687,7 +685,7 @@ func ProcessListAllAssets(response *taprpc.ListAssetResponse) *[]ListAllAsset {
 func GetAllAssetList() string {
 	response := allAssetList()
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "null asset list", nil)
+		return MakeJsonErrorResult(allAssetListErr, "null asset list", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListAllAssets(response))
 }
@@ -727,7 +725,7 @@ func ProcessListAllAssetsSimplified(result *[]ListAllAsset) *[]ListAllAssetSimpl
 func GetAllAssetListSimplified() string {
 	result := ProcessListAllAssetsSimplified(ProcessListAllAssets(allAssetList()))
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "null asset list", nil)
+		return MakeJsonErrorResult(ProcessListAllAssetsSimplifiedErr, "null asset list", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -780,7 +778,7 @@ func SyncUniverseFullIssuanceByIdSlice(ids []string) string {
 	}
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -810,7 +808,7 @@ func SyncUniverseFullTransferByIdSlice(ids []string) string {
 	}
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -829,7 +827,7 @@ func SyncUniverseFullNoSlice() string {
 	var targets []*universerpc.SyncTarget
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -960,7 +958,7 @@ func GetAssetHoldInfosExcludeSpent(id string) *[]AssetHoldInfo {
 func GetAssetHoldInfosIncludeSpentSlow(id string) string {
 	response := GetAssetHoldInfosIncludeSpent(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset hold infos include spent fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetHoldInfosIncludeSpentErr, "Get asset hold infos include spent fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1061,7 +1059,7 @@ func GetAssetInfoById(id string) string {
 func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 	response := GetAssetHoldInfosExcludeSpent(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset hold infos exclude spent fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetHoldInfosExcludeSpentErr, "Get asset hold infos exclude spent fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1072,7 +1070,7 @@ func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 func GetAssetTransactionInfoSlow(id string) string {
 	response := GetAssetTransactionInfos(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset transaction infos fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetTransactionInfosErr, "Get asset transaction infos fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1095,7 +1093,7 @@ func AssetIDAndTransferScriptKeyToOutpoint(id string, scriptKey string) string {
 func GetAllAssetListWithoutProcession() string {
 	response := allAssetList()
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null list asset response.", nil)
+		return MakeJsonErrorResult(allAssetListErr, "Null list asset response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
