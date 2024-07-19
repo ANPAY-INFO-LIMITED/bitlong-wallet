@@ -3910,3 +3910,67 @@ func GetAssetHolderBalance(token string, assetId string) string {
 	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
+
+type GetTimesByOutpointSliceResponse struct {
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Code    ErrCode        `json:"code"`
+	Data    map[string]int `json:"data"`
+}
+
+// PostCallBitcoindToQueryTimeByOutpoints
+// @Description: post call bitcoind to query time by outpoints
+func PostCallBitcoindToQueryTimeByOutpoints(token string, outpoints []string) (*GetTimesByOutpointSliceResponse, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/time/outpoints"
+	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
+	payload := strings.NewReader(requestStr)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetTimesByOutpointSliceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func GetAllOutpointsOfListUnspentUtxos(listUnspentUtxo *[]ListUnspentUtxo) []string {
+	var ops []string
+	for _, utxo := range *listUnspentUtxo {
+		ops = append(ops, utxo.Outpoint)
+	}
+	return ops
+}
+
+func GetTimeForListUnspentUtxoByBitcoind(token string, listUnspentUtxo *[]ListUnspentUtxo) (*[]ListUnspentUtxo, error) {
+	ops := GetAllOutpointsOfListUnspentUtxos(listUnspentUtxo)
+	opMapTime, err := PostCallBitcoindToQueryTimeByOutpoints(token, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i, utxo := range *listUnspentUtxo {
+		(*listUnspentUtxo)[i].Time = opMapTime.Data[utxo.Outpoint]
+	}
+	return listUnspentUtxo, nil
+}

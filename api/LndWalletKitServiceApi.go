@@ -152,6 +152,7 @@ type ListUnspentUtxo struct {
 	PkScript      string `json:"pk_script"`
 	Outpoint      string `json:"outpoint"`
 	Confirmations int    `json:"confirmations"`
+	Time          int    `json:"time"`
 }
 
 func ListUnspentResponseToListUnspentUtxos(listUnspentResponse *walletrpc.ListUnspentResponse) *[]ListUnspentUtxo {
@@ -164,6 +165,7 @@ func ListUnspentResponseToListUnspentUtxos(listUnspentResponse *walletrpc.ListUn
 			PkScript:      utxo.PkScript,
 			Outpoint:      utxo.Outpoint.TxidStr + ":" + strconv.Itoa(int(utxo.Outpoint.OutputIndex)),
 			Confirmations: int(utxo.Confirmations),
+			Time:          0,
 		})
 	}
 	return &listUnspentUtxos
@@ -184,18 +186,22 @@ func ListUnspentUtxoFilterByDefaultAddress(utxos *[]ListUnspentUtxo) *[]ListUnsp
 	return &listUnspentUtxos
 }
 
-func ListUnspentAndProcess() (*[]ListUnspentUtxo, error) {
+func ListUnspentAndProcess(token string) (*[]ListUnspentUtxo, error) {
 	response, err := ListUnspentAndGetResponse()
 	if err != nil {
 		return nil, err
 	}
 	btcUtxos := ListUnspentResponseToListUnspentUtxos(response)
 	btcUtxos = ListUnspentUtxoFilterByDefaultAddress(btcUtxos)
+	btcUtxos, err = GetTimeForListUnspentUtxoByBitcoind(token, btcUtxos)
+	if err != nil {
+		return nil, err
+	}
 	return btcUtxos, nil
 }
 
-func BtcUtxos() string {
-	response, err := ListUnspentAndProcess()
+func BtcUtxos(token string) string {
+	response, err := ListUnspentAndProcess(token)
 	if err != nil {
 		return MakeJsonErrorResult(ListUnspentAndGetResponseErr, err.Error(), nil)
 	}

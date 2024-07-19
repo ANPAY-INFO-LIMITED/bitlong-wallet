@@ -241,6 +241,7 @@ func queryAssetTransfers(assetId string) string {
 type ManagedUtxo struct {
 	Op                 string             `json:"op"`
 	OutPoint           string             `json:"out_point"`
+	Time               int                `json:"time"`
 	AmtSat             int                `json:"amt_sat"`
 	InternalKey        string             `json:"internal_key"`
 	TaprootAssetRoot   string             `json:"taproot_asset_root"`
@@ -343,6 +344,7 @@ func ListUtxosResponseToManagedUtxos(listUtxosResponse *taprpc.ListUtxosResponse
 		managedUtxo = ManagedUtxo{
 			Op:                 op,
 			OutPoint:           utxo.OutPoint,
+			Time:               0,
 			AmtSat:             int(utxo.AmtSat),
 			InternalKey:        hex.EncodeToString(utxo.InternalKey),
 			TaprootAssetRoot:   hex.EncodeToString(utxo.TaprootAssetRoot),
@@ -372,13 +374,37 @@ func ManagedUtxosFilterByAssetId(utxos *[]ManagedUtxo, assetId string) *[]Manage
 	return &managedUtxos
 }
 
-func AssetUtxos(assetId string) string {
+func GetAllOutpointsOfManagedUtxos(managedUtxos *[]ManagedUtxo) []string {
+	var ops []string
+	for _, utxo := range *managedUtxos {
+		ops = append(ops, utxo.OutPoint)
+	}
+	return ops
+}
+
+func GetTimeForManagedUtxoByBitcoind(token string, managedUtxos *[]ManagedUtxo) (*[]ManagedUtxo, error) {
+	ops := GetAllOutpointsOfManagedUtxos(managedUtxos)
+	opMapTime, err := PostCallBitcoindToQueryTimeByOutpoints(token, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i, utxo := range *managedUtxos {
+		(*managedUtxos)[i].Time = opMapTime.Data[utxo.OutPoint]
+	}
+	return managedUtxos, nil
+}
+
+func AssetUtxos(token string, assetId string) string {
 	response, err := ListUtxosAndGetResponse(true)
 	if err != nil {
 		return MakeJsonErrorResult(ListUtxosAndGetResponseErr, err.Error(), nil)
 	}
 	managedUtxos := ListUtxosResponseToManagedUtxos(response)
 	managedUtxos = ManagedUtxosFilterByAssetId(managedUtxos, assetId)
+	managedUtxos, err = GetTimeForManagedUtxoByBitcoind(token, managedUtxos)
+	if err != nil {
+		return MakeJsonErrorResult(GetTimeForManagedUtxoByBitcoindErr, err.Error(), nil)
+	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, managedUtxos)
 }
 

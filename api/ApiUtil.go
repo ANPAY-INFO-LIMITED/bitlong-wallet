@@ -83,6 +83,7 @@ const (
 	GetAssetHoldInfosIncludeSpentErr
 	GetAssetHoldInfosExcludeSpentErr
 	GetAssetTransactionInfosErr
+	GetTimeForManagedUtxoByBitcoindErr
 )
 
 var ErrMsgMap = map[ErrCode]error{
