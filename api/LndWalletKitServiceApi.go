@@ -31,7 +31,7 @@ func ListAddresses() string {
 	response, err := rpcclient.ListAddresses()
 	if err != nil {
 		fmt.Printf("%s walletrpc ListAddresses err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListAddressesErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -70,7 +70,7 @@ func ListAccounts() string {
 	response, err := listAccounts()
 	if err != nil {
 		fmt.Printf("%s watchtowerrpc ListAccounts err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAccountsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 
@@ -79,7 +79,7 @@ func ListAccounts() string {
 func FindAccount(name string) string {
 	response, err := listAccounts()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAccountsErr, err.Error(), nil)
 	}
 	var accounts []*walletrpc.Account
 	for _, account := range response.Accounts {
@@ -90,7 +90,7 @@ func FindAccount(name string) string {
 	if len(accounts) > 0 {
 		return MakeJsonErrorResult(SUCCESS, "", accounts)
 	}
-	return MakeJsonErrorResult(DefaultErr, "account not found", nil)
+	return MakeJsonErrorResult(AccountNotFoundErr, "account not found", nil)
 }
 
 // ListLeases
@@ -252,7 +252,7 @@ func BumpFee(txId string, fee int) string {
 	}
 	_, err := rpcclient.BumpFee(txId, fee)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(BumpFeeErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }

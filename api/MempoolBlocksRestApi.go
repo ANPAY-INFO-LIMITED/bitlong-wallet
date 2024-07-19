@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -30,8 +29,7 @@ func GetBlockTipHeightByMempool() string {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "http get fail.", "")
+		return MakeJsonErrorResult(HttpGetErr, "http get fail.", "")
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var height string
@@ -51,7 +49,6 @@ func BlockTipHeight() int {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
 		return 0
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)

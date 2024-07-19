@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -35,14 +34,12 @@ func GetDifficultyAdjustmentByMempool() string {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "http get fail.", "")
+		return MakeJsonErrorResult(HttpGetErr, "http get fail.", "")
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var difficultyResponse DifficultyResponse
 	if err := json.Unmarshal(bodyBytes, &difficultyResponse); err != nil {
-		fmt.Printf("%s GDABM json.Unmarshal :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", "")
+		return MakeJsonErrorResult(UnmarshalErr, "Unmarshal response body fail.", "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", difficultyResponse)
 }

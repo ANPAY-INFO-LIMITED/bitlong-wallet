@@ -67,17 +67,17 @@ func TrackPaymentV2(payhash string) string {
 
 	if err != nil {
 		fmt.Printf("%s client.SendPaymentV2 :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(TrackPaymentV2Err, err.Error(), nil)
 	}
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
 				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
-				return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+				return MakeJsonErrorResult(streamRecvIoEofErr, err.Error(), nil)
 			}
 			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
-			return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+			return MakeJsonErrorResult(streamRecvErr, err.Error(), nil)
 		}
 		fmt.Printf("%s %v\n", GetTimeNow(), response)
 		status := response.Status.String()

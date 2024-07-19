@@ -88,12 +88,12 @@ func GetWalletBalance() string {
 	response, err := getWalletBalance()
 	if err != nil {
 		fmt.Printf("%s lnrpc WalletBalance err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(getWalletBalanceErr, err.Error(), nil)
 	}
 	// @dev: mark imported tap addresses as locked
 	response, err = ProcessGetWalletBalanceResult(response)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ProcessGetWalletBalanceResultErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", WalletBalanceResponse{
 		TotalBalance:       int(response.TotalBalance),
@@ -138,7 +138,7 @@ func GetInfoOfLnd() string {
 	response, err := getInfoOfLnd()
 	if err != nil {
 		fmt.Printf("%s lnrpc GetInfo err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(getInfoOfLndErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -222,7 +222,7 @@ func ListInvoices() string {
 	response, err := client.ListInvoices(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s client.ListInvoice :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListInvoicesErr, err.Error(), nil)
 	}
 	invoices := SimplifyInvoice(response)
 	return MakeJsonErrorResult(SUCCESS, "", invoices)
@@ -517,7 +517,7 @@ func ClosedChannels() string {
 func DecodePayReq(payReq string) string {
 	req, err := rpcclient.DecodePayReq(payReq)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(DecodePayReqErr, err.Error(), nil)
 	}
 	result := struct {
 		Description string `json:"description"`
@@ -702,7 +702,7 @@ func ListChannels() string {
 	response, err := client.ListChannels(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListChannelsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -724,7 +724,7 @@ func PendingChannels() string {
 	response, err := client.PendingChannels(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc PendingChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(PendingChannelsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -753,7 +753,7 @@ func GetChannelState(chanPoint string) string {
 	response, err := client.ListChannels(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListChannelsErr, err.Error(), nil)
 	}
 
 	var ChannelState string
@@ -771,7 +771,7 @@ func GetChannelState(chanPoint string) string {
 	pendingresponse, err := client.PendingChannels(context.Background(), pendrequest)
 	if err != nil {
 		fmt.Printf("%s lnrpc PendingChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(PendingChannelsErr, err.Error(), nil)
 	}
 	for _, channel := range pendingresponse.PendingOpenChannels {
 		if channel.Channel.ChannelPoint == chanPoint {
@@ -791,7 +791,7 @@ func GetChannelState(chanPoint string) string {
 	closeresponse, err := client.ClosedChannels(context.Background(), closerequest)
 	if err != nil {
 		fmt.Printf("%s lnrpc ClosedChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ClosedChannelsErr, err.Error(), nil)
 	}
 	for _, channel := range closeresponse.Channels {
 		if channel.ChannelPoint == chanPoint {
@@ -800,7 +800,7 @@ func GetChannelState(chanPoint string) string {
 		}
 	}
 
-	return MakeJsonErrorResult(DefaultErr, "NO_FIND_CHANNEL", nil)
+	return MakeJsonErrorResult(NoFindChannelErr, "NO_FIND_CHANNEL", nil)
 }
 
 // GetChanBalance
@@ -823,7 +823,7 @@ func GetChannelInfo(chanPoint string) string {
 	response, err := client.ListChannels(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListChannelsErr, err.Error(), nil)
 	}
 	for _, channel := range response.Channels {
 		if channel.ChannelPoint == chanPoint {
@@ -831,7 +831,7 @@ func GetChannelInfo(chanPoint string) string {
 			return MakeJsonErrorResult(SUCCESS, "", channel)
 		}
 	}
-	return MakeJsonErrorResult(DefaultErr, "NO_FIND_CHANNEL", nil)
+	return MakeJsonErrorResult(NoFindChannelErr, "NO_FIND_CHANNEL", nil)
 }
 
 // RestoreChannelBackups
@@ -1086,7 +1086,7 @@ func SendPaymentSync(invoice string) string {
 	response, err := client.SendPaymentSync(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc SendPaymentSync :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(SendPaymentSyncErr, err.Error(), nil)
 	}
 	paymentHash := hex.EncodeToString(response.PaymentHash)
 	return MakeJsonErrorResult(SUCCESS, "", paymentHash)
@@ -1125,7 +1125,7 @@ func SendCoins(addr string, amount int64, feeRate int64, sendAll bool) string {
 	}
 	response, err := sendCoins(addr, amount, uint64(feeRate), sendAll)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(sendCoinsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1142,10 +1142,10 @@ func SendMany(jsonAddr string, feeRate int64) string {
 	}
 	err := json.Unmarshal([]byte(jsonAddr), &addrs)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Please use the correct json format", nil)
+		return MakeJsonErrorResult(UnmarshalErr, "Please use the correct json format", nil)
 	}
 	if len(addrs) == 0 {
-		return MakeJsonErrorResult(DefaultErr, "Please input the correct address and amount", nil)
+		return MakeJsonErrorResult(AddrsLenZeroErr, "Please input the correct address and amount", nil)
 	}
 	addrTo := make(map[string]int64)
 	for _, addr := range addrs {
@@ -1153,7 +1153,7 @@ func SendMany(jsonAddr string, feeRate int64) string {
 	}
 	response, err := sendMany(addrTo, uint64(feeRate))
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(sendManyErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1186,7 +1186,7 @@ func SendAllCoins(addr string, feeRate int) string {
 	}
 	response, err := sendCoins(addr, 0, uint64(feeRate), true)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(sendCoinsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }

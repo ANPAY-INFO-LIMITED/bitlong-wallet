@@ -147,14 +147,12 @@ func GetAddressInfoByMempool(address string) string {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "http get fail.", "")
+		return MakeJsonErrorResult(HttpGetErr, "http get fail.", "")
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var getAddressResponse GetAddressResponse
 	if err := json.Unmarshal(bodyBytes, &getAddressResponse); err != nil {
-		fmt.Printf("%s GAIBM json.Unmarshal :%v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", "")
+		return MakeJsonErrorResult(UnmarshalErr, "Unmarshal response body fail.", "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", getAddressResponse)
 }
@@ -222,7 +220,7 @@ func GetAddressTransferOut(address string) (*[]TransactionsSimplified, error) {
 func GetAddressTransferOutResult(address string) string {
 	transfers, err := GetAddressTransferOut(address)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Get Address Transfer Out Result fail.", "")
+		return MakeJsonErrorResult(GetAddressTransferOutErr, "Get Address Transfer Out Result fail.", "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", *transfers)
 }
@@ -234,7 +232,7 @@ func GetAddressTransferOutResult(address string) string {
 func GetAddressTransactionsByMempool(address string) string {
 	transactions, err := GetAddressTransactions(address)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Get Address Transactions", "")
+		return MakeJsonErrorResult(GetAddressTransactionsErr, "Get Address Transactions", "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", transactions)
 }

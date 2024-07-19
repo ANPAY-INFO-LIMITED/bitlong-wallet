@@ -10,7 +10,7 @@ import (
 func SubServerStatus() string {
 	response, err := subServerStatus()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(subServerStatusErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }

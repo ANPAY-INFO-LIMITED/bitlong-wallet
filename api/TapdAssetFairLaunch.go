@@ -41,7 +41,7 @@ func GetUserOwnIssuanceHistoryInfos(token string) string {
 	result, err := GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token)
 	if err != nil {
 		LogError("", err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfosErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -52,7 +52,7 @@ func GetIssuanceTransactionFee(token string) string {
 	result, err := GetIssuanceTransactionCalculatedFee(token)
 	if err != nil {
 		LogError("", err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetIssuanceTransactionCalculatedFeeErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -63,7 +63,7 @@ func GetMintTransactionFee(token string, id int, number int) string {
 	result, err := GetMintTransactionCalculatedFee(token, id, number)
 	if err != nil {
 		LogError("", err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetMintTransactionCalculatedFeeErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -155,12 +155,10 @@ func GetServerOwnSetFairLaunchInfos(token string) (fairLaunchInfos *[]models.Fai
 	}(response.Body)
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
 		return nil, err
 	}
 	var ownSetFairLaunchInfos ServerOwnSetFairLaunchInfoResponse
 	if err := json.Unmarshal(bodyBytes, &ownSetFairLaunchInfos); err != nil {
-		fmt.Printf("%s json.Unmarshal :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return &ownSetFairLaunchInfos.Data, nil
@@ -210,14 +208,12 @@ func GetServerFeeRate(token string) (*ServerFeeRateResponse, error) {
 	var jsonData []byte
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
 		return nil, err
 	}
 	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		fmt.Println("Error sending request:", err)
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
@@ -228,12 +224,10 @@ func GetServerFeeRate(token string) (*ServerFeeRateResponse, error) {
 	}(response.Body)
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
 		return nil, err
 	}
 	var serverFeeRateResponse ServerFeeRateResponse
 	if err = json.Unmarshal(bodyBytes, &serverFeeRateResponse); err != nil {
-		fmt.Printf("%s json.Unmarshal :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return &serverFeeRateResponse, nil
@@ -264,14 +258,12 @@ func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintRespo
 	requestJsonBytes, _ := json.Marshal(requestJson)
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(requestJsonBytes))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
 		return nil, err
 	}
 	request.Header.Add("Authorization", "Bearer "+token)
 	request.Header.Add("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		fmt.Println("Error sending request:", err)
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
@@ -282,12 +274,10 @@ func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintRespo
 	}(response.Body)
 	bodyBytes, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
 		return nil, err
 	}
 	var serverQueryMintResponse ServerQueryMintResponse
 	if err = json.Unmarshal(bodyBytes, &serverQueryMintResponse); err != nil {
-		fmt.Printf("%s json.Unmarshal :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return &serverQueryMintResponse, nil

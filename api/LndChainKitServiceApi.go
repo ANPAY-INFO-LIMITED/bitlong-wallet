@@ -10,7 +10,7 @@ import (
 func GetBlockWrap(blockHash string) string {
 	response, err := rpcclient.GetBlock(blockHash)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetBlockErr, err.Error(), nil)
 	}
 	msgBlock := &wire.MsgBlock{}
 	blockReader := bytes.NewReader(response.RawBlock)
@@ -21,7 +21,7 @@ func GetBlockWrap(blockHash string) string {
 func GetBlockInfoByHeight(height int64) string {
 	response, err := rpcclient.GetBlockHash(height)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetBlockHashErr, err.Error(), nil)
 	}
 	var blockHash chainhash.Hash
 	copy(blockHash[:], response)

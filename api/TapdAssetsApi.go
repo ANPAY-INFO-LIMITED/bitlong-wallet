@@ -3893,6 +3893,7 @@ func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAn
 	assetIdAndBalanceSimplified.AssetId = assetIdAndBalance.AssetId
 	var assetBalanceInfoSimplified []AssetBalanceInfoSimplified
 	if assetIdAndBalance.AssetBalances == nil {
+		assetIdAndBalanceSimplified.AssetBalances = &[]AssetBalanceInfoSimplified{}
 		return assetIdAndBalanceSimplified
 	}
 	for _, assetBalanceInfo := range *(assetIdAndBalance.AssetBalances) {

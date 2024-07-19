@@ -24,7 +24,7 @@ type Jstr struct {
 func DeliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint string) string {
 	response, err := deliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(deliverProofErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -32,7 +32,7 @@ func DeliverProof(universeUrl, assetId, groupKey, scriptKey, outpoint string) st
 func DeliverIssuanceProof(assetId string) string {
 	err := deliverIssuanceProof(Cfg.UniverseUrl, assetId, "")
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(deliverIssuanceProofErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }
@@ -40,7 +40,7 @@ func DeliverIssuanceProof(assetId string) string {
 func ReceiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) string {
 	err := receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(receiveProofErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }
@@ -48,7 +48,7 @@ func ReceiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) st
 func ReadProof(assetId, groupKey, scriptkey, outpoint string) string {
 	p, err := readProof(assetId, groupKey, scriptkey, outpoint)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(readProofErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", p)
 }
@@ -56,7 +56,7 @@ func ReadProof(assetId, groupKey, scriptkey, outpoint string) string {
 func QueryAssetProofs(assetId string) string {
 	outPoints, err := queryAssetProofs(Cfg.UniverseUrl, assetId)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(queryAssetProofsErr, err.Error(), nil)
 	}
 	if len(*outPoints) == 0 {
 		return MakeJsonErrorResult(NotFoundData, "", nil)
