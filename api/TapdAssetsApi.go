@@ -3981,3 +3981,55 @@ func GetTimeForListUnspentUtxoByBitcoind(token string, listUnspentUtxo *[]ListUn
 	}
 	return listUnspentUtxo, nil
 }
+
+type AssetHolderBalanceLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+// @dev
+func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := AssetHolderBalanceLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetHolderBalanceByAssetBalancesInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
