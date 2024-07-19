@@ -27,13 +27,13 @@ type ErrCode int
 const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
-	NotFoundData ErrCode = iota + 599
+	NotFoundData ErrCode = iota + 299
 	RequestError
 )
 
 // Errtype:Unkonwn
 const (
-	GetBtcTransferOutInfosErr ErrCode = iota + 500
+	GetBtcTransferOutInfosErr ErrCode = iota + 501
 	ListTransfersAndGetProcessedResponseErr
 	PostToSetAssetTransferErr
 	PostToGetAssetTransferAndGetResponseErr
