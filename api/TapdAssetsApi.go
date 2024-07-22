@@ -822,7 +822,7 @@ func SyncUniverseFullNoSlice() string {
 	case base.UseTestNet:
 		universeHost = "testnet.universe.lightning.finance:10029"
 	case base.UseMainNet:
-		universeHost = "mainnet.universe.lightning.finance:10029"
+		universeHost = "universe.lightning.finance:10029"
 	}
 	var targets []*universerpc.SyncTarget
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)

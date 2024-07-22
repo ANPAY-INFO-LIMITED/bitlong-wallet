@@ -561,3 +561,16 @@ func GetFunctionName(i any) string {
 func GetTimestamp() int {
 	return int(time.Now().Unix())
 }
+
+func GoRunTimeTest() {
+	go func() {
+		fmt.Println("1")
+		time.Sleep(time.Second * 2000)
+	}()
+	go func() {
+		fmt.Println("2")
+	}()
+	for {
+		fmt.Println("go run time test")
+	}
+}
