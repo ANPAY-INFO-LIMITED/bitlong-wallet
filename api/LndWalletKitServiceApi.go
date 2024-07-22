@@ -31,7 +31,7 @@ func ListAddresses() string {
 	response, err := rpcclient.ListAddresses()
 	if err != nil {
 		fmt.Printf("%s walletrpc ListAddresses err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListAddressesErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -70,7 +70,7 @@ func ListAccounts() string {
 	response, err := listAccounts()
 	if err != nil {
 		fmt.Printf("%s watchtowerrpc ListAccounts err: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAccountsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 
@@ -79,7 +79,7 @@ func ListAccounts() string {
 func FindAccount(name string) string {
 	response, err := listAccounts()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAccountsErr, err.Error(), nil)
 	}
 	var accounts []*walletrpc.Account
 	for _, account := range response.Accounts {
@@ -90,7 +90,7 @@ func FindAccount(name string) string {
 	if len(accounts) > 0 {
 		return MakeJsonErrorResult(SUCCESS, "", accounts)
 	}
-	return MakeJsonErrorResult(DefaultErr, "account not found", nil)
+	return MakeJsonErrorResult(AccountNotFoundErr, "account not found", nil)
 }
 
 // ListLeases
@@ -152,6 +152,7 @@ type ListUnspentUtxo struct {
 	PkScript      string `json:"pk_script"`
 	Outpoint      string `json:"outpoint"`
 	Confirmations int    `json:"confirmations"`
+	Time          int    `json:"time"`
 }
 
 func ListUnspentResponseToListUnspentUtxos(listUnspentResponse *walletrpc.ListUnspentResponse) *[]ListUnspentUtxo {
@@ -164,6 +165,7 @@ func ListUnspentResponseToListUnspentUtxos(listUnspentResponse *walletrpc.ListUn
 			PkScript:      utxo.PkScript,
 			Outpoint:      utxo.Outpoint.TxidStr + ":" + strconv.Itoa(int(utxo.Outpoint.OutputIndex)),
 			Confirmations: int(utxo.Confirmations),
+			Time:          0,
 		})
 	}
 	return &listUnspentUtxos
@@ -184,18 +186,22 @@ func ListUnspentUtxoFilterByDefaultAddress(utxos *[]ListUnspentUtxo) *[]ListUnsp
 	return &listUnspentUtxos
 }
 
-func ListUnspentAndProcess() (*[]ListUnspentUtxo, error) {
+func ListUnspentAndProcess(token string) (*[]ListUnspentUtxo, error) {
 	response, err := ListUnspentAndGetResponse()
 	if err != nil {
 		return nil, err
 	}
 	btcUtxos := ListUnspentResponseToListUnspentUtxos(response)
 	btcUtxos = ListUnspentUtxoFilterByDefaultAddress(btcUtxos)
+	btcUtxos, err = GetTimeForListUnspentUtxoByBitcoind(token, btcUtxos)
+	if err != nil {
+		return nil, err
+	}
 	return btcUtxos, nil
 }
 
-func BtcUtxos() string {
-	response, err := ListUnspentAndProcess()
+func BtcUtxos(token string) string {
+	response, err := ListUnspentAndProcess(token)
 	if err != nil {
 		return MakeJsonErrorResult(ListUnspentAndGetResponseErr, err.Error(), nil)
 	}
@@ -246,7 +252,7 @@ func BumpFee(txId string, fee int) string {
 	}
 	_, err := rpcclient.BumpFee(txId, fee)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(BumpFeeErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }

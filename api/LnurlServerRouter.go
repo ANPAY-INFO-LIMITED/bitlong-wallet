@@ -114,7 +114,7 @@ func setupRouterOnServer() *gin.Engine {
 
 		var invoice string
 		if result {
-			//@dev: RemotePort
+			// @dev: RemotePort
 			invoice = PostPhoneToAddInvoice(user.RemotePort, amount)
 		}
 		if invoice == "" {

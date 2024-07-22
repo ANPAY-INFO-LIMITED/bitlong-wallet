@@ -27,13 +27,13 @@ type ErrCode int
 const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
-	NotFoundData ErrCode = iota + 599
+	NotFoundData ErrCode = iota + 299
 	RequestError
 )
 
 // Errtype:Unkonwn
 const (
-	GetBtcTransferOutInfosErr ErrCode = iota + 300
+	GetBtcTransferOutInfosErr ErrCode = iota + 501
 	ListTransfersAndGetProcessedResponseErr
 	PostToSetAssetTransferErr
 	PostToGetAssetTransferAndGetResponseErr
@@ -66,6 +66,96 @@ const (
 	GetZeroBalanceAssetBalanceSliceErr
 	GetAssetHolderNumberByAssetBalancesInfoErr
 	GetAssetHolderBalanceByAssetBalancesInfoErr
+	AddrReceivesErr
+	BurnAssetErr
+	fetchAssetMetaErr
+	GetInfoErr
+	GetConnectionErr
+	syncUniverseErr
+	ProcessListAllAssetsSimplifiedErr
+	allAssetBalancesErr
+	allAssetGroupBalancesErr
+	assetKeysTransferErr
+	AssetLeavesSpecifiedErr
+	assetLeavesIssuanceErr
+	DecodeRawProofStringErr
+	allAssetListErr
+	GetAssetHoldInfosIncludeSpentErr
+	GetAssetHoldInfosExcludeSpentErr
+	GetAssetTransactionInfosErr
+	GetTimeForManagedUtxoByBitcoindErr
+	subServerStatusErr
+	NewAddressP2trErr
+	NewAddressP2wkhErr
+	NewAddressNp2wkhErr
+	CreateOrUpdateAddrErr
+	ReadAddrErr
+	DeleteAddrErr
+	AllAddressesErr
+	ListAddressesErr
+	GetAccountWithAddressesErr
+	UnmarshalErr
+	resultIsNotSuccessErr
+	GetAllAccountsErr
+	InvalidAddressTypeErr
+	GetBlockErr
+	GetBlockHashErr
+	getWalletBalanceErr
+	ProcessGetWalletBalanceResultErr
+	getInfoOfLndErr
+	DecodePayReqErr
+	ListChannelsErr
+	ListInvoicesErr
+	PendingChannelsErr
+	ClosedChannelsErr
+	NoFindChannelErr
+	sendCoinsErr
+	SendPaymentSyncErr
+	AddrsLenZeroErr
+	sendManyErr
+	TrackPaymentV2Err
+	streamRecvIoEofErr
+	streamRecvErr
+	listAccountsErr
+	AccountNotFoundErr
+	BumpFeeErr
+	HttpGetErr
+	GetAddressTransferOutErr
+	GetAddressTransactionsErr
+	listAssetsErr
+	responseNotSuccessErr
+	assetNotFoundErr
+	ListGroupsErr
+	ListTransfersErr
+	NewAddrErr
+	QueryAddrErr
+	listBalancesErr
+	assetLeafKeysErr
+	ListBatchesAndGetResponseErr
+	assetLeavesErr
+	GetTransactionsAndGetResponseErr
+	GetAssetInfoErr
+	ListAssetsProcessedErr
+	responseAssetKeysZeroErr
+	responseLeavesNullErr
+	QueryAssetRootsErr
+	blobLenZeroErr
+	DecodeProofErr
+	clientInfoErr
+	queryAssetRootErr
+	queryAssetStatsErr
+	GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfosErr
+	GetIssuanceTransactionCalculatedFeeErr
+	GetMintTransactionCalculatedFeeErr
+	FinalizeBatchErr
+	DecodeStringErr
+	MintAssetErr
+	getTransactionByMempoolErr
+	deliverIssuanceProofErr
+	deliverProofErr
+	receiveProofErr
+	readProofErr
+	queryAssetProofsErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

@@ -224,7 +224,7 @@ func SyncUniverseFullSpecified(universeHost string, id string, proofType string)
 	})
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -305,7 +305,7 @@ func allAssetBalances() *[]AssetBalance {
 func GetAllAssetBalances() string {
 	result := allAssetBalances()
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Balances", nil)
+		return MakeJsonErrorResult(allAssetBalancesErr, "Null Balances", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -329,7 +329,7 @@ func allAssetGroupBalances() *[]AssetGroupBalance {
 func GetAllAssetGroupBalances() string {
 	result := allAssetGroupBalances()
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Group Balances", nil)
+		return MakeJsonErrorResult(allAssetGroupBalancesErr, "Null Group Balances", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -385,7 +385,7 @@ func assetKeysTransfer(id string) *[]AssetKey {
 func AssetKeysTransfer(id string) string {
 	result := assetKeysTransfer(id)
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null Asset Keys", nil)
+		return MakeJsonErrorResult(assetKeysTransferErr, "Null Asset Keys", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -462,8 +462,7 @@ func ProcessAssetTransferLeave(response *universerpc.AssetLeafResponse) *[]Asset
 func AssetLeavesTransfer(id string) string {
 	response := AssetLeavesSpecified(id, universerpc.ProofType_PROOF_TYPE_TRANSFER.String())
 	if response == nil {
-		fmt.Printf("%s universerpc AssetLeaves Error.\n", GetTimeNow())
-		return MakeJsonErrorResult(DefaultErr, errors.New("null asset leaves").Error(), nil)
+		return MakeJsonErrorResult(AssetLeavesSpecifiedErr, errors.New("null asset leaves").Error(), nil)
 	}
 	assetTransferLeaves := ProcessAssetTransferLeave(response)
 	return MakeJsonErrorResult(SUCCESS, "", assetTransferLeaves)
@@ -548,8 +547,7 @@ func assetLeavesIssuance(id string) *AssetIssuanceLeave {
 func GetAssetInfoByIssuanceLeaf(id string) string {
 	response := assetLeavesIssuance(id)
 	if response == nil {
-		fmt.Printf("%s Universerpc asset leaves issuance error.\n", GetTimeNow())
-		return MakeJsonErrorResult(DefaultErr, errors.New("Null asset leaves").Error(), nil)
+		return MakeJsonErrorResult(assetLeavesIssuanceErr, errors.New("Null asset leaves").Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -608,7 +606,7 @@ func ProcessProof(response *taprpc.DecodeProofResponse) *DecodedProof {
 func DecodeRawProof(proof string) string {
 	response := DecodeRawProofString(proof)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "null raw proof", nil)
+		return MakeJsonErrorResult(DecodeRawProofStringErr, "null raw proof", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessProof(response))
 }
@@ -687,7 +685,7 @@ func ProcessListAllAssets(response *taprpc.ListAssetResponse) *[]ListAllAsset {
 func GetAllAssetList() string {
 	response := allAssetList()
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "null asset list", nil)
+		return MakeJsonErrorResult(allAssetListErr, "null asset list", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListAllAssets(response))
 }
@@ -727,7 +725,7 @@ func ProcessListAllAssetsSimplified(result *[]ListAllAsset) *[]ListAllAssetSimpl
 func GetAllAssetListSimplified() string {
 	result := ProcessListAllAssetsSimplified(ProcessListAllAssets(allAssetList()))
 	if result == nil {
-		return MakeJsonErrorResult(DefaultErr, "null asset list", nil)
+		return MakeJsonErrorResult(ProcessListAllAssetsSimplifiedErr, "null asset list", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -780,7 +778,7 @@ func SyncUniverseFullIssuanceByIdSlice(ids []string) string {
 	}
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -810,7 +808,7 @@ func SyncUniverseFullTransferByIdSlice(ids []string) string {
 	}
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -829,7 +827,7 @@ func SyncUniverseFullNoSlice() string {
 	var targets []*universerpc.SyncTarget
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -960,7 +958,7 @@ func GetAssetHoldInfosExcludeSpent(id string) *[]AssetHoldInfo {
 func GetAssetHoldInfosIncludeSpentSlow(id string) string {
 	response := GetAssetHoldInfosIncludeSpent(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset hold infos include spent fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetHoldInfosIncludeSpentErr, "Get asset hold infos include spent fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1061,7 +1059,7 @@ func GetAssetInfoById(id string) string {
 func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 	response := GetAssetHoldInfosExcludeSpent(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset hold infos exclude spent fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetHoldInfosExcludeSpentErr, "Get asset hold infos exclude spent fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1072,7 +1070,7 @@ func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 func GetAssetTransactionInfoSlow(id string) string {
 	response := GetAssetTransactionInfos(id)
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Get asset transaction infos fail, null response.", nil)
+		return MakeJsonErrorResult(GetAssetTransactionInfosErr, "Get asset transaction infos fail, null response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1095,7 +1093,7 @@ func AssetIDAndTransferScriptKeyToOutpoint(id string, scriptKey string) string {
 func GetAllAssetListWithoutProcession() string {
 	response := allAssetList()
 	if response == nil {
-		return MakeJsonErrorResult(DefaultErr, "Null list asset response.", nil)
+		return MakeJsonErrorResult(allAssetListErr, "Null list asset response.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -1251,7 +1249,7 @@ func ListAssetAndGetResponseByFlags(withWitness, includeSpent, includeLeased boo
 	return listAssets(withWitness, includeSpent, includeLeased)
 }
 
-//@dev
+// @dev
 
 func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 	response, err := ListBatchesAndGetResponse()
@@ -2471,12 +2469,141 @@ func PostToGetAssetTransfer(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
 }
 
+type AssetTransferProcessedSimplified struct {
+	Txid               string                                    `json:"txid"`
+	AssetID            string                                    `json:"asset_id"`
+	TransferTimestamp  int                                       `json:"transfer_timestamp"`
+	AnchorTxHeightHint int                                       `json:"anchor_tx_height_hint"`
+	AnchorTxChainFees  int                                       `json:"anchor_tx_chain_fees"`
+	Inputs             *[]AssetTransferProcessedInputSimplified  `json:"inputs"`
+	Outputs            *[]AssetTransferProcessedOutputSimplified `json:"outputs"`
+	DeviceID           string                                    `json:"device_id"`
+}
+
+type AssetTransferProcessedInputSimplified struct {
+	Address     string `json:"address"`
+	Amount      int    `json:"amount"`
+	AnchorPoint string `json:"anchor_point"`
+	ScriptKey   string `json:"script_key"`
+}
+
+type AssetTransferProcessedOutputSimplified struct {
+	Address          string `json:"address"`
+	Amount           int    `json:"amount"`
+	AnchorOutpoint   string `json:"anchor_outpoint"`
+	AnchorValue      int    `json:"anchor_value"`
+	ScriptKey        string `json:"script_key"`
+	ScriptKeyIsLocal bool   `json:"script_key_is_local"`
+	OutputType       string `json:"output_type"`
+	AssetVersion     string `json:"asset_version"`
+}
+
+type AssetTransferProcessedOutputSimplifiedAndTotalAmount struct {
+	OutputSimplified *[]AssetTransferProcessedOutputSimplified `json:"output_simplified"`
+	TotalAmount      int                                       `json:"total_amount"`
+}
+
+type AssetTransferProcessedSimplifiedResponse struct {
+	AssetID     string                            `json:"asset_id"`
+	Txid        string                            `json:"txid"`
+	TotalAmount int                               `json:"totalAmount"`
+	Time        int                               `json:"time"`
+	Detail      *AssetTransferProcessedSimplified `json:"detail"`
+}
+
+func SimplifyAssetTransferProcessedInput(assetTransferProcessedInput *[]AssetTransferProcessedInput) *[]AssetTransferProcessedInputSimplified {
+	var assetTransferProcessedInputSimplified []AssetTransferProcessedInputSimplified
+	for _, processedInput := range *assetTransferProcessedInput {
+		assetTransferProcessedInputSimplified = append(assetTransferProcessedInputSimplified, AssetTransferProcessedInputSimplified{
+			Address:     processedInput.Address,
+			Amount:      processedInput.Amount,
+			AnchorPoint: processedInput.AnchorPoint,
+			ScriptKey:   processedInput.ScriptKey,
+		})
+	}
+	return &assetTransferProcessedInputSimplified
+}
+
+func SimplifyAssetTransferProcessedOutput(assetTransferProcessedOutput *[]AssetTransferProcessedOutput) *[]AssetTransferProcessedOutputSimplified {
+	var assetTransferProcessedOutputSimplified []AssetTransferProcessedOutputSimplified
+	for _, processedOutput := range *assetTransferProcessedOutput {
+		assetTransferProcessedOutputSimplified = append(assetTransferProcessedOutputSimplified, AssetTransferProcessedOutputSimplified{
+			Address:          processedOutput.Address,
+			Amount:           processedOutput.Amount,
+			AnchorOutpoint:   processedOutput.AnchorOutpoint,
+			AnchorValue:      processedOutput.AnchorValue,
+			ScriptKey:        processedOutput.ScriptKey,
+			ScriptKeyIsLocal: processedOutput.ScriptKeyIsLocal,
+			OutputType:       processedOutput.OutputType,
+			AssetVersion:     processedOutput.AssetVersion,
+		})
+	}
+	return &assetTransferProcessedOutputSimplified
+}
+
+func SimplifyAssetTransferProcessedOutputAndTotalAmount(assetTransferProcessedOutput *[]AssetTransferProcessedOutput) *AssetTransferProcessedOutputSimplifiedAndTotalAmount {
+	var assetTransferProcessedOutputSimplified []AssetTransferProcessedOutputSimplified
+	var totalAmount int
+	for _, processedOutput := range *assetTransferProcessedOutput {
+		assetTransferProcessedOutputSimplified = append(assetTransferProcessedOutputSimplified, AssetTransferProcessedOutputSimplified{
+			Address:          processedOutput.Address,
+			Amount:           processedOutput.Amount,
+			AnchorOutpoint:   processedOutput.AnchorOutpoint,
+			AnchorValue:      processedOutput.AnchorValue,
+			ScriptKey:        processedOutput.ScriptKey,
+			ScriptKeyIsLocal: processedOutput.ScriptKeyIsLocal,
+			OutputType:       processedOutput.OutputType,
+			AssetVersion:     processedOutput.AssetVersion,
+		})
+		totalAmount += processedOutput.Amount
+	}
+	return &AssetTransferProcessedOutputSimplifiedAndTotalAmount{
+		OutputSimplified: &assetTransferProcessedOutputSimplified,
+		TotalAmount:      totalAmount,
+	}
+}
+
+func AssetTransferProcessedToSimplifiedResponse(assetTransferProcessed *[]AssetTransferProcessed) *[]AssetTransferProcessedSimplifiedResponse {
+	if assetTransferProcessed == nil {
+		return nil
+	}
+	var assetTransferProcessedSimplifiedResponse []AssetTransferProcessedSimplifiedResponse
+	for _, transferProcessed := range *assetTransferProcessed {
+		inputs := SimplifyAssetTransferProcessedInput(&(transferProcessed.Inputs))
+		outputs := SimplifyAssetTransferProcessedOutputAndTotalAmount(&(transferProcessed.Outputs))
+		assetTransferProcessedSimplified := AssetTransferProcessedSimplified{
+			Txid:               transferProcessed.Txid,
+			AssetID:            transferProcessed.AssetID,
+			TransferTimestamp:  transferProcessed.TransferTimestamp,
+			AnchorTxHeightHint: transferProcessed.AnchorTxHeightHint,
+			AnchorTxChainFees:  transferProcessed.AnchorTxChainFees,
+			Inputs:             inputs,
+			Outputs:            outputs.OutputSimplified,
+			DeviceID:           transferProcessed.DeviceID,
+		}
+		assetTransferProcessedSimplifiedResponse = append(assetTransferProcessedSimplifiedResponse, AssetTransferProcessedSimplifiedResponse{
+			AssetID:     assetTransferProcessedSimplified.AssetID,
+			Txid:        assetTransferProcessedSimplified.Txid,
+			TotalAmount: outputs.TotalAmount,
+			Time:        assetTransferProcessedSimplified.TransferTimestamp,
+			Detail:      &assetTransferProcessedSimplified,
+		})
+	}
+	return &assetTransferProcessedSimplifiedResponse
+}
+
 func PostToGetAssetTransferByAssetId(token string, assetId string) string {
 	response, err := RequestToGetAssetTransferByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(PostToGetAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, response.Data)
+	var result *[]AssetTransferProcessedSimplifiedResponse
+	if response == nil {
+		result = nil
+	} else {
+		result = AssetTransferProcessedToSimplifiedResponse(response.Data)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
 // UploadAssetTransfer
@@ -3299,16 +3426,17 @@ func ListBalancesAndProcess() (*[]ListBalanceInfo, error) {
 
 type AssetBalanceInfo struct {
 	gorm.Model
-	GenesisPoint string `json:"genesis_point"`
-	Name         string `json:"name"`
-	MetaHash     string `json:"meta_hash"`
-	AssetID      string `json:"asset_id"`
-	AssetType    string `json:"asset_type"`
+	GenesisPoint string `json:"genesis_point" gorm:"type:varchar(255)"`
+	Name         string `json:"name" gorm:"type:varchar(255)"`
+	MetaHash     string `json:"meta_hash" gorm:"type:varchar(255)"`
+	AssetID      string `json:"asset_id" gorm:"type:varchar(255)"`
+	AssetType    string `json:"asset_type" gorm:"type:varchar(255)"`
 	OutputIndex  int    `json:"output_index"`
 	Version      int    `json:"version"`
 	Balance      int    `json:"balance"`
 	DeviceId     string `json:"device_id" gorm:"type:varchar(255)"`
 	UserId       int    `json:"user_id"`
+	Username     string `json:"username" gorm:"type:varchar(255)"`
 	Status       int    `json:"status" gorm:"default:1"`
 }
 
@@ -3696,9 +3824,10 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 	Data    *AssetIdAndBalance `json:"data"`
 }
 
+// TODO: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/" + assetId
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit50/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3736,6 +3865,58 @@ func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId str
 	return response.Data, nil
 }
 
+type GetAssetHolderBalanceRecordsLengthResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string, assetId string) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/records/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetHolderBalanceRecordsLengthResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalanceRecordsLengthNumber(token string, assetId string) (int, error) {
+	return RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token, assetId)
+}
+
+// TODO: Should add page and size
 func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
@@ -3744,10 +3925,165 @@ func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*As
 	return holderBalance, nil
 }
 
+type AssetBalanceInfoSimplified struct {
+	Version  int    `json:"version"`
+	Balance  int    `json:"balance"`
+	DeviceId string `json:"device_id"`
+	UserId   int    `json:"user_id"`
+	Username string `json:"username"`
+}
+
+type AssetIdAndBalanceSimplified struct {
+	AssetId       string                        `json:"asset_id"`
+	AssetBalances *[]AssetBalanceInfoSimplified `json:"asset_balances"`
+}
+
+func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAndBalance) *AssetIdAndBalanceSimplified {
+	if assetIdAndBalance == nil {
+		return nil
+	}
+	assetIdAndBalanceSimplified := &AssetIdAndBalanceSimplified{}
+	assetIdAndBalanceSimplified.AssetId = assetIdAndBalance.AssetId
+	var assetBalanceInfoSimplified []AssetBalanceInfoSimplified
+	if assetIdAndBalance.AssetBalances == nil {
+		assetIdAndBalanceSimplified.AssetBalances = &[]AssetBalanceInfoSimplified{}
+		return assetIdAndBalanceSimplified
+	}
+	for _, assetBalanceInfo := range *(assetIdAndBalance.AssetBalances) {
+		assetBalanceInfoSimplified = append(assetBalanceInfoSimplified, AssetBalanceInfoSimplified{
+			Version:  assetBalanceInfo.Version,
+			Balance:  assetBalanceInfo.Balance,
+			DeviceId: assetBalanceInfo.DeviceId,
+			UserId:   assetBalanceInfo.UserId,
+			Username: assetBalanceInfo.Username,
+		})
+	}
+	assetIdAndBalanceSimplified.AssetBalances = &assetBalanceInfoSimplified
+	return assetIdAndBalanceSimplified
+}
+
 func GetAssetHolderBalance(token string, assetId string) string {
+	// TODO: Should update
 	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, holderBalance)
+	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+type GetTimesByOutpointSliceResponse struct {
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Code    ErrCode        `json:"code"`
+	Data    map[string]int `json:"data"`
+}
+
+// PostCallBitcoindToQueryTimeByOutpoints
+// @Description: post call bitcoind to query time by outpoints
+func PostCallBitcoindToQueryTimeByOutpoints(token string, outpoints []string) (*GetTimesByOutpointSliceResponse, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/time/outpoints"
+	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
+	payload := strings.NewReader(requestStr)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetTimesByOutpointSliceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func GetAllOutpointsOfListUnspentUtxos(listUnspentUtxo *[]ListUnspentUtxo) []string {
+	var ops []string
+	for _, utxo := range *listUnspentUtxo {
+		ops = append(ops, utxo.Outpoint)
+	}
+	return ops
+}
+
+func GetTimeForListUnspentUtxoByBitcoind(token string, listUnspentUtxo *[]ListUnspentUtxo) (*[]ListUnspentUtxo, error) {
+	ops := GetAllOutpointsOfListUnspentUtxos(listUnspentUtxo)
+	opMapTime, err := PostCallBitcoindToQueryTimeByOutpoints(token, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i, utxo := range *listUnspentUtxo {
+		(*listUnspentUtxo)[i].Time = opMapTime.Data[utxo.Outpoint]
+	}
+	return listUnspentUtxo, nil
+}
+
+type AssetHolderBalanceLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+// @dev
+func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := AssetHolderBalanceLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetHolderBalanceByAssetBalancesInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
 }

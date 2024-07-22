@@ -17,7 +17,7 @@ import (
 func AddrReceives(assetId string) string {
 	response, err := rpcclient.AddrReceives()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
 	}
 	type addrEvent struct {
 		CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
@@ -58,7 +58,7 @@ func AddrReceives(assetId string) string {
 func BurnAsset(AssetIdStr string, amountToBurn int64) string {
 	response, err := rpcclient.BurnAsset(AssetIdStr, uint64(amountToBurn))
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(BurnAssetErr, err.Error(), nil)
 	}
 	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
 	return MakeJsonErrorResult(SUCCESS, "", txHash)
@@ -71,7 +71,7 @@ func DebugLevel() {
 func DecodeAddr(addr string) string {
 	response, err := rpcclient.DecodeAddr(addr)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(DecodeAddrErr, err.Error(), nil)
 	}
 	// make result struct
 	result := JsonResultAddr{}
@@ -90,7 +90,7 @@ func ExportProof() {
 func FetchAssetMeta(isHash bool, data string) string {
 	response, err := fetchAssetMeta(isHash, data)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(fetchAssetMetaErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", string(response.Data))
 }
@@ -102,15 +102,14 @@ func FetchAssetMeta(isHash bool, data string) string {
 func GetInfoOfTap() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
 	request := &taprpc.GetInfoRequest{}
 	response, err := client.GetInfo(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s taprpc GetInfo Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(GetInfoErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -122,7 +121,7 @@ func GetInfoOfTap() string {
 func ListAssets(withWitness, includeSpent, includeLeased bool) string {
 	response, err := listAssets(withWitness, includeSpent, includeLeased)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAssetsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -130,8 +129,7 @@ func ListAssets(withWitness, includeSpent, includeLeased bool) string {
 func ListSimpleAssets(withWitness, includeSpent, includeLeased bool) string {
 	response, err := listAssets(withWitness, includeSpent, includeLeased)
 	if err != nil {
-		fmt.Printf("%s taprpc ListAssets Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listAssetsErr, err.Error(), nil)
 	}
 	var (
 		simpleAssets []struct {
@@ -178,10 +176,10 @@ func FindAssetByAssetName(assetName string) string {
 	list := ListAssets(false, false, false)
 	err := json.Unmarshal([]byte(list), &response)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(UnmarshalErr, err.Error(), nil)
 	}
 	if response.Success == false {
-		return MakeJsonErrorResult(DefaultErr, response.Error, nil)
+		return MakeJsonErrorResult(responseNotSuccessErr, response.Error, nil)
 	}
 	var assets []*taprpc.Asset
 	for _, asset := range response.Data.Assets {
@@ -191,7 +189,7 @@ func FindAssetByAssetName(assetName string) string {
 		}
 	}
 	if len(assets) == 0 {
-		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+		return MakeJsonErrorResult(assetNotFoundErr, "NOT_FOUND", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", assets)
 }
@@ -203,7 +201,7 @@ func FindAssetByAssetName(assetName string) string {
 func ListGroups() string {
 	response, err := rpcclient.ListGroups()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListGroupsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -221,8 +219,7 @@ func QueryAssetTransfers(token string, assetId string) string {
 func queryAssetTransfers(assetId string) string {
 	response, err := rpcclient.ListTransfers()
 	if err != nil {
-		fmt.Printf("%s taprpc ListTransfers Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListTransfersErr, err.Error(), nil)
 	}
 	var transfers []Transfer
 	for _, t := range response.Transfers {
@@ -242,6 +239,7 @@ func queryAssetTransfers(assetId string) string {
 type ManagedUtxo struct {
 	Op                 string             `json:"op"`
 	OutPoint           string             `json:"out_point"`
+	Time               int                `json:"time"`
 	AmtSat             int                `json:"amt_sat"`
 	InternalKey        string             `json:"internal_key"`
 	TaprootAssetRoot   string             `json:"taproot_asset_root"`
@@ -344,6 +342,7 @@ func ListUtxosResponseToManagedUtxos(listUtxosResponse *taprpc.ListUtxosResponse
 		managedUtxo = ManagedUtxo{
 			Op:                 op,
 			OutPoint:           utxo.OutPoint,
+			Time:               0,
 			AmtSat:             int(utxo.AmtSat),
 			InternalKey:        hex.EncodeToString(utxo.InternalKey),
 			TaprootAssetRoot:   hex.EncodeToString(utxo.TaprootAssetRoot),
@@ -373,13 +372,37 @@ func ManagedUtxosFilterByAssetId(utxos *[]ManagedUtxo, assetId string) *[]Manage
 	return &managedUtxos
 }
 
-func AssetUtxos(assetId string) string {
+func GetAllOutpointsOfManagedUtxos(managedUtxos *[]ManagedUtxo) []string {
+	var ops []string
+	for _, utxo := range *managedUtxos {
+		ops = append(ops, utxo.OutPoint)
+	}
+	return ops
+}
+
+func GetTimeForManagedUtxoByBitcoind(token string, managedUtxos *[]ManagedUtxo) (*[]ManagedUtxo, error) {
+	ops := GetAllOutpointsOfManagedUtxos(managedUtxos)
+	opMapTime, err := PostCallBitcoindToQueryTimeByOutpoints(token, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i, utxo := range *managedUtxos {
+		(*managedUtxos)[i].Time = opMapTime.Data[utxo.OutPoint]
+	}
+	return managedUtxos, nil
+}
+
+func AssetUtxos(token string, assetId string) string {
 	response, err := ListUtxosAndGetResponse(true)
 	if err != nil {
 		return MakeJsonErrorResult(ListUtxosAndGetResponseErr, err.Error(), nil)
 	}
 	managedUtxos := ListUtxosResponseToManagedUtxos(response)
 	managedUtxos = ManagedUtxosFilterByAssetId(managedUtxos, assetId)
+	managedUtxos, err = GetTimeForManagedUtxoByBitcoind(token, managedUtxos)
+	if err != nil {
+		return MakeJsonErrorResult(GetTimeForManagedUtxoByBitcoindErr, err.Error(), nil)
+	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, managedUtxos)
 }
 
@@ -425,7 +448,7 @@ func ListUtxos(includeLeased bool) string {
 func NewAddr(assetId string, amt int, token string, deviceId string) string {
 	response, err := rpcclient.NewAddr(assetId, amt)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(NewAddrErr, err.Error(), "")
 	}
 	result := JsonResultAddr{}
 	result.GetData(response)
@@ -449,8 +472,7 @@ func NewAddr(assetId string, amt int, token string, deviceId string) string {
 func QueryAddrs(assetId string) string {
 	addrRcv, err := rpcclient.AddrReceives()
 	if err != nil {
-		fmt.Printf("%s taprpc QueryAddrs Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), "")
 	}
 
 	addrMap := make(map[string]int)
@@ -460,8 +482,7 @@ func QueryAddrs(assetId string) string {
 
 	_addrs, err := rpcclient.QueryAddr()
 	if err != nil {
-		fmt.Printf("%s taprpc QueryAddrs Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(QueryAddrErr, err.Error(), "")
 	}
 
 	var addrs []JsonResultAddr
@@ -495,7 +516,6 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	var addrs []string
 	err = json.Unmarshal([]byte(jsonAddrs), &addrs)
 	if err != nil {
-		fmt.Printf("%s json.Unmarshal Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", nil)
 	}
 	response, err := sendAssets(addrs, uint32(feeRate))
@@ -563,7 +583,6 @@ func sendAssets(addrs []string, feeRate uint32) (*taprpc.SendAssetResponse, erro
 	}
 	response, err := client.SendAsset(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s taprpc SendAsset Error: %v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return response, nil
@@ -700,7 +719,7 @@ func ProcessListBalancesByGroupKeyResponse(response *taprpc.ListBalancesResponse
 func ListBalances() string {
 	response, err := listBalances(false, nil, nil)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listBalancesErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListBalancesResponse(response))
 }
@@ -708,7 +727,7 @@ func ListBalances() string {
 func ListNormalBalances() string {
 	response, err := listBalances(false, nil, nil)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listBalancesErr, err.Error(), nil)
 	}
 	processed := ProcessListBalancesResponse(response)
 	filtered := ExcludeListBalancesResponseCollectible(processed)
@@ -718,7 +737,7 @@ func ListNormalBalances() string {
 func ListBalancesByGroupKey() string {
 	response, err := listBalances(true, nil, nil)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(listBalancesErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", ProcessListBalancesByGroupKeyResponse(response))
 }
@@ -742,7 +761,7 @@ func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAsse
 func CheckAssetIssuanceIsLocal(assetId string) string {
 	keys, err := assetLeafKeys(assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil || len(keys.AssetKeys) == 0 {
-		return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+		return MakeJsonErrorResult(assetLeafKeysErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 	}
 
 	result := struct {
@@ -762,18 +781,18 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 		opStr := strings.Split(o.OpStr, ":")
 		listBatch, err := ListBatchesAndGetResponse()
 		if err != nil {
-			return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get mint info: %v", err).Error(), "")
+			return MakeJsonErrorResult(ListBatchesAndGetResponseErr, fmt.Errorf("failed to get mint info: %v", err).Error(), "")
 		}
 		for _, batch := range listBatch.Batches {
 			if batch.BatchTxid == opStr[0] {
 				leaves, err := assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 				if err != nil {
-					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+					return MakeJsonErrorResult(assetLeavesErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 				}
 				result.Amount = int64(leaves.Leaves[0].Asset.Amount)
 				transactions, err := GetTransactionsAndGetResponse()
 				if err != nil {
-					return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+					return MakeJsonErrorResult(GetTransactionsAndGetResponseErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 				}
 				for _, tx := range transactions.Transactions {
 					if tx.TxHash == opStr[0] {
@@ -791,7 +810,7 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 		}
 		return MakeJsonErrorResult(SUCCESS, "", result)
 	}
-	return MakeJsonErrorResult(DefaultErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
+	return MakeJsonErrorResult(GetAssetInfoErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
 }
 
 type ListAssetsResponse struct {
@@ -950,7 +969,7 @@ func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 func ListAssetsAll() string {
 	response, err := ListAssetsProcessed(true, true, false)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -958,7 +977,7 @@ func ListAssetsAll() string {
 func ListNFTGroups() string {
 	resResponse, err := rpcclient.ListGroups()
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListGroupsErr, err.Error(), nil)
 	}
 	type NFTId struct {
 		Id  string `json:"id"`
@@ -999,7 +1018,7 @@ func ListNFTGroups() string {
 func ListNFTAssets() string {
 	processed, err := ListAssetsProcessed(false, false, false)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
 	}
 	var result []ListAssetsResponse
 	for index, pr := range *processed {

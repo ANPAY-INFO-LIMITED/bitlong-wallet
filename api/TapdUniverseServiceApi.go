@@ -33,7 +33,6 @@ func assetLeafKeys(id string, proofType universerpc.ProofType) (*universerpc.Ass
 	}
 	response, err := client.AssetLeafKeys(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s universerpc Info Error: %v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return response, nil
@@ -54,11 +53,10 @@ func AssetLeafKeys(id string, proofType string) string {
 	}
 	response, err := assetLeafKeys(id, _proofType)
 	if err != nil {
-		fmt.Printf("%s universerpc AssetLeafKeys Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(assetLeafKeysErr, err.Error(), nil)
 	}
 	if len(response.AssetKeys) == 0 {
-		return MakeJsonErrorResult(DefaultErr, "Result length is zero.", nil)
+		return MakeJsonErrorResult(responseAssetKeysZeroErr, "Result length is zero.", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", processAssetKey(response))
 }
@@ -82,12 +80,11 @@ func processAssetKey(response *universerpc.AssetLeafKeyResponse) *[]AssetKey {
 func AssetLeaves(id string) string {
 	response, err := assetLeaves(false, id, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
-		fmt.Printf("%s universerpc AssetLeaves Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(assetLeavesErr, err.Error(), nil)
 	}
 
 	if response.Leaves == nil {
-		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+		return MakeJsonErrorResult(responseLeavesNullErr, "NOT_FOUND", nil)
 	}
 
 	return MakeJsonErrorResult(SUCCESS, "", response)
@@ -96,7 +93,7 @@ func AssetLeaves(id string) string {
 func GetAssetInfo(id string) string {
 	root := rpcclient.QueryAssetRoots(id)
 	if root.IssuanceRoot.Id == nil {
-		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+		return MakeJsonErrorResult(QueryAssetRootsErr, "NOT_FOUND", nil)
 	}
 	queryId := id
 	isGroup := false
@@ -107,11 +104,10 @@ func GetAssetInfo(id string) string {
 	}
 	response, err := assetLeaves(isGroup, queryId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
-		fmt.Printf("%s universerpc AssetLeaves Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(assetLeavesErr, err.Error(), nil)
 	}
 	if response.Leaves == nil {
-		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+		return MakeJsonErrorResult(responseLeavesNullErr, "NOT_FOUND", nil)
 	}
 	var blob proof.Blob
 	for index, leaf := range response.Leaves {
@@ -121,7 +117,7 @@ func GetAssetInfo(id string) string {
 		}
 	}
 	if len(blob) == 0 {
-		return MakeJsonErrorResult(DefaultErr, "NOT_FOUND", nil)
+		return MakeJsonErrorResult(blobLenZeroErr, "NOT_FOUND", nil)
 	}
 	p, _ := blob.AsSingleProof()
 	assetId := p.Asset.ID().String()
@@ -135,14 +131,13 @@ func GetAssetInfo(id string) string {
 	//m := hex.EncodeToString(p.MetaReveal.Data)
 	m := string(p.MetaReveal.Data)
 	newMeta.GetMetaFromStr(m)
-
 	//proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	//if err != nil {
-	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	//	return MakeJsonErrorResult(DecodeProofErr, err.Error(), nil)
 	//}
 	//block, err := rpcclient2.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
 	//if err != nil {
-	//	return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	//	return MakeJsonErrorResult(GetBlockErr, err.Error(), nil)
 	//}
 	//msgBlock := &wire.MsgBlock{}
 	//blockReader := bytes.NewReader(block.RawBlock)
@@ -218,8 +213,7 @@ func UniverseInfo() string {
 	request := &universerpc.InfoRequest{}
 	response, err := client.Info(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s universerpc Info Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(clientInfoErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -252,8 +246,7 @@ func MultiverseRoot() {}
 func QueryAssetRoots(id string) string {
 	response, err := queryAssetRoot(id)
 	if err != nil {
-		fmt.Printf("%s universerpc AssetRoots Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+		return MakeJsonErrorResult(queryAssetRootErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -261,8 +254,7 @@ func QueryAssetRoots(id string) string {
 func QueryAssetStats(assetId string) string {
 	response, err := queryAssetStats(assetId)
 	if err != nil {
-		fmt.Printf("%s universerpc QueryAssetStats Error: %v\n", GetTimeNow(), err)
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(queryAssetStatsErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
@@ -300,7 +292,7 @@ func SyncUniverse(universeHost string, assetId string) string {
 	}
 	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }

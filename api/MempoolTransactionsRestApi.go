@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -59,13 +58,11 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.Get :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var transactionsResponse TransactionsResponse
 	if err := json.Unmarshal(bodyBytes, &transactionsResponse); err != nil {
-		fmt.Printf("%s GTBM json.Unmarshal :%v\n", GetTimeNow(), err)
 		return nil, err
 	}
 	return &transactionsResponse, nil
@@ -109,7 +106,7 @@ func TransactionsResponseToTransactionsSimplified(transactionsResponse *Transact
 func GetTransactionByMempool(txid string) string {
 	response, err := getTransactionByMempool(txid)
 	if err != nil {
-		return MakeJsonErrorResult(DefaultErr, "Unmarshal response body fail.", nil)
+		return MakeJsonErrorResult(getTransactionByMempoolErr, "Unmarshal response body fail.", nil)
 	}
 	result := TransactionsResponseToTransactionsSimplified(response)
 	return MakeJsonErrorResult(SUCCESS, "", result)
