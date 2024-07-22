@@ -3824,9 +3824,10 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 	Data    *AssetIdAndBalance `json:"data"`
 }
 
+// TODO: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/" + assetId
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit50/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3864,6 +3865,58 @@ func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId str
 	return response.Data, nil
 }
 
+type GetAssetHolderBalanceRecordsLengthResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string, assetId string) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/records/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetHolderBalanceRecordsLengthResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalanceRecordsLengthNumber(token string, assetId string) (int, error) {
+	return RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token, assetId)
+}
+
+// TODO: Should add page and size
 func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
@@ -3910,6 +3963,7 @@ func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAn
 }
 
 func GetAssetHolderBalance(token string, assetId string) string {
+	// TODO: Should update
 	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
