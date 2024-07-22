@@ -158,6 +158,10 @@ func readProof(assetId, groupKey, scriptkey, outpoint string) (*Jstr, error) {
 		return nil, InputErr
 	}
 	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
+	if loc == nil {
+		locRequestErr := errors.New("asset info is fail, please check the assetId, groupKey, scriptkey, outpoint")
+		return nil, locRequestErr
+	}
 	fetchProof, err := universeCourier.FetchProof(*loc)
 	if err != nil {
 		return nil, FetchProofErr
