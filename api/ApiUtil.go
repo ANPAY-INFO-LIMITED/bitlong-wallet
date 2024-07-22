@@ -564,13 +564,22 @@ func GetTimestamp() int {
 
 func GoRunTimeTest() {
 	go func() {
-		fmt.Println("1")
-		time.Sleep(time.Second * 2000)
+		for {
+			fmt.Println("111111111")
+			time.Sleep(time.Second * 2000)
+			fmt.Println("11111.end")
+		}
 	}()
 	go func() {
-		fmt.Println("2")
+		for {
+			fmt.Println("22222222222222")
+			time.Sleep(time.Second * 1)
+		}
+
 	}()
-	for {
+
+	for i := 0; i < 100; i++ {
 		fmt.Println("go run time test")
+		time.Sleep(time.Second * 1)
 	}
 }
