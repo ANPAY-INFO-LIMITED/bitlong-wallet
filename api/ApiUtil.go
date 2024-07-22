@@ -577,9 +577,10 @@ func GoRunTimeTest() {
 		}
 
 	}()
-
-	for i := 0; i < 100; i++ {
-		fmt.Println("go run time test")
-		time.Sleep(time.Second * 1)
-	}
+	go func() {
+		for i := 0; i < 100; i++ {
+			fmt.Println("go run time test")
+			time.Sleep(time.Second * 1)
+		}
+	}()
 }
