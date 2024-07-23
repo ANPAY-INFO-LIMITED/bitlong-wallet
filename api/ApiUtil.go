@@ -562,3 +562,18 @@ func GetFunctionName(i any) string {
 func GetTimestamp() int {
 	return int(time.Now().Unix())
 }
+
+// TxHashConversion size-end conversion
+func TxHashConversion(txHash string) string {
+	b, err := hex.DecodeString(txHash)
+	if err != nil {
+		return err.Error()
+	}
+	for i := 0; i < len(b)/2; i++ {
+		temp := b[i]
+		b[i] = b[len(b)-i-1]
+		b[len(b)-i-1] = temp
+	}
+	txHash = hex.EncodeToString(b)
+	return txHash
+}
