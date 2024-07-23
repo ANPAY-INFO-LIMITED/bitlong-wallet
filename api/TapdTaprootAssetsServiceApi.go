@@ -55,10 +55,14 @@ func AddrReceives(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
 }
 
-func BurnAsset(AssetIdStr string, amountToBurn int64) string {
+func BurnAsset(token string, AssetIdStr string, amountToBurn int64, deviceId string) string {
 	response, err := rpcclient.BurnAsset(AssetIdStr, uint64(amountToBurn))
 	if err != nil {
 		return MakeJsonErrorResult(BurnAssetErr, err.Error(), nil)
+	}
+	err = UploadAssetBurn(token, AssetIdStr, int(amountToBurn), deviceId)
+	if err != nil {
+		return MakeJsonErrorResult(UploadAssetBurnErr, err.Error(), nil)
 	}
 	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
 	return MakeJsonErrorResult(SUCCESS, "", txHash)

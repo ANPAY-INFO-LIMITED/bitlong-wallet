@@ -3032,6 +3032,7 @@ type AssetAddr struct {
 	AssetVersion     int    `json:"asset_version"`
 	DeviceID         string `json:"device_id" gorm:"type:varchar(255)"`
 	UserId           int    `json:"user_id"`
+	Username         string `json:"username" gorm:"type:varchar(255)"`
 	Status           int    `json:"status" gorm:"default:1"`
 }
 
@@ -4086,4 +4087,129 @@ func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, 
 		return nil, errors.New(response.Error)
 	}
 	return response.Data, nil
+}
+
+type GetAssetAddrByEncodedResponse struct {
+	Success bool       `json:"success"`
+	Error   string     `json:"error"`
+	Code    ErrCode    `json:"code"`
+	Data    *AssetAddr `json:"data"`
+}
+
+func RequestToGetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_addr/get/encoded/" + encoded
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetAddrByEncodedResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, error) {
+	return RequestToGetAssetAddrByEncoded(token, encoded)
+}
+
+func GetUsernameByEncoded(token string, encoded string) (string, error) {
+	assetAddr, err := GetAssetAddrByEncoded(token, encoded)
+	if err != nil {
+		return "", err
+	}
+	return assetAddr.Username, nil
+}
+
+type AssetBurn struct {
+	gorm.Model
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255)"`
+	Amount   int    `json:"amount"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId   int    `json:"user_id"`
+	Username string `json:"username" gorm:"type:varchar(255)"`
+	Status   int    `json:"status" gorm:"default:1"`
+}
+
+type AssetBurnSetRequest struct {
+	AssetId  string `json:"asset_id"`
+	Amount   int    `json:"amount"`
+	DeviceId string `json:"device_id"`
+}
+
+func PostToSetAssetBurn(token string, assetBurnSetRequest *AssetBurnSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_burn/set"
+	requestJsonBytes, err := json.Marshal(assetBurnSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func UploadAssetBurn(token string, assetId string, amount int, deviceId string) error {
+	assetBurnSetRequest := &AssetBurnSetRequest{
+		AssetId:  assetId,
+		Amount:   amount,
+		DeviceId: deviceId,
+	}
+	_, err := PostToSetAssetBurn(token, assetBurnSetRequest)
+	return err
 }

@@ -156,6 +156,7 @@ const (
 	receiveProofErr
 	readProofErr
 	queryAssetProofsErr
+	UploadAssetBurnErr
 )
 
 var ErrMsgMap = map[ErrCode]error{
