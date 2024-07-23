@@ -582,6 +582,7 @@ func TxHashConversion(txHash string) string {
 }
 func FixAssetTest() {
 	dbPath := base.GetFilePath() + "test.db"
+	fmt.Println(dbPath)
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		fmt.Println(err)
