@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/wallet/base"
 	"google.golang.org/protobuf/proto"
 	"log"
 	"math"
@@ -578,3 +580,27 @@ func TxHashConversion(txHash string) string {
 	txHash = hex.EncodeToString(b)
 	return txHash
 }
+func FixAssetTest() {
+	dbPath := base.GetFilePath() + "test.db"
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	out := "44a630322ca3f7c8f5cb5f96994bb901934d98ba1f8b4039de175b08beee3f2701000000"
+	lows, err := db.Exec(test, out)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(lows.RowsAffected())
+}
+
+const test = `
+	update  assets 
+	set spent = 1
+	WHERE anchor_utxo_id = (
+		SELECT utxo_id 
+		FROM managed_utxos 
+		WHERE lower(hex(outpoint)) = $1
+	);
+	`
