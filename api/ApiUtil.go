@@ -157,6 +157,7 @@ const (
 	readProofErr
 	queryAssetProofsErr
 	UploadAssetBurnErr
+	GetAssetBurnTotalAmountByAssetIdErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

@@ -3913,6 +3913,7 @@ func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string
 	return response.Data, nil
 }
 
+// TODO: Continue from here (page,size)
 func GetAssetHolderBalanceRecordsLengthNumber(token string, assetId string) (int, error) {
 	return RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token, assetId)
 }
@@ -4212,4 +4213,63 @@ func UploadAssetBurn(token string, assetId string, amount int, deviceId string) 
 	}
 	_, err := PostToSetAssetBurn(token, assetBurnSetRequest)
 	return err
+}
+
+type GetAssetBurnTotalAmountByAssetIdResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetAssetBurnTotalAmountByAssetId(token string, assetId string) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_burn/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetBurnTotalAmountByAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetBurnTotalAmountByAssetId(token string, assetId string) (int, error) {
+	return RequestToGetAssetBurnTotalAmountByAssetId(token, assetId)
+}
+
+func GetAssetBurnTotalAmount(token string, assetId string) string {
+	totalAmount, err := GetAssetBurnTotalAmountByAssetId(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetBurnTotalAmountByAssetIdErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, totalAmount)
 }
