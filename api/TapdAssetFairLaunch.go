@@ -87,7 +87,7 @@ func GetIssuanceTransactionCalculatedFee(token string) (fee int, err error) {
 		return 0, err
 	}
 	feeRate := serverFeeRateResponse.Data.SatPerB
-	return feeRate * size, err
+	return feeRate*size + 2000, err
 }
 
 func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int, err error) {
@@ -98,7 +98,7 @@ func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int,
 		return 0, err
 	}
 	feeRate := serverQueryMintResponse.Data.CalculatedFeeRateSatPerB
-	return feeRate * size, err
+	return feeRate*size + 1000, err
 }
 
 func GetIssuanceTransactionByteSize() int {
