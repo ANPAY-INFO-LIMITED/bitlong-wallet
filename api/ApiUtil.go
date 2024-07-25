@@ -159,6 +159,7 @@ const (
 	queryAssetProofsErr
 	UploadAssetBurnErr
 	GetAssetBurnTotalAmountByAssetIdErr
+	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

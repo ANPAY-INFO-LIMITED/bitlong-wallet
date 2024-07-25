@@ -473,6 +473,30 @@ func NewAddr(assetId string, amt int, token string, deviceId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
+func NewAddrAndGetResponseEncoded(assetId string, amt int, token string, deviceId string) (string, error) {
+	response, err := rpcclient.NewAddr(assetId, amt)
+	if err != nil {
+		return "", err
+	}
+	result := JsonResultAddr{}
+	result.GetData(response)
+	UploadAssetAddr(token, &AssetAddrSetRequest{
+		Encoded:          result.Encoded,
+		AssetId:          result.AssetId,
+		AssetType:        result.AssetType,
+		Amount:           result.Amount,
+		GroupKey:         result.GroupKey,
+		ScriptKey:        result.ScriptKey,
+		InternalKey:      result.InternalKey,
+		TapscriptSibling: result.TapscriptSibling,
+		TaprootOutputKey: result.TaprootOutputKey,
+		ProofCourierAddr: result.ProofCourierAddr,
+		AssetVersion:     result.AssetVersion,
+		DeviceID:         deviceId,
+	})
+	return response.Encoded, nil
+}
+
 func QueryAddrs(assetId string) string {
 	addrRcv, err := rpcclient.AddrReceives()
 	if err != nil {

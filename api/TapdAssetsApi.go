@@ -12,6 +12,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/wallet/base"
+	"github.com/wallet/models"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"gorm.io/gorm"
@@ -2231,7 +2232,6 @@ func GetAllOutPointsOfListTransfersResponse(listTransfersResponse *taprpc.ListTr
 		for _, input := range listTransfer.Inputs {
 			allOutPoints = append(allOutPoints, input.AnchorPoint)
 		}
-
 		for _, output := range listTransfer.Outputs {
 			allOutPoints = append(allOutPoints, output.Anchor.Outpoint)
 		}
@@ -2299,7 +2299,8 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 	}
 	addressMap := response.Data
 	for _, listTransfer := range listTransfersResponse.Transfers {
-		txid, err := GetTxidFromOutpoint(listTransfer.Outputs[0].Anchor.Outpoint)
+		var txid string
+		txid, err = GetTxidFromOutpoint(listTransfer.Outputs[0].Anchor.Outpoint)
 		if err != nil {
 			return nil
 		}
@@ -2793,6 +2794,8 @@ func RequestToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 	return response.Data, nil
 }
 
+// UploadAddrReceives
+// @Description: Upload addr receives
 func UploadAddrReceives(token string, deviceId string) string {
 	events, err := AddrReceivesAndGetEvents(deviceId)
 	if err != nil {
@@ -4141,6 +4144,8 @@ func GetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, error) {
 	return RequestToGetAssetAddrByEncoded(token, encoded)
 }
 
+// GetUsernameByEncoded
+// @Description: Get username by encoded addr
 func GetUsernameByEncoded(token string, encoded string) (string, error) {
 	assetAddr, err := GetAssetAddrByEncoded(token, encoded)
 	if err != nil {
@@ -4272,4 +4277,173 @@ func GetAssetBurnTotalAmount(token string, assetId string) string {
 		return MakeJsonErrorResult(GetAssetBurnTotalAmountByAssetIdErr, err.Error(), 0)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, totalAmount)
+}
+
+//TODO: Query all username's assets' simplified balances and query username by encoded addr
+
+type FairLaunchInfoSimplified struct {
+	ID                    int                    `json:"id"`
+	Name                  string                 `json:"name"`
+	ReserveTotal          int                    `json:"reserve_total"`
+	CalculationExpression string                 `json:"calculation_expression"`
+	AssetID               string                 `json:"asset_id"`
+	State                 models.FairLaunchState `json:"state"`
+}
+
+type GetOwnFairLaunchInfoIssuedSimplifiedResponse struct {
+	Success bool                        `json:"success"`
+	Error   string                      `json:"error"`
+	Code    ErrCode                     `json:"code"`
+	Data    *[]FairLaunchInfoSimplified `json:"data"`
+}
+
+func RequestToGetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchInfoSimplified, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/own_set/issued/simplified"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetOwnFairLaunchInfoIssuedSimplifiedResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+// GetOwnFairLaunchInfoIssuedSimplified
+// @Description: Get own fair launch info issued simplified
+func GetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchInfoSimplified, error) {
+	return RequestToGetOwnFairLaunchInfoIssuedSimplified(token)
+}
+
+type MintReservedRequest struct {
+	AssetID     string `json:"asset_id"`
+	EncodedAddr string `json:"encoded_addr"`
+}
+
+type MintReservedResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    struct {
+		AnchorOutpoint string `json:"anchor_outpoint"`
+	} `json:"data"`
+}
+
+func PostToFairLaunchMintReserved(token string, mintReservedRequest *MintReservedRequest) (string, error) {
+	if mintReservedRequest == nil {
+		return "", errors.New("invalid request")
+	}
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/mint_reserved"
+	requestJsonBytes, err := json.Marshal(mintReservedRequest)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response MintReservedResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data.AnchorOutpoint, nil
+}
+
+// FairLaunchMintReserved
+// @Description: Fair launch mint reserved
+func FairLaunchMintReserved(token string, assetId string, encodedAddr string) (string, error) {
+	mintReservedRequest := MintReservedRequest{
+		AssetID:     assetId,
+		EncodedAddr: encodedAddr,
+	}
+	return PostToFairLaunchMintReserved(token, &mintReservedRequest)
+}
+
+func GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReserved(token string, deviceId string) ([]string, error) {
+	fairLaunchInfoIssuedSimplified, err := GetOwnFairLaunchInfoIssuedSimplified(token)
+	if err != nil {
+		return nil, err
+	}
+	if fairLaunchInfoIssuedSimplified == nil {
+		return []string{}, nil
+	}
+	var outpoints []string
+	for _, fairLaunchInfo := range *fairLaunchInfoIssuedSimplified {
+		assetId := fairLaunchInfo.AssetID
+		amount := fairLaunchInfo.ReserveTotal
+		var encoded string
+		encoded, err = NewAddrAndGetResponseEncoded(assetId, amount, token, deviceId)
+		if err != nil {
+			return nil, err
+		}
+		var op string
+		op, err = FairLaunchMintReserved(token, fairLaunchInfo.AssetID, encoded)
+		if err != nil {
+			return nil, err
+		}
+		outpoints = append(outpoints, op)
+	}
+	return outpoints, nil
+}
+
+// AutoMintReserved
+// @Description: Get own fair launch info issued simplified and execute mint reserved
+// @dev: This should be executed in a loop
+func AutoMintReserved(token string, deviceId string) string {
+	result, err := GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReserved(token, deviceId)
+	if err != nil {
+		return MakeJsonErrorResult(GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
