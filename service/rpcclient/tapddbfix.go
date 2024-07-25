@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/lightninglabs/lightning-terminal/litrpc"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/wallet/base"
+	"github.com/wallet/service/apiConnect"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -55,22 +57,17 @@ list:
 
 	//交易列表中是否存在该资产
 tx:
-	txReq := taprpc.ListTransfersRequest{}
-	txs, err := client.ListTransfers(context.Background(), &txReq)
+	coon, clearUp, err := apiConnect.GetConnection("litd", false)
 	if err != nil {
-		return "GetListTransfers failed", err
+		return "", err
 	}
-	for _, tx := range txs.Transfers {
-		for _, input := range tx.Inputs {
-			if input.AnchorPoint == outpoint {
-				return "asset is spent ", nil
-			}
-		}
-	}
-	stopreq := taprpc.StopRequest{}
-	_, err = client.StopDaemon(context.Background(), &stopreq)
+	defer clearUp()
+	litdClient := litrpc.NewProxyClient(coon)
+	stopReq := &litrpc.StopDaemonRequest{}
+
+	_, err = litdClient.StopDaemon(context.Background(), stopReq)
 	if err != nil {
-		return "Stop failed", err
+		return "", errors.New("litd is not stop")
 	}
 	for i := 0; i < 10; i++ {
 		getinfoReq := taprpc.GetInfoRequest{}
