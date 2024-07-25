@@ -36,9 +36,9 @@ const (
 	// TX.
 	DummyAmtSats = btcutil.Amount(1_000)
 
-	// pk:  cP5juDH4poMV95VHiyKK7GfgZeY2yqhDisovSuhySafATHYhr21W
-	// tapdAddr:  bcrt1ptqcwa0mmmupxqteefr7j7jtr34ujt8p7jpz8xh8rjwcvaqd8atrqqv555x
-	// addr:  mrLUkNARoDenQiUrX9Lv8wwjxkUF2xkCfx
+	// AddrCharge 和 AddrChargeTr 都必须使用p2wkh格式地址来收手续费，为了兼容官方的
+	// AddrCharge 为铸币手续费地址
+	// AddrChargeTr 为多签手续费地址
 	//这里手续费参数
 	AddrCharge               = "bc1q7mnlw0nsxpxzgjw79mcjhekdun8h6hngwvlkcg"
 	AddrChargeTr             = "bc1q8srgdudydhpjv3892qffc24xmqu2j7cy0mryhl"
