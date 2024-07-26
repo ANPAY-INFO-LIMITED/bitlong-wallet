@@ -98,7 +98,7 @@ func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int,
 		return 0, err
 	}
 	feeRate := serverQueryMintResponse.Data.CalculatedFeeRateSatPerB
-	return feeRate*size + 1000, err
+	return feeRate*size + 1500, err
 }
 
 func GetIssuanceTransactionByteSize() int {

@@ -62,7 +62,8 @@ func BurnAsset(token string, AssetIdStr string, amountToBurn int64, deviceId str
 	}
 	err = UploadAssetBurn(token, AssetIdStr, int(amountToBurn), deviceId)
 	if err != nil {
-		return MakeJsonErrorResult(UploadAssetBurnErr, err.Error(), nil)
+		LogError("Upload asset burn", err)
+		// @dev: Do not return error
 	}
 	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
 	return MakeJsonErrorResult(SUCCESS, "", txHash)
@@ -213,6 +214,7 @@ func ListGroups() string {
 // QueryAssetTransfers
 // @Description: ListTransfers lists outbound asset transfer tracked by the target daemon.
 func QueryAssetTransfers(token string, assetId string) string {
+	// @dev: The token is actually not been used.
 	response, err := QueryAssetTransferSimplified(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
@@ -529,17 +531,18 @@ func QueryAddrs(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addrs)
 }
 
-// jsonAddrs : ["addrs1","addrs2",...]
+// SendAssets
+// @Description: jsonAddrs : ["addrs1","addrs2",...]
+// @dev: If operation using token fail, ignore it and continue
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
 	if int(feeRate) > FeeRateSatPerBToSatPerKw(500) {
 		err := errors.New("fee rate exceeds max(500)")
 		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
 	}
-	isTokenValid, err := IsTokenValid(token)
+	_, err := IsTokenValid(token)
 	if err != nil {
-		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", nil)
-	} else if !isTokenValid {
-		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
+		LogError("token is invalid", err)
+		// @dev: Do not return error
 	}
 	var addrs []string
 	err = json.Unmarshal([]byte(jsonAddrs), &addrs)
@@ -585,7 +588,8 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	// @dev: Upload
 	err = UploadBatchTransfers(token, &batchTransfersRequest)
 	if err != nil {
-		return MakeJsonErrorResult(UploadBatchTransfersErr, err.Error()+"; Assets sent, but upload failed.", txid)
+		LogError("; Assets sent, but upload failed.", err)
+		// @dev: Do not return error
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }

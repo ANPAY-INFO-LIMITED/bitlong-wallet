@@ -2052,7 +2052,10 @@ func BtcTransferOutInfoToBtcTransferInInfoSimplified(btcTransferInInfos *[]BtcTr
 	return &btcTransferOutInfoSimplified
 }
 
+// GetBtcTransferOutInfosJsonResult
+// @Description: Out
 func GetBtcTransferOutInfosJsonResult(token string) string {
+	// TODO: When token is invalid or request error, return result which not been processed
 	response, err := GetBtcTransferOutInfos(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
@@ -2060,7 +2063,10 @@ func GetBtcTransferOutInfosJsonResult(token string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
+// GetBtcTransferInInfosJsonResult
+// @Description: In
 func GetBtcTransferInInfosJsonResult(token string) string {
+	// TODO: When token is invalid or request error, return result which not been processed
 	response, err := GetBtcTransferInInfos(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
@@ -2808,6 +2814,8 @@ func UploadAddrReceives(token string, deviceId string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
 }
 
+// GetAddrReceives
+// @Description: Actually not been used. Use AddrReceives instead.
 func GetAddrReceives(token string) string {
 	response, err := RequestToGetAddrReceivesEvents(token)
 	if err != nil {
@@ -3746,6 +3754,7 @@ func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransfe
 	// reserved
 	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
 	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
+	// @dev: Request spent a lot of time, do not use token now
 	_ = token
 	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
 	return assetTransferSimplified, nil
@@ -3831,7 +3840,7 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 // TODO: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit50/" + assetId
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/all/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
