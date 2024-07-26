@@ -504,17 +504,14 @@ func QueryAddrs(assetId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), "")
 	}
-
 	addrMap := make(map[string]int)
 	for _, events := range addrRcv.Events {
 		addrMap[events.Addr.Encoded]++
 	}
-
 	_addrs, err := rpcclient.QueryAddr()
 	if err != nil {
 		return MakeJsonErrorResult(QueryAddrErr, err.Error(), "")
 	}
-
 	var addrs []JsonResultAddr
 	for _, a := range _addrs.Addrs {
 		if assetId != "" && assetId != hex.EncodeToString(a.AssetId) {
@@ -1006,12 +1003,12 @@ func ListAssetsAll() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-func ListNFTGroups() string {
+func ListNftGroups() string {
 	resResponse, err := rpcclient.ListGroups()
 	if err != nil {
 		return MakeJsonErrorResult(ListGroupsErr, err.Error(), nil)
 	}
-	type NFTId struct {
+	type NftId struct {
 		Id  string `json:"id"`
 		Tag string `json:"tag"`
 	}
@@ -1019,7 +1016,7 @@ func ListNFTGroups() string {
 		GroupKey  string   `json:"group_key"`
 		GroupName string   `json:"group_name"`
 		Supply    int      `json:"supply"`
-		NFTIds    *[]NFTId `json:"nft_ids"`
+		NftIds    *[]NftId `json:"nft_ids"`
 	}
 	var Groups []Group
 	if resResponse.Groups != nil {
@@ -1027,9 +1024,9 @@ func ListNFTGroups() string {
 			if group.Assets[0].Type != taprpc.AssetType_COLLECTIBLE {
 				break
 			}
-			var nftIds []NFTId
+			var nftIds []NftId
 			for _, asset := range group.Assets {
-				nftIds = append(nftIds, NFTId{
+				nftIds = append(nftIds, NftId{
 					Id:  hex.EncodeToString(asset.Id),
 					Tag: asset.Tag,
 				})
@@ -1040,14 +1037,14 @@ func ListNFTGroups() string {
 				GroupKey:  key,
 				GroupName: meta.Name,
 				Supply:    len(group.Assets),
-				NFTIds:    &nftIds,
+				NftIds:    &nftIds,
 			})
 		}
 	}
 	return MakeJsonErrorResult(SUCCESS, "", Groups)
 }
 
-func ListNFTAssets() string {
+func ListNftAssets() string {
 	processed, err := ListAssetsProcessed(false, false, false)
 	if err != nil {
 		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
@@ -1061,7 +1058,7 @@ func ListNFTAssets() string {
 	return MakeJsonErrorResult(SUCCESS, "", &result)
 }
 
-func QueryAllNFTByGroup(groupKey string) string {
+func QueryAllNftByGroup(groupKey string) string {
 	response, err := GetGroupAssets(groupKey)
 	if err != nil {
 		return MakeJsonErrorResult(ListNftAssetsAndGetResponseErr, err.Error(), nil)
