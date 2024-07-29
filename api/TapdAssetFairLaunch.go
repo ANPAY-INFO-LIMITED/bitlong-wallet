@@ -329,7 +329,7 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 		if err != nil {
 			//LogError("", err)
 			continue
-			//	@dev:do not return
+			//	@dev: Do not return
 		}
 		timestamp = int(transaction.TimeStamp)
 		outpoint = transaction.PreviousOutpoints[0].Outpoint

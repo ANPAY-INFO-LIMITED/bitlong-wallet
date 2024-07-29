@@ -42,12 +42,12 @@ func CancelBatch() bool {
 //	@param shortResponse
 //	@param feeRate
 //	@return bool
-func FinalizeBatch(feeRate int) string {
+func FinalizeBatch(feeRate int, token string, deviceId string) string {
 	if feeRate > FeeRateSatPerBToSatPerKw(500) {
 		err := errors.New("fee rate exceeds max(500)")
 		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
 	}
-	return finalizeBatch(false, feeRate)
+	return finalizeBatch(false, feeRate, token, deviceId)
 }
 
 // ListBatches
@@ -217,7 +217,7 @@ func (m *Meta) FetchAssetMeta(isHash bool, data string) string {
 //	@param shortResponse
 //	@param feeRate
 //	@return string
-func finalizeBatch(shortResponse bool, feeRate int) string {
+func finalizeBatch(shortResponse bool, feeRate int, token string, deviceId string) string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
@@ -233,7 +233,13 @@ func finalizeBatch(shortResponse bool, feeRate int) string {
 		fmt.Printf("%s mintrpc FinalizeBatch Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(FinalizeBatchErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	// @dev: Upload asset local mint
+	err = UploadAssetLocalMints(token, deviceId, response)
+	if err != nil {
+		LogError("", err)
+		// @dev: Do not return
+	}
+	return MakeJsonErrorResult(SUCCESS, "", FinalizeBatchResponseToPendingBatch(response))
 }
 
 // mintAsset
@@ -304,5 +310,5 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 		fmt.Printf("%s mintrpc MintAsset Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(MintAssetErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, "", response)
+	return MakeJsonErrorResult(SUCCESS, "", MintAssetResponseToPendingBatch(response))
 }

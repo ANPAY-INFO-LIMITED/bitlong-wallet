@@ -81,7 +81,7 @@ func (r *Transfer) GetData(response *taprpc.AssetTransfer) {
 	r.AnchorTxHash = hex.EncodeToString(response.AnchorTxHash)
 	r.AnchorTxHeightHint = int(response.AnchorTxHeightHint)
 	r.AnchorTxChainFees = response.AnchorTxChainFees
-	r.Txid, _ = outpointToTransactionAndIndex(response.Outputs[0].Anchor.Outpoint)
+	r.Txid, _ = OutpointToTransactionAndIndex(response.Outputs[0].Anchor.Outpoint)
 	for _, input := range response.Inputs {
 		newInput := &Inputs{}
 		newInput.AnchorPoint = input.AnchorPoint

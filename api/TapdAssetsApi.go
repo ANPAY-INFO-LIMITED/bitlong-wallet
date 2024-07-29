@@ -2630,7 +2630,7 @@ func GetAssetTransferByAssetIdFromServer(token string, assetId string) string {
 	return PostToGetAssetTransferByAssetId(token, assetId)
 }
 
-func outpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
+func OutpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
 	result := strings.Split(outpoint, ":")
 	return result[0], result[1]
 }
@@ -2638,7 +2638,7 @@ func outpointToTransactionAndIndex(outpoint string) (transaction string, index s
 func BatchTxidToAssetId(batchTxid string) (string, error) {
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
-		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
 		if batchTxid == txid {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}
@@ -4455,4 +4455,240 @@ func AutoMintReserved(token string, deviceId string) string {
 		return MakeJsonErrorResult(GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+type AssetLocalMint struct {
+	gorm.Model
+	AssetVersion    string `json:"asset_version" gorm:"type:varchar(255)"`
+	AssetType       string `json:"asset_type" gorm:"type:varchar(255)"`
+	Name            string `json:"name" gorm:"type:varchar(255)"`
+	AssetMetaData   string `json:"asset_meta_data"`
+	AssetMetaType   string `json:"asset_meta_type" gorm:"type:varchar(255)"`
+	AssetMetaHash   string `json:"asset_meta_hash" gorm:"type:varchar(255)"`
+	Amount          int    `json:"amount"`
+	NewGroupedAsset bool   `json:"new_grouped_asset"`
+	GroupKey        string `json:"group_key" gorm:"type:varchar(255)"`
+	GroupAnchor     string `json:"group_anchor" gorm:"type:varchar(255)"`
+	GroupedAsset    bool   `json:"grouped_asset"`
+	BatchKey        string `json:"batch_key" gorm:"type:varchar(255)"`
+	BatchTxid       string `json:"batch_txid" gorm:"type:varchar(255)"`
+	AssetId         string `json:"asset_id" gorm:"type:varchar(255)"`
+	DeviceId        string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId          int    `json:"user_id"`
+	Username        string `json:"username" gorm:"type:varchar(255)"`
+	Status          int    `json:"status" gorm:"default:1"`
+}
+
+type AssetLocalMintSetRequest struct {
+	AssetVersion    string `json:"asset_version"`
+	AssetType       string `json:"asset_type"`
+	Name            string `json:"name"`
+	AssetMetaData   string `json:"asset_meta_data"`
+	AssetMetaType   string `json:"asset_meta_type"`
+	AssetMetaHash   string `json:"asset_meta_hash"`
+	Amount          int    `json:"amount"`
+	NewGroupedAsset bool   `json:"new_grouped_asset"`
+	GroupKey        string `json:"group_key"`
+	GroupAnchor     string `json:"group_anchor"`
+	GroupedAsset    bool   `json:"grouped_asset"`
+	BatchKey        string `json:"batch_key"`
+	BatchTxid       string `json:"batch_txid"`
+	AssetId         string `json:"asset_id"`
+	DeviceId        string `json:"device_id"`
+}
+
+func BatchTxidAnchorToAssetId(batchTxidAnchor string) (string, error) {
+	assets, _ := listAssets(true, true, false)
+	for _, asset := range assets.Assets {
+		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		if batchTxidAnchor == txid {
+			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
+		}
+	}
+	err := errors.New("no asset found for batch txid")
+	return "", err
+}
+
+func BatchTxidAndAssetMintInfoToAssetId(batchTxid string, pendingAsset *mintrpc.PendingAsset) (string, error) {
+	assets, _ := listAssets(true, true, false)
+	for _, asset := range assets.Assets {
+		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		if batchTxid == txid &&
+			pendingAsset.Name == asset.AssetGenesis.Name &&
+			pendingAsset.Amount == asset.Amount &&
+			hex.EncodeToString(pendingAsset.AssetMeta.MetaHash) == hex.EncodeToString(asset.AssetGenesis.MetaHash) &&
+			pendingAsset.AssetType == asset.AssetGenesis.AssetType {
+			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
+		}
+	}
+	err := errors.New("no asset found for batch txid")
+	return "", err
+}
+
+func BatchAssetToAssetLocalMintSetRequest(batchKey string, batchTxid string, deviceId string, asset *mintrpc.PendingAsset) *AssetLocalMintSetRequest {
+	if asset == nil {
+		return nil
+	}
+	groupKey := hex.EncodeToString(asset.GroupKey)
+	groupedAsset := asset.NewGroupedAsset || groupKey != ""
+	assetId, err := BatchTxidAndAssetMintInfoToAssetId(batchTxid, asset)
+	if err != nil {
+		// @dev: Do not return
+		LogError("", err)
+	}
+	return &AssetLocalMintSetRequest{
+		AssetVersion:    asset.AssetVersion.String(),
+		AssetType:       asset.AssetType.String(),
+		Name:            asset.Name,
+		AssetMetaData:   hex.EncodeToString(asset.AssetMeta.Data),
+		AssetMetaType:   asset.AssetMeta.Type.String(),
+		AssetMetaHash:   hex.EncodeToString(asset.AssetMeta.MetaHash),
+		Amount:          int(asset.Amount),
+		NewGroupedAsset: asset.NewGroupedAsset,
+		GroupKey:        groupKey,
+		GroupAnchor:     asset.GroupAnchor,
+		GroupedAsset:    groupedAsset,
+		BatchKey:        batchKey,
+		BatchTxid:       batchTxid,
+		AssetId:         assetId,
+		DeviceId:        deviceId,
+	}
+}
+
+func FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId string, finalizeBatchResponse *mintrpc.FinalizeBatchResponse) *[]AssetLocalMintSetRequest {
+	batch := finalizeBatchResponse.GetBatch()
+	if batch == nil {
+		return nil
+	}
+	var assetLocalMintSetRequests []AssetLocalMintSetRequest
+	batchKey := hex.EncodeToString(batch.BatchKey)
+	batchTxid := batch.BatchTxid
+	for _, asset := range (*batch).Assets {
+		assetLocalMintSetRequests = append(assetLocalMintSetRequests, *BatchAssetToAssetLocalMintSetRequest(batchKey, batchTxid, deviceId, asset))
+	}
+	return &assetLocalMintSetRequests
+}
+
+func PostToSetAssetLocalMints(token string, assetLocalMintSetRequests *[]AssetLocalMintSetRequest) error {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_local_mint/set/slice"
+	requestJsonBytes, err := json.Marshal(assetLocalMintSetRequests)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+// UploadAssetLocalMints
+// @Description: Upload asset local mints
+func UploadAssetLocalMints(token string, deviceId string, finalizeBatchResponse *mintrpc.FinalizeBatchResponse) error {
+	assetLocalMintSetRequests := FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId, finalizeBatchResponse)
+	return PostToSetAssetLocalMints(token, assetLocalMintSetRequests)
+}
+
+type PendingBatch struct {
+	BatchKey  string              `json:"batch_key"`
+	BatchTxid string              `json:"batch_txid"`
+	State     string              `json:"state"`
+	Assets    []PendingBatchAsset `json:"assets"`
+}
+
+type PendingBatchAsset struct {
+	AssetVersion      string `json:"asset_version"`
+	AssetType         string `json:"asset_type"`
+	Name              string `json:"name"`
+	AssetMetaData     string `json:"asset_meta_data"`
+	AssetMetaType     string `json:"asset_meta_type"`
+	AssetMetaMetaHash string `json:"asset_meta_meta_hash"`
+	Amount            int    `json:"amount"`
+	NewGroupedAsset   bool   `json:"new_grouped_asset"`
+	GroupKey          string `json:"group_key"`
+	GroupAnchor       string `json:"group_anchor"`
+}
+
+func BatchPendingAssetToPendingBatchAsset(pendingAsset *mintrpc.PendingAsset) *PendingBatchAsset {
+	if pendingAsset == nil {
+		return nil
+	}
+	return &PendingBatchAsset{
+		AssetVersion:      pendingAsset.AssetVersion.String(),
+		AssetType:         pendingAsset.AssetType.String(),
+		Name:              pendingAsset.Name,
+		AssetMetaData:     hex.EncodeToString(pendingAsset.AssetMeta.Data),
+		AssetMetaType:     pendingAsset.AssetMeta.Type.String(),
+		AssetMetaMetaHash: hex.EncodeToString(pendingAsset.AssetMeta.MetaHash),
+		Amount:            int(pendingAsset.Amount),
+		NewGroupedAsset:   pendingAsset.NewGroupedAsset,
+		GroupKey:          hex.EncodeToString(pendingAsset.GroupKey),
+		GroupAnchor:       pendingAsset.GroupAnchor,
+	}
+}
+
+func BatchPendingAssetSliceToPendingBatchAssetSlice(pendingAssets []*mintrpc.PendingAsset) []PendingBatchAsset {
+	var finalizedBatchAssets []PendingBatchAsset
+	if len(pendingAssets) == 0 {
+		return finalizedBatchAssets
+	}
+	for _, pendingAsset := range pendingAssets {
+		finalizedBatchAsset := BatchPendingAssetToPendingBatchAsset(pendingAsset)
+		if finalizedBatchAsset == nil {
+			continue
+		}
+		finalizedBatchAssets = append(finalizedBatchAssets, *finalizedBatchAsset)
+	}
+	return finalizedBatchAssets
+}
+
+func MintAssetResponseToPendingBatch(mintAssetResponse *mintrpc.MintAssetResponse) *PendingBatch {
+	if mintAssetResponse == nil {
+		return nil
+	}
+	return &PendingBatch{
+		BatchKey:  hex.EncodeToString(mintAssetResponse.PendingBatch.BatchKey),
+		BatchTxid: mintAssetResponse.PendingBatch.BatchTxid,
+		State:     mintAssetResponse.PendingBatch.State.String(),
+		Assets:    BatchPendingAssetSliceToPendingBatchAssetSlice(mintAssetResponse.PendingBatch.Assets),
+	}
+}
+
+func FinalizeBatchResponseToPendingBatch(finalizeBatchResponse *mintrpc.FinalizeBatchResponse) *PendingBatch {
+	if finalizeBatchResponse == nil {
+		return nil
+	}
+	return &PendingBatch{
+		BatchKey:  hex.EncodeToString(finalizeBatchResponse.Batch.BatchKey),
+		BatchTxid: finalizeBatchResponse.Batch.BatchTxid,
+		State:     finalizeBatchResponse.Batch.State.String(),
+		Assets:    BatchPendingAssetSliceToPendingBatchAssetSlice(finalizeBatchResponse.Batch.Assets),
+	}
 }
