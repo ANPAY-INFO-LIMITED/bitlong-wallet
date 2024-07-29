@@ -42,7 +42,7 @@ func AddrReceives(assetId string) string {
 		e.Addr = &a
 		e.Status = event.Status.String()
 		e.Outpoint = event.Outpoint
-		e.Txid, _ = OutpointToTransactionAndIndex(event.Outpoint)
+		e.Txid, _ = outpointToTransactionAndIndex(event.Outpoint)
 		e.UtxoAmtSat = int64(event.UtxoAmtSat)
 		e.TaprootSibling = hex.EncodeToString(event.TaprootSibling)
 		e.ConfirmationHeight = int64(event.ConfirmationHeight)

@@ -2630,7 +2630,8 @@ func GetAssetTransferByAssetIdFromServer(token string, assetId string) string {
 	return PostToGetAssetTransferByAssetId(token, assetId)
 }
 
-func OutpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
+// @dev: Do not use upper letter prefix function name to avoid pack api error
+func outpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
 	result := strings.Split(outpoint, ":")
 	return result[0], result[1]
 }
@@ -2638,7 +2639,7 @@ func OutpointToTransactionAndIndex(outpoint string) (transaction string, index s
 func BatchTxidToAssetId(batchTxid string) (string, error) {
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
-		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
 		if batchTxid == txid {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}
@@ -4500,7 +4501,7 @@ type AssetLocalMintSetRequest struct {
 func BatchTxidAnchorToAssetId(batchTxidAnchor string) (string, error) {
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
-		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
 		if batchTxidAnchor == txid {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}
@@ -4512,7 +4513,7 @@ func BatchTxidAnchorToAssetId(batchTxidAnchor string) (string, error) {
 func BatchTxidAndAssetMintInfoToAssetId(batchTxid string, pendingAsset *mintrpc.PendingAsset) (string, error) {
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
-		txid, _ := OutpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
 		if batchTxid == txid &&
 			pendingAsset.Name == asset.AssetGenesis.Name &&
 			pendingAsset.Amount == asset.Amount &&
