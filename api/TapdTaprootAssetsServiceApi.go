@@ -321,7 +321,7 @@ func ListUtxosResponseToManagedUtxos(listUtxosResponse *taprpc.ListUtxosResponse
 					AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
 					AssetType:    asset.AssetGenesis.AssetType.String(),
 					OutputIndex:  int(asset.AssetGenesis.OutputIndex),
-					Version:      int(asset.AssetGenesis.Version),
+					Version:      int(asset.Version),
 				},
 				Amount:           int(asset.Amount),
 				LockTime:         int(asset.LockTime),
@@ -717,7 +717,7 @@ func ProcessListBalancesResponse(response *taprpc.ListBalancesResponse) *[]ListA
 			AssetID:      hex.EncodeToString(balance.AssetGenesis.AssetId),
 			AssetType:    balance.AssetGenesis.AssetType.String(),
 			OutputIndex:  int(balance.AssetGenesis.OutputIndex),
-			Version:      int(balance.AssetGenesis.Version),
+			Version:      -1,
 			Balance:      strconv.FormatUint(balance.Balance, 10),
 		})
 	}
@@ -813,7 +813,7 @@ func CheckAssetIssuanceIsLocal(assetId string) string {
 			return MakeJsonErrorResult(ListBatchesAndGetResponseErr, fmt.Errorf("failed to get mint info: %v", err).Error(), "")
 		}
 		for _, batch := range listBatch.Batches {
-			if batch.BatchTxid == opStr[0] {
+			if batch.Batch.BatchTxid == opStr[0] {
 				leaves, err := assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 				if err != nil {
 					return MakeJsonErrorResult(assetLeavesErr, fmt.Errorf("failed to get asset info: %v", err).Error(), "")
@@ -939,7 +939,7 @@ func ListAssetsProcessed(withWitness, includeSpent, includeLeased bool) (*[]List
 				AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
 				AssetType:    asset.AssetGenesis.AssetType.String(),
 				OutputIndex:  int(asset.AssetGenesis.OutputIndex),
-				Version:      int(asset.AssetGenesis.Version),
+				Version:      int(asset.Version),
 			},
 			Amount:           int(asset.Amount),
 			LockTime:         asset.LockTime,
