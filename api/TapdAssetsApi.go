@@ -1594,7 +1594,7 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -1629,7 +1629,7 @@ func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions [
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2157,7 +2157,7 @@ func PostToSetAssetTransfer(token string, assetTransferSetRequest *[]AssetTransf
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2204,7 +2204,7 @@ func RequestToGetAssetTransferTxids(token string) (txids []string, err error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2279,7 +2279,7 @@ func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string)
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2408,7 +2408,7 @@ func RequestToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferRes
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2448,7 +2448,7 @@ func RequestToGetAssetTransferByAssetIdAndGetResponse(token string, assetId stri
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2734,7 +2734,7 @@ func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveE
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2781,7 +2781,7 @@ func RequestToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2863,7 +2863,7 @@ func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferReques
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -2903,7 +2903,7 @@ func RequestToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3090,7 +3090,7 @@ func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) 
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3130,7 +3130,7 @@ func RequestToGetAssetAddr(token string) (*[]AssetAddr, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3170,7 +3170,7 @@ func RequestToGetAssetAddrByScriptKey(token string, scriptKey string) (*[]AssetA
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3268,7 +3268,7 @@ func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) 
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3308,7 +3308,7 @@ func RequestToGetAssetLock(token string) (*[]AssetLock, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3368,7 +3368,7 @@ func GetValidateTokenResult(token string) (*ValidateTokenResponse, error) {
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3485,7 +3485,7 @@ func PostToSetAssetBalanceInfo(assetBalanceSetRequest *[]AssetBalanceSetRequest,
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3580,7 +3580,7 @@ func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalanceInfo, error) 
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3788,7 +3788,7 @@ func RequestToGetAssetHolderNumberByAssetBalancesInfo(token string, assetId stri
 		return 0, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3859,7 +3859,7 @@ func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId str
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -3906,7 +3906,7 @@ func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string
 		return 0, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4014,7 +4014,7 @@ func PostCallBitcoindToQueryTimeByOutpoints(token string, outpoints []string) (*
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4083,7 +4083,7 @@ func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, 
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4130,7 +4130,7 @@ func RequestToGetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, e
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4200,7 +4200,7 @@ func PostToSetAssetBurn(token string, assetBurnSetRequest *AssetBurnSetRequest) 
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4257,7 +4257,7 @@ func RequestToGetAssetBurnTotalAmountByAssetId(token string, assetId string) (in
 		return 0, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4327,7 +4327,7 @@ func RequestToGetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchI
 		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4390,7 +4390,7 @@ func PostToFairLaunchMintReserved(token string, mintReservedRequest *MintReserve
 		return "", err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4590,7 +4590,7 @@ func PostToSetAssetLocalMints(token string, assetLocalMintSetRequests *[]AssetLo
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+		err = Body.Close()
 		if err != nil {
 			return
 		}
@@ -4693,3 +4693,211 @@ func FinalizeBatchResponseToPendingBatch(finalizeBatchResponse *mintrpc.Finalize
 		Assets:    BatchPendingAssetSliceToPendingBatchAssetSlice(finalizeBatchResponse.Batch.Assets),
 	}
 }
+
+type AssetRecommend struct {
+	gorm.Model
+	AssetId           string `json:"asset_id" gorm:"type:varchar(255)"`
+	AssetFromAddr     string `json:"asset_from_addr" gorm:"type:varchar(255)"`
+	RecommendUserId   int    `json:"recommend_user_id"`
+	RecommendUsername string `json:"recommend_username" gorm:"type:varchar(255)"`
+	RecommendTime     int    `json:"recommend_time"`
+	DeviceId          string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId            int    `json:"user_id"`
+	Username          string `json:"username" gorm:"type:varchar(255)"`
+	Status            int    `json:"status" gorm:"default:1"`
+}
+
+type AssetRecommendSetRequest struct {
+	AssetId           string `json:"asset_id"`
+	AssetFromAddr     string `json:"asset_from_addr"`
+	RecommendUserId   int    `json:"recommend_user_id"`
+	RecommendUsername string `json:"recommend_username"`
+	RecommendTime     int    `json:"recommend_time"`
+	DeviceId          string `json:"device_id"`
+}
+
+type GetAssetRecommendsByUserIdAndAssetId struct {
+	Success bool            `json:"success"`
+	Error   string          `json:"error"`
+	Code    ErrCode         `json:"code"`
+	Data    *AssetRecommend `json:"data"`
+}
+
+func RequestToGetAssetRecommendByUserIdAndAssetId(token string, assetId string) (*AssetRecommend, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_recommend/get/user/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetRecommendsByUserIdAndAssetId
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetSelfAssetRecommendByAssetId(token string, assetId string) (*AssetRecommend, error) {
+	return RequestToGetAssetRecommendByUserIdAndAssetId(token, assetId)
+}
+
+func PostToSetAssetRecommendByAssetId(token string, assetRecommendSetRequest *AssetRecommendSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_recommend/set"
+	requestJsonBytes, err := json.Marshal(assetRecommendSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func SetAssetRecommendByAssetId(token string, assetId string, assetFromAddr string, recommendUserId int, recommendUsername string, recommendTime int, deviceId string) error {
+	assetRecommendSetRequest := AssetRecommendSetRequest{
+		AssetId:           assetId,
+		AssetFromAddr:     assetFromAddr,
+		RecommendUserId:   recommendUserId,
+		RecommendUsername: recommendUsername,
+		RecommendTime:     recommendTime,
+		DeviceId:          deviceId,
+	}
+	_, err := PostToSetAssetRecommendByAssetId(token, &assetRecommendSetRequest)
+	return err
+}
+
+// CheckIfAssetIsIssuedLocally
+// @Description: Refer to CheckAssetIssuanceIsLocal
+func CheckIfAssetIsIssuedLocally(assetId string) (bool, error) {
+	keys, err := assetLeafKeys(assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+	if err != nil || len(keys.AssetKeys) == 0 {
+		errorAppendInfo := ErrorAppendInfo(err)
+		return false, errorAppendInfo("failed to get asset info")
+	}
+	result := struct {
+		IsLocal   bool   `json:"is_local"`
+		AssetId   string `json:"asset_id"`
+		BatchTxid string `json:"batch_txid"`
+		Amount    int64  `json:"amount"`
+		Timestamp int64  `json:"timestamp"`
+		ScriptKey string `json:"script_key"`
+	}{
+		IsLocal: false,
+		AssetId: assetId,
+	}
+	Outpoint := keys.AssetKeys[0].Outpoint
+	if o, ok := Outpoint.(*universerpc.AssetKey_OpStr); ok {
+		opStr := strings.Split(o.OpStr, ":")
+		var listBatch *mintrpc.ListBatchResponse
+		listBatch, err = ListBatchesAndGetResponse()
+		if err != nil {
+			errorAppendInfo := ErrorAppendInfo(err)
+			return false, errorAppendInfo("failed to get mint info")
+		}
+		for _, batch := range listBatch.Batches {
+			if batch.BatchTxid == opStr[0] {
+				var leaves *universerpc.AssetLeafResponse
+				leaves, err = assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+				if err != nil {
+					errorAppendInfo := ErrorAppendInfo(err)
+					return false, errorAppendInfo("failed to get mint info")
+				}
+				result.Amount = int64(leaves.Leaves[0].Asset.Amount)
+				var transactions *lnrpc.TransactionDetails
+				transactions, err = GetTransactionsAndGetResponse()
+				if err != nil {
+					errorAppendInfo := ErrorAppendInfo(err)
+					return false, errorAppendInfo("failed to get mint info")
+				}
+				for _, tx := range transactions.Transactions {
+					if tx.TxHash == opStr[0] {
+						result.Timestamp = tx.TimeStamp
+						break
+					}
+				}
+				result.IsLocal = true
+				result.BatchTxid = o.OpStr
+				if s, _ok := keys.AssetKeys[0].ScriptKey.(*universerpc.AssetKey_ScriptKeyBytes); _ok {
+					result.ScriptKey = "02" + hex.EncodeToString(s.ScriptKeyBytes)
+				}
+				break
+			}
+		}
+		return true, nil
+	}
+	errorAppendInfo := ErrorAppendInfo(err)
+	return false, errorAppendInfo("failed to get mint info")
+}
+
+// IsAssetLocalIssuance
+// @Description: Only return boolean result
+func IsAssetLocalIssuance(assetId string) bool {
+	isLocal, err := CheckIfAssetIsIssuedLocally(assetId)
+	if err != nil {
+		LogError("", err)
+		return false
+	}
+	return isLocal
+}
+
+// TODO: Process
+//		1. Alice generates the asset address (invoice) and uploads it to the server
+//		2. Alice sends the asset address (invoice) to Bob.
+//		3. Bob queries the user ID and user name of the creator of the asset address (invoice) (i.e. Alice) when he makes a payment to Alice's asset address.
+//		4. Bob queries Alice to see if the asset has been issued locally.
+//		5. Bob queries whether Alice already has a referrer for the asset.
+//		6. Bob uploads the information that Bob is Alice's referrer for the asset.
