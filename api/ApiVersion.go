@@ -1,15 +1,26 @@
 package api
 
-const API_VERSION_PREFFIX = "v0.0.1"
-const API_MARKER = "-dev.0."
-const API_DATE_TIME = "20240501000000"
+const (
+	PrimaryVersion = "0"
+	SubVersion     = "0"
+	DevVersion     = "2"
+)
 
-var API_VERSION = API_VERSION_PREFFIX + API_MARKER + API_DATE_TIME
+const (
+	BaseVersion = "v" + PrimaryVersion + "." + SubVersion + "." + DevVersion
+	DateTime    = "20240801142752"
+)
 
-func GetApiVersion() string {
-	return API_VERSION
+func apiVersionWithMaker(maker string) string {
+	if maker == "" {
+		return BaseVersion + "-" + DateTime
+	} else {
+		return BaseVersion + "-" + maker + "-" + DateTime
+	}
 }
 
-func NewVersionTag() string {
-	return API_VERSION_PREFFIX + API_MARKER + GetTimeSuffixString()
+// GetApiVersion
+// @Description: Get api version
+func GetApiVersion() string {
+	return apiVersionWithMaker("")
 }
