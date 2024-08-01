@@ -13,6 +13,7 @@ import (
 	"github.com/wallet/models"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -46,10 +47,104 @@ func GetUserOwnIssuanceHistoryInfos(token string) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
+type GetIssuanceTransactionFeeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetIssuanceTransactionFee(token string, feeRate int) (fee int, err error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/issuance?fee_rate=" + strconv.Itoa(feeRate)
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetIssuanceTransactionFeeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+type GetMintTransactionFeeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetMintTransactionFee(token string, feeRate int) (fee int, err error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/mint?fee_rate=" + strconv.Itoa(feeRate)
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetMintTransactionFeeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
 // GetIssuanceTransactionFee
 // @Description: Get Issuance Transaction Fee
-func GetIssuanceTransactionFee(token string) string {
-	result, err := GetIssuanceTransactionCalculatedFee(token)
+func GetIssuanceTransactionFee(token string, feeRate int) string {
+	result, err := RequestToGetIssuanceTransactionFee(token, feeRate)
 	if err != nil {
 		LogError("", err)
 		return MakeJsonErrorResult(GetIssuanceTransactionCalculatedFeeErr, err.Error(), nil)
@@ -59,8 +154,8 @@ func GetIssuanceTransactionFee(token string) string {
 
 // GetMintTransactionFee
 // @Description: Get Mint Transaction Fee
-func GetMintTransactionFee(token string, id int, number int) string {
-	result, err := GetMintTransactionCalculatedFee(token, id, number)
+func GetMintTransactionFee(token string, feeRate int) string {
+	result, err := RequestToGetMintTransactionFee(token, feeRate)
 	if err != nil {
 		LogError("", err)
 		return MakeJsonErrorResult(GetMintTransactionCalculatedFeeErr, err.Error(), nil)
