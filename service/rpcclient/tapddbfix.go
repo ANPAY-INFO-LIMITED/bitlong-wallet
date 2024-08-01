@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func FixAsset(outpoint string) (string, error) {
+func FixAsset(outpoint string, isSpend bool) (string, error) {
 
 	client, clearUp, err := getTaprootAssetsClient()
 	if err != nil {
@@ -104,7 +104,11 @@ dbSet:
 	port, err := strconv.Atoi(op[1])
 	outBytes[32] = 0x00 + byte(port)
 	out := hex.EncodeToString(outBytes)
-	lows, err := db.Exec(test, out)
+	var Spend int
+	if isSpend {
+		Spend = 1
+	}
+	lows, err := db.Exec(test, out, Spend)
 	if err != nil {
 		return "", err
 	}
@@ -115,7 +119,7 @@ dbSet:
 
 const test = `
 	update  assets 
-	set spent = 0
+	set spent = $2
 	WHERE anchor_utxo_id = (
 		SELECT utxo_id 
 		FROM managed_utxos 
