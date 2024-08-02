@@ -587,7 +587,7 @@ func TxHashConversion(txHash string) string {
 	return txHash
 }
 func FixAsset(output string) string {
-	str, err := rpcclient.FixAsset(output)
+	str, err := rpcclient.FixAsset(output, false)
 	if err != nil {
 		fmt.Println(err)
 		return MakeJsonErrorResult(DefaultErr, "FixAsset error, please check the output parameter and whether the asset needs to be repaired", nil)
