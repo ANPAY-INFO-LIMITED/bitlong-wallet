@@ -162,6 +162,7 @@ const (
 	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr
 	PostToSetFollowFairLaunchInfoErr
 	PostToSetUnfollowFairLaunchInfoErr
+	RequestToQueryIsFairLaunchFollowedErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

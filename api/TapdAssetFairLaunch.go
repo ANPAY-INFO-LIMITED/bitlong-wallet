@@ -666,6 +666,8 @@ func PostToSetUnfollowFairLaunchInfo(token string, assetId string) (*JsonResult,
 	return &response, nil
 }
 
+// FollowFairLaunchAsset
+// @Description: Follow fair launch asset
 func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, deviceId string) string {
 	_, err := PostToSetFollowFairLaunchInfo(token, &FairLaunchFollowSetRequest{
 		FairLaunchInfoId: fairLaunchInfoId,
@@ -678,10 +680,70 @@ func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, d
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
 }
 
+// UnfollowFairLaunchAsset
+// @Description: Unfollow fair launch asset
 func UnfollowFairLaunchAsset(token string, assetId string) string {
 	_, err := PostToSetUnfollowFairLaunchInfo(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(PostToSetUnfollowFairLaunchInfoErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
+
+type QueryIsFairLaunchFollowedResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    bool    `json:"data"`
+}
+
+func RequestToQueryIsFairLaunchFollowed(token string, assetId string) (bool, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/query/user/is_followed/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return false, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return false, err
+	}
+	var response QueryIsFairLaunchFollowedResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return false, err
+	}
+	if response.Error != "" {
+		return false, errors.New(response.Error)
+	}
+	return response.Data, nil
+
+}
+
+// QueryIsFairLaunchFollowed
+// @Description: Query is fair launch followed
+func QueryIsFairLaunchFollowed(token string, assetId string) string {
+	response, err := RequestToQueryIsFairLaunchFollowed(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(RequestToQueryIsFairLaunchFollowedErr, err.Error(), false)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
