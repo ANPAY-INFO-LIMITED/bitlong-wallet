@@ -7,6 +7,10 @@ pwsh ./pack.api.ps1
 ```
 
 ## Update log
+### v0.0.4
+
+- [新增从种子恢复钱包的接口](https://seven-liquors-doc.gitbook.io/btlapi-1/wallet/recoverwallet)
+
 
 ### v0.0.3
 

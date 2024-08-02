@@ -53,6 +53,14 @@ func ChangePassword(currentPassword, newPassword string) bool {
 	return changePassword(currentPassword, newPassword)
 }
 
+func RecoverWallet(password, mnemonic, passphrase string) string {
+	err := recoverWallet(password, mnemonic, passphrase)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", "")
+}
+
 func genSeed() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
@@ -114,35 +122,7 @@ func initWallet(seed, password string) bool {
 	if err != nil {
 		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
 	}
-	d1 := response.AdminMacaroon
-	newFilePath := filepath.Join(base.Configure("lnd"), "."+"macaroonfile")
-	err = os.MkdirAll(newFilePath, os.ModePerm)
-	if err != nil {
-		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
-	}
-	macaroonPath := filepath.Join(newFilePath, "admin.macaroon")
-	f, err := os.Create(macaroonPath)
-	if err != nil {
-		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
-		return false
-	}
-	_, err = f.Write(d1)
-	if err != nil {
-		err := f.Close()
-		if err != nil {
-			fmt.Printf("%s f Close err: %v\n", GetTimeNow(), err)
-			return false
-		}
-		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
-		return false
-	}
-	fmt.Printf("%s successful\n", GetTimeNow())
-	err = f.Close()
-	if err != nil {
-		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
-		return false
-	}
-	return true
+	return writeMacaroon(response.AdminMacaroon)
 }
 
 func unlockWallet(password string) bool {
@@ -185,6 +165,92 @@ func changePassword(currentPassword, newPassword string) bool {
 	return true
 }
 
-func recoverWallet(mnemonic, passphrase string) bool {
-	return false
+// abandon bar bicycle license embark keen crime rain suffer nation pill blade dwarf faith play motor meadow power skull cheese follow thunder load sail
+func recoverWallet(password, mnemonic, passphrase string) error {
+	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
+	if err != nil {
+		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+	}
+	defer clearUp()
+	client := lnrpc.NewWalletUnlockerClient(conn)
+
+	var (
+		cipherSeedMnemonic      []string
+		aezeedPass              []byte
+		extendedRootKey         string
+		extendedRootKeyBirthday uint64
+		recoveryWindow          int32
+	)
+	// We'll trim off extra spaces, and ensure the mnemonic is all
+	// lower case, then populate our request.
+	mnemonic = strings.TrimSpace(mnemonic)
+	mnemonic = strings.ToLower(mnemonic)
+
+	cipherSeedMnemonic = strings.Split(mnemonic, " ")
+
+	fmt.Println()
+
+	if len(cipherSeedMnemonic) != 24 {
+		return fmt.Errorf("wrong cipher seed mnemonic "+
+			"length: got %v words, expecting %v words",
+			len(cipherSeedMnemonic), 24)
+	}
+
+	// Additionally, the user may have a passphrase, that will also
+	// need to be provided so the daemon can properly decipher the
+	// cipher seed.
+	aezeedPass = []byte(passphrase)
+
+	recoveryWindow = 2500
+
+	// With either the user's prior cipher seed, or a newly generated one,
+	// we'll go ahead and initialize the wallet.
+	req := &lnrpc.InitWalletRequest{
+		WalletPassword:                     []byte(password),
+		CipherSeedMnemonic:                 cipherSeedMnemonic,
+		AezeedPassphrase:                   aezeedPass,
+		ExtendedMasterKey:                  extendedRootKey,
+		ExtendedMasterKeyBirthdayTimestamp: extendedRootKeyBirthday,
+		RecoveryWindow:                     recoveryWindow,
+	}
+
+	response, err := client.InitWallet(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if !writeMacaroon(response.AdminMacaroon) {
+		return fmt.Errorf("write macaroon file failed")
+	}
+	return nil
+}
+
+func writeMacaroon(macaroon []byte) bool {
+	newFilePath := filepath.Join(base.Configure("lnd"), "."+"macaroonfile")
+	err := os.MkdirAll(newFilePath, os.ModePerm)
+	if err != nil {
+		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
+	}
+	macaroonPath := filepath.Join(newFilePath, "admin.macaroon")
+	f, err := os.Create(macaroonPath)
+	if err != nil {
+		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
+		return false
+	}
+	_, err = f.Write(macaroon)
+	if err != nil {
+		err := f.Close()
+		if err != nil {
+			fmt.Printf("%s f Close err: %v\n", GetTimeNow(), err)
+			return false
+		}
+		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
+		return false
+	}
+	fmt.Printf("%s successful\n", GetTimeNow())
+	err = f.Close()
+	if err != nil {
+		fmt.Printf("%s Error calling InitWallet: %v\n", GetTimeNow(), err)
+		return false
+	}
+	return true
 }
