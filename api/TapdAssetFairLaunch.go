@@ -579,3 +579,109 @@ func GetImageByImageData(imageData string) []byte {
 	}
 	return dataUrl.Data
 }
+
+type FairLaunchFollowSetRequest struct {
+	FairLaunchInfoId int    `json:"fair_launch_info_id"`
+	AssetId          string `json:"asset_id" gorm:"type:varchar(255)"`
+	DeviceId         string `json:"device_id" gorm:"type:varchar(255)"`
+}
+
+func PostToSetFollowFairLaunchInfo(token string, fairLaunchFollowSetRequest *FairLaunchFollowSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/follow"
+	requestJsonBytes, err := json.Marshal(fairLaunchFollowSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func PostToSetUnfollowFairLaunchInfo(token string, assetId string) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/unfollow/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, deviceId string) string {
+	_, err := PostToSetFollowFairLaunchInfo(token, &FairLaunchFollowSetRequest{
+		FairLaunchInfoId: fairLaunchInfoId,
+		AssetId:          assetId,
+		DeviceId:         deviceId,
+	})
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetFollowFairLaunchInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
+
+func UnfollowFairLaunchAsset(token string, assetId string) string {
+	_, err := PostToSetUnfollowFairLaunchInfo(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetUnfollowFairLaunchInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}

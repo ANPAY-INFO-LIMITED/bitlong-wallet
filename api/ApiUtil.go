@@ -160,6 +160,8 @@ const (
 	UploadAssetBurnErr
 	GetAssetBurnTotalAmountByAssetIdErr
 	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr
+	PostToSetFollowFairLaunchInfoErr
+	PostToSetUnfollowFairLaunchInfoErr
 )
 
 var ErrMsgMap = map[ErrCode]error{
