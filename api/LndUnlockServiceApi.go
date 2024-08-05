@@ -53,8 +53,8 @@ func ChangePassword(currentPassword, newPassword string) bool {
 	return changePassword(currentPassword, newPassword)
 }
 
-func RecoverWallet(password, mnemonic, passphrase string) string {
-	err := recoverWallet(password, mnemonic, passphrase)
+func RecoverWallet(password, mnemonic string) string {
+	err := recoverWallet(password, mnemonic, "")
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
 	}
