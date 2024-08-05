@@ -9,7 +9,7 @@ pwsh ./pack.api.ps1
 ## Update log
 
 ### v0.0.5
-
+- [托管账户通道交易记录查询新增费用字段](https://app.gitbook.com/o/YKwEeYmlIe2KJGpL2TiX/s/nQHIKw00nyi8RS189Cfp/trade/custodyaccount)
 - [上传本地资产UTXO](https://bitlong.gitbook.io/api-doc#id-202482-172842-shang-chuan-ben-di-zi-chan-utxo)
 - [上传本地资产发行成功记录](https://bitlong.gitbook.io/api-doc#id-202482-172829-shang-chuan-ben-di-zi-chan-fa-xing-cheng-gong-ji-lu)
 
