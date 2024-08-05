@@ -163,6 +163,8 @@ const (
 	PostToSetFollowFairLaunchInfoErr
 	PostToSetUnfollowFairLaunchInfoErr
 	RequestToQueryIsFairLaunchFollowedErr
+	ListBatchesAndPostToSetAssetLocalMintHistoriesErr
+	ListUtxosAndPostToSetAssetManagedUtxosErr
 )
 
 var ErrMsgMap = map[ErrCode]error{

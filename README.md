@@ -7,6 +7,12 @@ pwsh ./pack.api.ps1
 ```
 
 ## Update log
+
+### v0.0.5
+
+- [上传本地资产UTXO](https://bitlong.gitbook.io/api-doc#id-202482-172842-shang-chuan-ben-di-zi-chan-utxo)
+- [上传本地资产发行成功记录](https://bitlong.gitbook.io/api-doc#id-202482-172829-shang-chuan-ben-di-zi-chan-fa-xing-cheng-gong-ji-lu)
+
 ### v0.0.4
 
 - [新增从种子恢复钱包的接口](https://seven-liquors-doc.gitbook.io/btlapi-1/wallet/recoverwallet)

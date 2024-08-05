@@ -4535,7 +4535,7 @@ func BatchAssetToAssetLocalMintSetRequest(batchKey string, batchTxid string, dev
 	assetId, err := BatchTxidAndAssetMintInfoToAssetId(batchTxid, asset)
 	if err != nil {
 		// @dev: Do not return
-		LogError("", err)
+		//LogError("", err)
 	}
 	return &AssetLocalMintSetRequest{
 		AssetVersion:    asset.AssetVersion.String(),
@@ -4892,6 +4892,533 @@ func IsAssetLocalIssuance(assetId string) bool {
 		return false
 	}
 	return isLocal
+}
+
+type AssetLocalMintHistory struct {
+	gorm.Model
+	AssetVersion    string `json:"asset_version" gorm:"type:varchar(255)"`
+	AssetType       string `json:"asset_type" gorm:"type:varchar(255)"`
+	Name            string `json:"name" gorm:"type:varchar(255)"`
+	AssetMetaData   string `json:"asset_meta_data"`
+	AssetMetaType   string `json:"asset_meta_type" gorm:"type:varchar(255)"`
+	AssetMetaHash   string `json:"asset_meta_hash" gorm:"type:varchar(255)"`
+	Amount          int    `json:"amount"`
+	NewGroupedAsset bool   `json:"new_grouped_asset"`
+	GroupKey        string `json:"group_key" gorm:"type:varchar(255)"`
+	GroupAnchor     string `json:"group_anchor" gorm:"type:varchar(255)"`
+	GroupedAsset    bool   `json:"grouped_asset"`
+	BatchKey        string `json:"batch_key" gorm:"type:varchar(255)"`
+	BatchTxid       string `json:"batch_txid" gorm:"type:varchar(255)"`
+	AssetId         string `json:"asset_id" gorm:"type:varchar(255)"`
+	DeviceId        string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId          int    `json:"user_id"`
+	Username        string `json:"username" gorm:"type:varchar(255)"`
+	Status          int    `json:"status" gorm:"default:1"`
+}
+
+type AssetLocalMintHistorySetRequest struct {
+	AssetVersion    string `json:"asset_version"`
+	AssetType       string `json:"asset_type"`
+	Name            string `json:"name"`
+	AssetMetaData   string `json:"asset_meta_data"`
+	AssetMetaType   string `json:"asset_meta_type"`
+	AssetMetaHash   string `json:"asset_meta_hash"`
+	Amount          int    `json:"amount"`
+	NewGroupedAsset bool   `json:"new_grouped_asset"`
+	GroupKey        string `json:"group_key"`
+	GroupAnchor     string `json:"group_anchor"`
+	GroupedAsset    bool   `json:"grouped_asset"`
+	BatchKey        string `json:"batch_key"`
+	BatchTxid       string `json:"batch_txid"`
+	AssetId         string `json:"asset_id"`
+	DeviceId        string `json:"device_id"`
+}
+
+func BatchAssetToAssetLocalMintHistorySetRequest(batchKey string, batchTxid string, deviceId string, asset *mintrpc.PendingAsset) *AssetLocalMintHistorySetRequest {
+	if asset == nil {
+		return nil
+	}
+	groupKey := hex.EncodeToString(asset.GroupKey)
+	groupedAsset := asset.NewGroupedAsset || groupKey != ""
+	assetId, err := BatchTxidAndAssetMintInfoToAssetId(batchTxid, asset)
+	if err != nil {
+		// @dev: Do not return
+		//LogError("", err)
+	}
+	return &AssetLocalMintHistorySetRequest{
+		AssetVersion:    asset.AssetVersion.String(),
+		AssetType:       asset.AssetType.String(),
+		Name:            asset.Name,
+		AssetMetaData:   hex.EncodeToString(asset.AssetMeta.Data),
+		AssetMetaType:   asset.AssetMeta.Type.String(),
+		AssetMetaHash:   hex.EncodeToString(asset.AssetMeta.MetaHash),
+		Amount:          int(asset.Amount),
+		NewGroupedAsset: asset.NewGroupedAsset,
+		GroupKey:        groupKey,
+		GroupAnchor:     asset.GroupAnchor,
+		GroupedAsset:    groupedAsset,
+		BatchKey:        batchKey,
+		BatchTxid:       batchTxid,
+		AssetId:         assetId,
+		DeviceId:        deviceId,
+	}
+}
+
+func MintingBatchToAssetLocalMintHistorySetRequests(deviceId string, mintingBatch *mintrpc.MintingBatch) *[]AssetLocalMintHistorySetRequest {
+	if mintingBatch == nil {
+		return nil
+	}
+	var assetLocalMintHistorySetRequests []AssetLocalMintHistorySetRequest
+	batchKey := hex.EncodeToString(mintingBatch.BatchKey)
+	batchTxid := mintingBatch.BatchTxid
+	for _, asset := range (*mintingBatch).Assets {
+		request := BatchAssetToAssetLocalMintHistorySetRequest(batchKey, batchTxid, deviceId, asset)
+		if request.AssetId != "" {
+			assetLocalMintHistorySetRequests = append(assetLocalMintHistorySetRequests, *request)
+		}
+	}
+	return &assetLocalMintHistorySetRequests
+}
+
+func ListBatchResponseToAssetLocalMintHistorySetRequests(deviceId string, listBatchResponse *mintrpc.ListBatchResponse) *[]AssetLocalMintHistorySetRequest {
+	if listBatchResponse == nil {
+		return nil
+	}
+	var assetLocalMintHistorySetRequests []AssetLocalMintHistorySetRequest
+	for _, batch := range listBatchResponse.Batches {
+		requests := MintingBatchToAssetLocalMintHistorySetRequests(deviceId, batch)
+		if requests != nil {
+			assetLocalMintHistorySetRequests = append(assetLocalMintHistorySetRequests, *requests...)
+		}
+	}
+	return &assetLocalMintHistorySetRequests
+}
+
+func PostToSetAssetLocalMintHistories(token string, assetLocalMintHistorySetRequests *[]AssetLocalMintHistorySetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_local_mint_history/set"
+	requestJsonBytes, err := json.Marshal(assetLocalMintHistorySetRequests)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func ListBatchesAndPostToSetAssetLocalMintHistories(token string, deviceId string) error {
+	listBatchResponse, err := ListBatchesAndGetResponse()
+	if err != nil {
+		return err
+	}
+	assetLocalMintHistorySetRequests := ListBatchResponseToAssetLocalMintHistorySetRequests(deviceId, listBatchResponse)
+	_, err = PostToSetAssetLocalMintHistories(token, assetLocalMintHistorySetRequests)
+	return err
+}
+
+// UploadAssetLocalMintHistory
+// @Description: Upload asset local mint history
+// @dev: This should be executed when enter app
+func UploadAssetLocalMintHistory(token string, deviceId string) string {
+	err := ListBatchesAndPostToSetAssetLocalMintHistories(token, deviceId)
+	if err != nil {
+		return MakeJsonErrorResult(ListBatchesAndPostToSetAssetLocalMintHistoriesErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
+
+type GetAssetManagedUtxoIdsResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AssetManagedUtxo `json:"data"`
+}
+
+func RequestToGetAssetManagedUtxos(token string) (*[]AssetManagedUtxo, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/user"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetManagedUtxoIdsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func ManagedUtxosToAssetIds(managedUtxos *[]ManagedUtxo) *[]string {
+	if managedUtxos == nil {
+		return nil
+	}
+	var assetIds []string
+	for _, managedUtxo := range *managedUtxos {
+		for _, asset := range managedUtxo.ManagedUtxosAssets {
+			assetIds = append(assetIds, asset.AssetGenesis.AssetID)
+		}
+	}
+	return &assetIds
+}
+
+func AssetIdsToAssetIdMapIsExist(assetIds *[]string) *map[string]bool {
+	assetIdMapIsExist := make(map[string]bool)
+	if assetIds == nil {
+		return &assetIdMapIsExist
+	}
+	for _, assetId := range *assetIds {
+		assetIdMapIsExist[assetId] = true
+	}
+	return &assetIdMapIsExist
+}
+
+func PostToRemoveAssetManagedUtxos(token string, managedUtxos *[]int) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/remove"
+	requestJsonBytes, err := json.Marshal(managedUtxos)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func RemoveNotLocalAssetManagedUtxos(token string, managedUtxos *[]ManagedUtxo) error {
+	// @dev: 1. Request to get
+	assetManagedUtxos, err := RequestToGetAssetManagedUtxos(token)
+	if err != nil {
+		errorAppendInfo := ErrorAppendInfo(err)
+		return errorAppendInfo("Request To Get Asset Managed Utxos")
+	}
+	// @dev: 2. Get local ids
+	localAssetIds := ManagedUtxosToAssetIds(managedUtxos)
+	localAssetIdMapIsExist := AssetIdsToAssetIdMapIsExist(localAssetIds)
+	var idsRemove []int
+	// @dev: 3. Get ids who are not exist
+	for _, assetManagedUtxo := range *assetManagedUtxos {
+		if !(*localAssetIdMapIsExist)[assetManagedUtxo.AssetGenesisAssetID] {
+			idsRemove = append(idsRemove, int(assetManagedUtxo.ID))
+		}
+	}
+	// @dev: 4. Post to remove
+	if len(idsRemove) != 0 {
+		_, err = PostToRemoveAssetManagedUtxos(token, &idsRemove)
+		if err != nil {
+			errorAppendInfo := ErrorAppendInfo(err)
+			return errorAppendInfo("Post To Remove Asset Managed Utxos")
+		}
+	}
+	return nil
+}
+
+func ListUtxosAndGetProcessedManagedUtxos(token string) (*[]ManagedUtxo, error) {
+	response, err := ListUtxosAndGetResponse(true)
+	if err != nil {
+		return nil, err
+	}
+	managedUtxos := ListUtxosResponseToManagedUtxos(response)
+	// @dev: Query db's records, if local not exist, delete it
+	err = RemoveNotLocalAssetManagedUtxos(token, managedUtxos)
+	if err != nil {
+		errorAppendInfo := ErrorAppendInfo(err)
+		return nil, errorAppendInfo("Remove Not Local Asset Managed Utxos")
+	}
+	managedUtxos, err = GetTimeForManagedUtxoByBitcoind(token, managedUtxos)
+	if err != nil {
+		return nil, err
+	}
+	return managedUtxos, nil
+}
+
+type AssetManagedUtxo struct {
+	gorm.Model
+	Op                          string `json:"op" gorm:"type:varchar(255)"`
+	OutPoint                    string `json:"out_point" gorm:"type:varchar(255)"`
+	Time                        int    `json:"time"`
+	AmtSat                      int    `json:"amt_sat"`
+	InternalKey                 string `json:"internal_key" gorm:"type:varchar(255)"`
+	TaprootAssetRoot            string `json:"taproot_asset_root" gorm:"type:varchar(255)"`
+	MerkleRoot                  string `json:"merkle_root" gorm:"type:varchar(255)"`
+	Version                     string `json:"version" gorm:"type:varchar(255)"`
+	AssetGenesisPoint           string `json:"asset_genesis_point" gorm:"type:varchar(255)"`
+	AssetGenesisName            string `json:"asset_genesis_name" gorm:"type:varchar(255)"`
+	AssetGenesisMetaHash        string `json:"asset_genesis_meta_hash" gorm:"type:varchar(255)"`
+	AssetGenesisAssetID         string `json:"asset_genesis_asset_id" gorm:"type:varchar(255)"`
+	AssetGenesisAssetType       string `json:"asset_genesis_asset_type" gorm:"type:varchar(255)"`
+	AssetGenesisOutputIndex     int    `json:"asset_genesis_output_index"`
+	AssetGenesisVersion         int    `json:"asset_genesis_version"`
+	Amount                      int    `json:"amount"`
+	LockTime                    int    `json:"lock_time"`
+	RelativeLockTime            int    `json:"relative_lock_time"`
+	ScriptVersion               int    `json:"script_version"`
+	ScriptKey                   string `json:"script_key" gorm:"type:varchar(255)"`
+	ScriptKeyIsLocal            bool   `json:"script_key_is_local"`
+	AssetGroupRawGroupKey       string `json:"asset_group_raw_group_key" gorm:"type:varchar(255)"`
+	AssetGroupTweakedGroupKey   string `json:"asset_group_tweaked_group_key" gorm:"type:varchar(255)"`
+	AssetGroupAssetWitness      string `json:"asset_group_asset_witness"`
+	ChainAnchorTx               string `json:"chain_anchor_tx"`
+	ChainAnchorBlockHash        string `json:"chain_anchor_block_hash" gorm:"type:varchar(255)"`
+	ChainAnchorOutpoint         string `json:"chain_anchor_outpoint" gorm:"type:varchar(255)"`
+	ChainAnchorInternalKey      string `json:"chain_anchor_internal_key" gorm:"type:varchar(255)"`
+	ChainAnchorMerkleRoot       string `json:"chain_anchor_merkle_root" gorm:"type:varchar(255)"`
+	ChainAnchorTapscriptSibling string `json:"chain_anchor_tapscript_sibling"`
+	ChainAnchorBlockHeight      int    `json:"chain_anchor_block_height"`
+	IsSpent                     bool   `json:"is_spent"`
+	LeaseOwner                  string `json:"lease_owner" gorm:"type:varchar(255)"`
+	LeaseExpiry                 int    `json:"lease_expiry"`
+	IsBurn                      bool   `json:"is_burn"`
+	DeviceId                    string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId                      int    `json:"user_id"`
+	Username                    string `json:"username" gorm:"type:varchar(255)"`
+	Status                      int    `json:"status" gorm:"default:1"`
+}
+
+type AssetManagedUtxoSetRequest struct {
+	Op                          string `json:"op"`
+	OutPoint                    string `json:"out_point"`
+	Time                        int    `json:"time"`
+	AmtSat                      int    `json:"amt_sat"`
+	InternalKey                 string `json:"internal_key"`
+	TaprootAssetRoot            string `json:"taproot_asset_root"`
+	MerkleRoot                  string `json:"merkle_root"`
+	Version                     string `json:"version"`
+	AssetGenesisPoint           string `json:"asset_genesis_point"`
+	AssetGenesisName            string `json:"asset_genesis_name"`
+	AssetGenesisMetaHash        string `json:"asset_genesis_meta_hash"`
+	AssetGenesisAssetID         string `json:"asset_genesis_asset_id"`
+	AssetGenesisAssetType       string `json:"asset_genesis_asset_type"`
+	AssetGenesisOutputIndex     int    `json:"asset_genesis_output_index"`
+	AssetGenesisVersion         int    `json:"asset_genesis_version"`
+	Amount                      int    `json:"amount"`
+	LockTime                    int    `json:"lock_time"`
+	RelativeLockTime            int    `json:"relative_lock_time"`
+	ScriptVersion               int    `json:"script_version"`
+	ScriptKey                   string `json:"script_key"`
+	ScriptKeyIsLocal            bool   `json:"script_key_is_local"`
+	AssetGroupRawGroupKey       string `json:"asset_group_raw_group_key"`
+	AssetGroupTweakedGroupKey   string `json:"asset_group_tweaked_group_key"`
+	AssetGroupAssetWitness      string `json:"asset_group_asset_witness"`
+	ChainAnchorTx               string `json:"chain_anchor_tx"`
+	ChainAnchorBlockHash        string `json:"chain_anchor_block_hash"`
+	ChainAnchorOutpoint         string `json:"chain_anchor_outpoint"`
+	ChainAnchorInternalKey      string `json:"chain_anchor_internal_key"`
+	ChainAnchorMerkleRoot       string `json:"chain_anchor_merkle_root"`
+	ChainAnchorTapscriptSibling string `json:"chain_anchor_tapscript_sibling"`
+	ChainAnchorBlockHeight      int    `json:"chain_anchor_block_height"`
+	IsSpent                     bool   `json:"is_spent"`
+	LeaseOwner                  string `json:"lease_owner"`
+	LeaseExpiry                 int    `json:"lease_expiry"`
+	IsBurn                      bool   `json:"is_burn"`
+	DeviceId                    string `json:"device_id" gorm:"type:varchar(255)"`
+}
+
+func ManagedUtxoAssetToAssetManagedUtxoSetRequest(deviceId string, op string, outPoint string, time int, amtSat int, internalKey string, taprootAssetRoot string, merkleRoot string, managedUtxoAsset ManagedUtxoAsset) AssetManagedUtxoSetRequest {
+	return AssetManagedUtxoSetRequest{
+		Op:                          op,
+		OutPoint:                    outPoint,
+		Time:                        time,
+		AmtSat:                      amtSat,
+		InternalKey:                 internalKey,
+		TaprootAssetRoot:            taprootAssetRoot,
+		MerkleRoot:                  merkleRoot,
+		Version:                     managedUtxoAsset.Version,
+		AssetGenesisPoint:           managedUtxoAsset.AssetGenesis.GenesisPoint,
+		AssetGenesisName:            managedUtxoAsset.AssetGenesis.Name,
+		AssetGenesisMetaHash:        managedUtxoAsset.AssetGenesis.MetaHash,
+		AssetGenesisAssetID:         managedUtxoAsset.AssetGenesis.AssetID,
+		AssetGenesisAssetType:       managedUtxoAsset.AssetGenesis.AssetType,
+		AssetGenesisOutputIndex:     managedUtxoAsset.AssetGenesis.OutputIndex,
+		AssetGenesisVersion:         managedUtxoAsset.AssetGenesis.Version,
+		Amount:                      managedUtxoAsset.Amount,
+		LockTime:                    managedUtxoAsset.LockTime,
+		RelativeLockTime:            managedUtxoAsset.RelativeLockTime,
+		ScriptVersion:               managedUtxoAsset.ScriptVersion,
+		ScriptKey:                   managedUtxoAsset.ScriptKey,
+		ScriptKeyIsLocal:            managedUtxoAsset.ScriptKeyIsLocal,
+		AssetGroupRawGroupKey:       managedUtxoAsset.AssetGroup.RawGroupKey,
+		AssetGroupTweakedGroupKey:   managedUtxoAsset.AssetGroup.TweakedGroupKey,
+		AssetGroupAssetWitness:      managedUtxoAsset.AssetGroup.AssetWitness,
+		ChainAnchorTx:               managedUtxoAsset.ChainAnchor.AnchorTx,
+		ChainAnchorBlockHash:        managedUtxoAsset.ChainAnchor.AnchorBlockHash,
+		ChainAnchorOutpoint:         managedUtxoAsset.ChainAnchor.AnchorOutpoint,
+		ChainAnchorInternalKey:      managedUtxoAsset.ChainAnchor.InternalKey,
+		ChainAnchorMerkleRoot:       managedUtxoAsset.ChainAnchor.MerkleRoot,
+		ChainAnchorTapscriptSibling: managedUtxoAsset.ChainAnchor.TapscriptSibling,
+		ChainAnchorBlockHeight:      managedUtxoAsset.ChainAnchor.BlockHeight,
+		IsSpent:                     managedUtxoAsset.IsSpent,
+		LeaseOwner:                  managedUtxoAsset.LeaseOwner,
+		LeaseExpiry:                 managedUtxoAsset.LeaseExpiry,
+		IsBurn:                      managedUtxoAsset.IsBurn,
+		DeviceId:                    deviceId,
+	}
+}
+
+func ManagedUtxoToAssetManagedUtxoSetRequests(deviceId string, managedUtxo *ManagedUtxo) []AssetManagedUtxoSetRequest {
+	var assetManagedUtxoSetRequests []AssetManagedUtxoSetRequest
+	if managedUtxo == nil || len((*managedUtxo).ManagedUtxosAssets) == 0 {
+		return assetManagedUtxoSetRequests
+	}
+	for _, asset := range (*managedUtxo).ManagedUtxosAssets {
+		request := ManagedUtxoAssetToAssetManagedUtxoSetRequest(deviceId, managedUtxo.Op, managedUtxo.OutPoint, managedUtxo.Time, managedUtxo.AmtSat, managedUtxo.InternalKey, managedUtxo.TaprootAssetRoot, managedUtxo.MerkleRoot, asset)
+		assetManagedUtxoSetRequests = append(assetManagedUtxoSetRequests, request)
+	}
+	return assetManagedUtxoSetRequests
+}
+
+func ManagedUtxosToAssetManagedUtxoSetRequests(deviceId string, managedUtxos *[]ManagedUtxo) *[]AssetManagedUtxoSetRequest {
+	if managedUtxos == nil {
+		return nil
+	}
+	var assetManagedUtxoSetRequests []AssetManagedUtxoSetRequest
+	for _, managedUtxo := range *managedUtxos {
+		assetManagedUtxoSetRequests = append(assetManagedUtxoSetRequests, ManagedUtxoToAssetManagedUtxoSetRequests(deviceId, &managedUtxo)...)
+	}
+	return &assetManagedUtxoSetRequests
+}
+
+func PostToSetAssetManagedUtxos(token string, assetManagedUtxoSetRequests *[]AssetManagedUtxoSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/set"
+	requestJsonBytes, err := json.Marshal(assetManagedUtxoSetRequests)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func ListUtxosAndPostToSetAssetManagedUtxos(token string, deviceId string) error {
+	managedUtxos, err := ListUtxosAndGetProcessedManagedUtxos(token)
+	if err != nil {
+		errorAppendInfo := ErrorAppendInfo(err)
+		return errorAppendInfo("List Utxos And Get Processed Managed Utxos")
+	}
+	assetManagedUtxoSetRequests := ManagedUtxosToAssetManagedUtxoSetRequests(deviceId, managedUtxos)
+	_, err = PostToSetAssetManagedUtxos(token, assetManagedUtxoSetRequests)
+	return err
+}
+
+// UploadAssetManagedUtxos
+// @Description: Upload asset managed utxos
+// @dev: This should be executed when enter app
+func UploadAssetManagedUtxos(token string, deviceId string) string {
+	err := ListUtxosAndPostToSetAssetManagedUtxos(token, deviceId)
+	if err != nil {
+		return MakeJsonErrorResult(ListUtxosAndPostToSetAssetManagedUtxosErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
 }
 
 // TODO: Process
