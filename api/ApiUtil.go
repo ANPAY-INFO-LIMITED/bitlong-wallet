@@ -24,7 +24,7 @@ import (
 
 type ErrCode int
 
-// Errtype:Normal
+// Err type:Normal
 const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
@@ -32,7 +32,7 @@ const (
 	RequestError
 )
 
-// Errtype:Unkonwn
+// Err type:Unknown
 const (
 	GetBtcTransferOutInfosErr ErrCode = iota + 501
 	ListTransfersAndGetProcessedResponseErr
@@ -165,14 +165,17 @@ const (
 	RequestToQueryIsFairLaunchFollowedErr
 )
 
-var ErrMsgMap = map[ErrCode]error{
-	NotFoundData: errors.New("not found Data"),
-	SUCCESS:      errors.New(""),
-	RequestError: errors.New("request error"),
-}
-
-func GetErrMsg(code ErrCode) string {
-	return ErrMsgMap[code].Error()
+func (e ErrCode) Error() string {
+	switch {
+	case errors.Is(e, NotFoundData):
+		return "not found Data"
+	case errors.Is(e, SUCCESS):
+		return ""
+	case errors.Is(e, RequestError):
+		return "request error"
+	default:
+		return ""
+	}
 }
 
 var (
@@ -210,15 +213,12 @@ func MakeJsonResult(success bool, error string, data any) string {
 }
 
 func MakeJsonErrorResult(code ErrCode, errorString string, data any) string {
-	if errorString == "" {
-		errorString = GetErrMsg(code)
-	}
 	jsr := JsonResult{
 		Error: errorString,
 		Code:  code,
 		Data:  data,
 	}
-	if code == SUCCESS {
+	if errors.Is(code, SUCCESS) {
 		jsr.Success = true
 	} else {
 		jsr.Success = false
