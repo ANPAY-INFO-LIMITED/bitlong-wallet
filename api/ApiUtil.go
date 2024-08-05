@@ -179,8 +179,7 @@ func (e ErrCode) Error() string {
 }
 
 var (
-	SuccessErr   = errors.New("")
-	SuccessError = SuccessErr.Error()
+	SuccessError = SUCCESS.Error()
 )
 
 type JsonResult struct {
