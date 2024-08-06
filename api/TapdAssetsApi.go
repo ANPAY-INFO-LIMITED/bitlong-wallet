@@ -4995,6 +4995,11 @@ func ListBatchResponseToAssetLocalMintHistorySetRequests(deviceId string, listBa
 }
 
 func PostToSetAssetLocalMintHistories(token string, assetLocalMintHistorySetRequests *[]AssetLocalMintHistorySetRequest) (*JsonResult, error) {
+	if assetLocalMintHistorySetRequests == nil {
+		return &JsonResult{
+			Success: true,
+		}, nil
+	}
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_local_mint_history/set"
 	requestJsonBytes, err := json.Marshal(assetLocalMintHistorySetRequests)
@@ -5360,6 +5365,11 @@ func ManagedUtxosToAssetManagedUtxoSetRequests(deviceId string, managedUtxos *[]
 }
 
 func PostToSetAssetManagedUtxos(token string, assetManagedUtxoSetRequests *[]AssetManagedUtxoSetRequest) (*JsonResult, error) {
+	if assetManagedUtxoSetRequests == nil {
+		return &JsonResult{
+			Success: true,
+		}, nil
+	}
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/set"
 	requestJsonBytes, err := json.Marshal(assetManagedUtxoSetRequests)
