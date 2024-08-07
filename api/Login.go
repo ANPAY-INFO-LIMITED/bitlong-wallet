@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/wallet/service/untils"
 	"io"
 	"net/http"
 )
@@ -67,7 +68,7 @@ func refresh(url string, username string, password string) (string, error) {
 		Password string `gorm:"column:password" json:"password"`
 	}{
 		Username: username,
-		Password: password,
+		Password: untils.GenerateExtMD5WithSalt(password),
 	}
 	requestBody, _ := json.Marshal(user)
 	a, err := SendPostRequest(url, "", requestBody)
