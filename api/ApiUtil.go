@@ -165,6 +165,7 @@ const (
 	RequestToQueryIsFairLaunchFollowedErr
 	ListBatchesAndPostToSetAssetLocalMintHistoriesErr
 	ListUtxosAndPostToSetAssetManagedUtxosErr
+	GetWalletBalanceCalculatedTotalValueErr
 )
 
 func (e ErrCode) Error() string {
@@ -333,26 +334,20 @@ func FeeRateSatPerKwToBtcPerKb(feeRateSatPerKw int) (feeRateBtcPerKb float64) {
 
 // FeeRateSatPerKwToSatPerB
 // @Description: sat/kw to sat/b
-// @param feeRateSatPerKw
-// @return feeRateSatPerB
 func FeeRateSatPerKwToSatPerB(feeRateSatPerKw int) (feeRateSatPerB int) {
-	return feeRateSatPerKw * 4 / 1000
+	return int(math.Ceil(float64(feeRateSatPerKw) * 4 / 1000))
 }
 
 // FeeRateSatPerBToBtcPerKb
 // @Description: sat/b to BTC/Kb
-// @param feeRateSatPerB
-// @return feeRateBtcPerKb
 func FeeRateSatPerBToBtcPerKb(feeRateSatPerB int) (feeRateBtcPerKb float64) {
-	return RoundToDecimalPlace(float64(feeRateSatPerB)/100000, 8)
+	return RoundToDecimalPlace(math.Ceil(float64(feeRateSatPerB)/100000), 8)
 }
 
 // FeeRateSatPerBToSatPerKw
 // @Description: sat/b to sat/kw
-// @param feeRateSatPerB
-// @return feeRateSatPerKw
 func FeeRateSatPerBToSatPerKw(feeRateSatPerB int) (feeRateSatPerKw int) {
-	return feeRateSatPerB * 1000 / 4
+	return int(math.Ceil(float64(feeRateSatPerB) * 1000 / 4))
 }
 
 func ValueJsonString(value any) string {
@@ -588,6 +583,7 @@ func TxHashConversion(txHash string) string {
 	txHash = hex.EncodeToString(b)
 	return txHash
 }
+
 func FixAsset(output string) string {
 	str, err := rpcclient.FixAsset(output, false)
 	if err != nil {

@@ -699,7 +699,7 @@ type ListAssetBalanceInfo struct {
 	AssetType    string `json:"asset_type"`
 	OutputIndex  int    `json:"output_index"`
 	Version      int    `json:"version"`
-	Balance      string `json:"balance"`
+	Balance      int    `json:"balance"`
 }
 
 type ListAssetGroupBalanceInfo struct {
@@ -718,7 +718,7 @@ func ProcessListBalancesResponse(response *taprpc.ListBalancesResponse) *[]ListA
 			AssetType:    balance.AssetGenesis.AssetType.String(),
 			OutputIndex:  int(balance.AssetGenesis.OutputIndex),
 			Version:      int(balance.AssetGenesis.Version),
-			Balance:      strconv.FormatUint(balance.Balance, 10),
+			Balance:      int(balance.Balance),
 		})
 	}
 	return &listAssetBalanceInfos

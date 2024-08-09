@@ -16,10 +16,12 @@ import (
 
 func RouterRunOnPhone() {
 	router := setupRouterOnPhone()
-	err := router.Run("0.0.0.0:9090")
-	if err != nil {
-		return
-	}
+	go func() {
+		err := router.Run("0.0.0.0:9090")
+		if err != nil {
+			return
+		}
+	}()
 }
 
 func setupRouterOnPhone() *gin.Engine {
