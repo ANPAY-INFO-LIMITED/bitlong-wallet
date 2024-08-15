@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/wallet/service/untils"
 	"io"
 	"net/http"
+	"time"
 )
 
 var serverHost string = "http://132.232.109.84:8090"
@@ -89,13 +91,15 @@ func refresh(url string, username string, password string) (string, error) {
 	return result.Token, err
 }
 func SendPostRequest(url string, token string, requestBody []byte) ([]byte, error) {
-
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	// 创建HTTP请求
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
 	if err != nil {
 		fmt.Println("An error occurred while creating an HTTP request:", err)
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 
 	// 设置Authorization Header
 	req.Header.Set("Authorization", "Bearer "+token)

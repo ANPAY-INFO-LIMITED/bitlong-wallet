@@ -9,7 +9,7 @@ pwsh ./pack.api.ps1
 ## Update log
 
 ### v0.0.6
-
+- login接口增加超时
 - [获取所有BTC和资产价值](https://bitlong.gitbook.io/api-doc#id-202489-112258-huo-qu-suo-you-btc-he-zi-chan-jia-zhi)
 
 ### v0.0.5
