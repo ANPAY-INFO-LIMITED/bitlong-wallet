@@ -205,7 +205,7 @@ func newAddrsMap() map[string]*url.URL {
 	addrs := make(map[string]*url.URL)
 	addrs[Cfg.UniverseUrl] = nil
 	if Cfg.Network == "mainnet" {
-		addrs["universerpc://44.230.212.183:10029"] = nil
+		//addrs["universerpc://44.230.212.183:10029"] = nil
 	}
 	return addrs
 }

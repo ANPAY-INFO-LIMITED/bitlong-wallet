@@ -13,6 +13,7 @@ import (
 	"github.com/wallet/models"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -46,10 +47,104 @@ func GetUserOwnIssuanceHistoryInfos(token string) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
+type GetIssuanceTransactionFeeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetIssuanceTransactionFee(token string, feeRate int) (fee int, err error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/issuance?fee_rate=" + strconv.Itoa(feeRate)
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetIssuanceTransactionFeeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+type GetMintTransactionFeeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetMintTransactionFee(token string, feeRate int) (fee int, err error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/mint?fee_rate=" + strconv.Itoa(feeRate)
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetMintTransactionFeeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
 // GetIssuanceTransactionFee
 // @Description: Get Issuance Transaction Fee
-func GetIssuanceTransactionFee(token string) string {
-	result, err := GetIssuanceTransactionCalculatedFee(token)
+func GetIssuanceTransactionFee(token string, feeRate int) string {
+	result, err := RequestToGetIssuanceTransactionFee(token, feeRate)
 	if err != nil {
 		LogError("", err)
 		return MakeJsonErrorResult(GetIssuanceTransactionCalculatedFeeErr, err.Error(), nil)
@@ -59,8 +154,8 @@ func GetIssuanceTransactionFee(token string) string {
 
 // GetMintTransactionFee
 // @Description: Get Mint Transaction Fee
-func GetMintTransactionFee(token string, id int, number int) string {
-	result, err := GetMintTransactionCalculatedFee(token, id, number)
+func GetMintTransactionFee(token string, feeRate int) string {
+	result, err := RequestToGetMintTransactionFee(token, feeRate)
 	if err != nil {
 		LogError("", err)
 		return MakeJsonErrorResult(GetMintTransactionCalculatedFeeErr, err.Error(), nil)
@@ -483,4 +578,172 @@ func GetImageByImageData(imageData string) []byte {
 		return nil
 	}
 	return dataUrl.Data
+}
+
+type FairLaunchFollowSetRequest struct {
+	FairLaunchInfoId int    `json:"fair_launch_info_id"`
+	AssetId          string `json:"asset_id" gorm:"type:varchar(255)"`
+	DeviceId         string `json:"device_id" gorm:"type:varchar(255)"`
+}
+
+func PostToSetFollowFairLaunchInfo(token string, fairLaunchFollowSetRequest *FairLaunchFollowSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/follow"
+	requestJsonBytes, err := json.Marshal(fairLaunchFollowSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func PostToSetUnfollowFairLaunchInfo(token string, assetId string) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/unfollow/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+// FollowFairLaunchAsset
+// @Description: Follow fair launch asset
+func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, deviceId string) string {
+	_, err := PostToSetFollowFairLaunchInfo(token, &FairLaunchFollowSetRequest{
+		FairLaunchInfoId: fairLaunchInfoId,
+		AssetId:          assetId,
+		DeviceId:         deviceId,
+	})
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetFollowFairLaunchInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
+
+// UnfollowFairLaunchAsset
+// @Description: Unfollow fair launch asset
+func UnfollowFairLaunchAsset(token string, assetId string) string {
+	_, err := PostToSetUnfollowFairLaunchInfo(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetUnfollowFairLaunchInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
+}
+
+type QueryIsFairLaunchFollowedResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    bool    `json:"data"`
+}
+
+func RequestToQueryIsFairLaunchFollowed(token string, assetId string) (bool, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/query/user/is_followed/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return false, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return false, err
+	}
+	var response QueryIsFairLaunchFollowedResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return false, err
+	}
+	if response.Error != "" {
+		return false, errors.New(response.Error)
+	}
+	return response.Data, nil
+
+}
+
+// QueryIsFairLaunchFollowed
+// @Description: Query is fair launch followed
+func QueryIsFairLaunchFollowed(token string, assetId string) string {
+	response, err := RequestToQueryIsFairLaunchFollowed(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(RequestToQueryIsFairLaunchFollowedErr, err.Error(), false)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }

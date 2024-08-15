@@ -24,7 +24,7 @@ import (
 
 type ErrCode int
 
-// Errtype:Normal
+// Err type:Normal
 const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
@@ -32,7 +32,7 @@ const (
 	RequestError
 )
 
-// Errtype:Unkonwn
+// Err type:Unknown
 const (
 	GetBtcTransferOutInfosErr ErrCode = iota + 501
 	ListTransfersAndGetProcessedResponseErr
@@ -160,21 +160,29 @@ const (
 	UploadAssetBurnErr
 	GetAssetBurnTotalAmountByAssetIdErr
 	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr
+	PostToSetFollowFairLaunchInfoErr
+	PostToSetUnfollowFairLaunchInfoErr
+	RequestToQueryIsFairLaunchFollowedErr
+	ListBatchesAndPostToSetAssetLocalMintHistoriesErr
+	ListUtxosAndPostToSetAssetManagedUtxosErr
+	GetWalletBalanceCalculatedTotalValueErr
 )
 
-var ErrMsgMap = map[ErrCode]error{
-	NotFoundData: errors.New("not found Data"),
-	SUCCESS:      errors.New(""),
-	RequestError: errors.New("request error"),
-}
-
-func GetErrMsg(code ErrCode) string {
-	return ErrMsgMap[code].Error()
+func (e ErrCode) Error() string {
+	switch {
+	case errors.Is(e, NotFoundData):
+		return "not found Data"
+	case errors.Is(e, SUCCESS):
+		return ""
+	case errors.Is(e, RequestError):
+		return "request error"
+	default:
+		return ""
+	}
 }
 
 var (
-	SuccessErr   = errors.New("")
-	SuccessError = SuccessErr.Error()
+	SuccessError = SUCCESS.Error()
 )
 
 type JsonResult struct {
@@ -207,15 +215,12 @@ func MakeJsonResult(success bool, error string, data any) string {
 }
 
 func MakeJsonErrorResult(code ErrCode, errorString string, data any) string {
-	if errorString == "" {
-		errorString = GetErrMsg(code)
-	}
 	jsr := JsonResult{
 		Error: errorString,
 		Code:  code,
 		Data:  data,
 	}
-	if code == SUCCESS {
+	if errors.Is(code, SUCCESS) {
 		jsr.Success = true
 	} else {
 		jsr.Success = false
@@ -329,26 +334,20 @@ func FeeRateSatPerKwToBtcPerKb(feeRateSatPerKw int) (feeRateBtcPerKb float64) {
 
 // FeeRateSatPerKwToSatPerB
 // @Description: sat/kw to sat/b
-// @param feeRateSatPerKw
-// @return feeRateSatPerB
 func FeeRateSatPerKwToSatPerB(feeRateSatPerKw int) (feeRateSatPerB int) {
-	return feeRateSatPerKw * 4 / 1000
+	return int(math.Ceil(float64(feeRateSatPerKw) * 4 / 1000))
 }
 
 // FeeRateSatPerBToBtcPerKb
 // @Description: sat/b to BTC/Kb
-// @param feeRateSatPerB
-// @return feeRateBtcPerKb
 func FeeRateSatPerBToBtcPerKb(feeRateSatPerB int) (feeRateBtcPerKb float64) {
-	return RoundToDecimalPlace(float64(feeRateSatPerB)/100000, 8)
+	return RoundToDecimalPlace(math.Ceil(float64(feeRateSatPerB)/100000), 8)
 }
 
 // FeeRateSatPerBToSatPerKw
 // @Description: sat/b to sat/kw
-// @param feeRateSatPerB
-// @return feeRateSatPerKw
 func FeeRateSatPerBToSatPerKw(feeRateSatPerB int) (feeRateSatPerKw int) {
-	return feeRateSatPerB * 1000 / 4
+	return int(math.Ceil(float64(feeRateSatPerB) * 1000 / 4))
 }
 
 func ValueJsonString(value any) string {
@@ -544,6 +543,10 @@ func CreateTestMainFile(testPath string, testFuncName string) {
 }
 
 func BuildTestMainFile(testPath string, testFuncName string) {
+	if strings.HasPrefix(testFuncName, ".\\") && strings.HasSuffix(testFuncName, ".exe") {
+		testFuncName, _ = strings.CutPrefix(testFuncName, ".\\")
+		testFuncName, _ = strings.CutSuffix(testFuncName, ".exe")
+	}
 	dirPath := path.Join(testPath, ToLowerWordsWithHyphens(testFuncName))
 	filePath := path.Join(dirPath, "main.go")
 	executableFileName := testFuncName + ".exe"
@@ -580,8 +583,9 @@ func TxHashConversion(txHash string) string {
 	txHash = hex.EncodeToString(b)
 	return txHash
 }
+
 func FixAsset(output string) string {
-	str, err := rpcclient.FixAsset(output)
+	str, err := rpcclient.FixAsset(output, false)
 	if err != nil {
 		fmt.Println(err)
 		return MakeJsonErrorResult(DefaultErr, "FixAsset error, please check the output parameter and whether the asset needs to be repaired", nil)

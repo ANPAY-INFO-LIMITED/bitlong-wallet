@@ -248,7 +248,7 @@ func NextAddr() string {
 
 func BumpFee(txId string, fee int) string {
 	if txId == "" || fee == 0 {
-		return MakeJsonErrorResult(RequestError, ErrMsgMap[RequestError].Error()+":txId or fee is empty", nil)
+		return MakeJsonErrorResult(RequestError, RequestError.Error()+":txId or fee is empty", nil)
 	}
 	_, err := rpcclient.BumpFee(txId, fee)
 	if err != nil {
