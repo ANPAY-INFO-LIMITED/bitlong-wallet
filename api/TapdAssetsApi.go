@@ -5803,7 +5803,7 @@ func GetWalletBalanceTotalValue(token string) string {
 
 // TODO
 // B query who is A's referer when he send asset to A
-func GetAssetRecommendUser(token string, assetId string, encoded string) (string, error) {
+func GetAssetRecommendUser(token string, assetId string, encoded string, deviceId string) (string, error) {
 	//if IsLocalMintAsset(assetId) {
 	//	return "", errors.New("asset is local issuance")
 	//}
@@ -5826,8 +5826,11 @@ func GetAssetRecommendUser(token string, assetId string, encoded string) (string
 		AssetId: assetId,
 	})
 	if err != nil {
-		//TODO: Set AssetRecommend
-		return "", err
+		err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
+		if err != nil {
+			return "", err
+		}
+		return GetPublicKey(), nil
 	}
 	return assetRecommend.RecommendUsername, nil
 }
@@ -5845,3 +5848,8 @@ func GetAssetRecommendUser(token string, assetId string, encoded string) (string
 // @dev: GetUserAssetRecommendByAssetId X
 // TODO: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
 // @dev: SetAssetRecommendByAssetId
+
+// TODO: Custody Asset
+//		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)
+//		2. Query all transfer records including the custody of asset (on-chain and custodial data)
+//		3. May need to use a separate table to record transfer records for custodial assets
