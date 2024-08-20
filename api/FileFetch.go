@@ -3,8 +3,10 @@ package api
 import (
 	"errors"
 	"fmt"
+	"github.com/lightninglabs/taproot-assets/tapdbtlutil"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/rpcclient"
 	"github.com/wallet/service/universeCourier"
 	"os"
 	"path/filepath"
@@ -49,8 +51,15 @@ func SetPath(path string, network string) error {
 	if err != nil {
 		return errors.New("load config error ")
 	}
+	_, err = rpcclient.CheckTapdDb()
+	if err != nil {
+		fmt.Println("4.0 update TapdDb is error")
+		return fmt.Errorf("4.0 update TapdDb is error %v", err)
+	}
+	tapdbtlutil.SetFeeParams(Cfg.Network)
 	return nil
 }
+
 func (c *Config) loadConfig() error {
 	//load service config
 	err := c.loadServiceConfig()

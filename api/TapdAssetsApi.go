@@ -4897,8 +4897,8 @@ func CheckIfAssetIsIssuedLocally(assetId string) (bool, error) {
 			errorAppendInfo := ErrorAppendInfo(err)
 			return false, errorAppendInfo("failed to get mint info")
 		}
-		for _, batch := range listBatch.Batches {
-			if batch.BatchTxid == opStr[0] {
+		for _, b := range listBatch.Batches {
+			if b.Batch.BatchTxid == opStr[0] {
 				var leaves *universerpc.AssetLeafResponse
 				leaves, err = assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 				if err != nil {
@@ -5034,8 +5034,8 @@ func ListBatchResponseToAssetLocalMintHistorySetRequests(deviceId string, listBa
 		return nil
 	}
 	var assetLocalMintHistorySetRequests []AssetLocalMintHistorySetRequest
-	for _, batch := range listBatchResponse.Batches {
-		requests := MintingBatchToAssetLocalMintHistorySetRequests(deviceId, batch)
+	for _, b := range listBatchResponse.Batches {
+		requests := MintingBatchToAssetLocalMintHistorySetRequests(deviceId, b.Batch)
 		if requests != nil {
 			assetLocalMintHistorySetRequests = append(assetLocalMintHistorySetRequests, *requests...)
 		}
@@ -5508,8 +5508,8 @@ func AssetIssuanceIsLocal(assetId string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		for _, batch := range listBatch.Batches {
-			if batch.BatchTxid == opStr[0] {
+		for _, b := range listBatch.Batches {
+			if b.Batch.BatchTxid == opStr[0] {
 				leaves, err := assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 				if err != nil {
 					return false, err
@@ -5756,9 +5756,15 @@ func GetWalletBalanceTotalValueAndGetResponse(token string) ([]BtcOrAssetsValue,
 		return nil, err
 	}
 	for _, normalBalance := range *normalBalances {
+		var balance int
+		balance, err = strconv.Atoi(normalBalance.Balance)
+		if err != nil {
+			//TODO
+			continue
+		}
 		btcOrAssetsValueRequest = append(btcOrAssetsValueRequest, BtcOrAssetsValueRequest{
 			Ids:     normalBalance.AssetID,
-			Numbers: normalBalance.Balance,
+			Numbers: balance,
 		})
 	}
 	// @dev: Value of normal asset

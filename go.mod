@@ -11,6 +11,7 @@ replace (
 	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	github.com/lightninglabs/lightning-terminal => ./lib/lightning-terminal@v0.13.3
 	github.com/lightningnetwork/lnd/cert => ./lib/cert@v1.2.2
+	github.com/lightninglabs/taproot-assets => ./lib/taproot-assets@v0.4.2-0.20240725155459-2bf18437e945
 
 	// This replace is for https://github.com/advisories/GHSA-25xm-hr59-7c27
 	github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.11
