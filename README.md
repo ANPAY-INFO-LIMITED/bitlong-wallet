@@ -8,6 +8,15 @@ pwsh ./pack.api.ps1
 
 ## Update log
 
+### v0.1.0
+- 升级lit,lnd,tapd版本
+- 编译命令请增加 -tags "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi"
+example:
+```
+1.gomobile.exe bind -v -target=android -tags "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi"
+2.go build  -tags "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi" -o main.exe 
+```
+
 ### v0.0.6
 - login接口增加超时
 - [获取所有BTC和资产价值](https://bitlong.gitbook.io/api-doc#id-202489-112258-huo-qu-suo-you-btc-he-zi-chan-jia-zhi)
