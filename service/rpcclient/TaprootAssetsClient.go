@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
+	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/wallet/base"
@@ -422,7 +423,7 @@ func (d *decodeProofOffline) marshalChainAsset(ctx context.Context, a *asset.Cha
 	withWitness bool) (*taprpc.Asset, error) {
 
 	rpcAsset, err := taprpc.MarshalAsset(
-		ctx, a.Asset, a.IsSpent, withWitness, nil,
+		ctx, a.Asset, a.IsSpent, withWitness, nil, fn.None[uint32](),
 	)
 	if err != nil {
 		return nil, err

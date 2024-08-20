@@ -3,11 +3,8 @@ go 1.22.5
 use (
 	.
 	./lib/btcutil@v1.1.5
-	./lib/lnd@v0.17.4
-	./lib/lndclient@v0.17.4
-	./lib/lightning-terminal@v0.12.2
+	./lib/lightning-terminal@v0.13.3
 	./lib/frp@v0.56.0
-	./lib/taproot-assets@v0.3.3
 	./lib/cert@v1.2.2
-	./lib/faraday@v0.2.13
+
 )

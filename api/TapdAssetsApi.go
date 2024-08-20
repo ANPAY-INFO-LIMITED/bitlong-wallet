@@ -156,7 +156,7 @@ func SimplifyAssetsList(assets []*taprpc.Asset) *[]SimplifiedAssetsList {
 				AssetID:      hex.EncodeToString(_asset.AssetGenesis.AssetId),
 				AssetType:    _asset.AssetGenesis.AssetType.String(),
 				OutputIndex:  int(_asset.AssetGenesis.OutputIndex),
-				Version:      int(_asset.AssetGenesis.Version),
+				Version:      int(_asset.Version),
 			},
 			Amount:           int(_asset.Amount),
 			LockTime:         int(_asset.LockTime),
@@ -1261,7 +1261,7 @@ func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 	var listBatchesResponse []ListBatchesResponse
 	for _, batch := range (*response).Batches {
 		var assets []ListBatchesAsset
-		for _, _asset := range batch.Assets {
+		for _, _asset := range batch.Batch.Assets {
 			assets = append(assets, ListBatchesAsset{
 				AssetVersion: _asset.AssetVersion.String(),
 				AssetType:    _asset.AssetType.String(),
@@ -1274,9 +1274,9 @@ func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 			})
 		}
 		listBatchesResponse = append(listBatchesResponse, ListBatchesResponse{
-			BatchKey:  hex.EncodeToString(batch.BatchKey),
-			BatchTxid: batch.BatchTxid,
-			State:     batch.State.String(),
+			BatchKey:  hex.EncodeToString(batch.Batch.BatchKey),
+			BatchTxid: batch.Batch.BatchTxid,
+			State:     batch.Batch.State.String(),
 			Assets:    assets,
 			//Amount:    0,
 			//NewGroupedAsset: false,
@@ -1304,7 +1304,7 @@ func ListAssetAndGetCustomResponse() (*[]ListAssetResponse, error) {
 				AssetID:      hex.EncodeToString(_asset.AssetGenesis.AssetId),
 				AssetType:    int(_asset.AssetGenesis.AssetType),
 				OutputIndex:  int(_asset.AssetGenesis.OutputIndex),
-				Version:      int(_asset.AssetGenesis.Version),
+				Version:      int(_asset.Version),
 			},
 			Amount:           int(_asset.Amount),
 			LockTime:         int(_asset.LockTime),
@@ -3421,7 +3421,7 @@ func ListBalancesResponseToListBalanceInfos(listBalancesResponse *taprpc.ListBal
 			AssetID:      hex.EncodeToString(balance.AssetGenesis.AssetId),
 			AssetType:    balance.AssetGenesis.AssetType.String(),
 			OutputIndex:  int(balance.AssetGenesis.OutputIndex),
-			Version:      int(balance.AssetGenesis.Version),
+			Version:      -1,
 			Balance:      int(balance.Balance),
 		})
 	}

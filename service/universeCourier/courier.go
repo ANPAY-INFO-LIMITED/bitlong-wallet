@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
@@ -45,7 +46,7 @@ func (c *courier) DeliverProof(ctx context.Context,
 
 		// Construct asset leaf.
 		rpcAsset, err := taprpc.MarshalAsset(
-			ctx, &proofAsset, true, true, nil,
+			ctx, &proofAsset, true, true, nil, fn.None[uint32](),
 		)
 		if err != nil {
 			return err

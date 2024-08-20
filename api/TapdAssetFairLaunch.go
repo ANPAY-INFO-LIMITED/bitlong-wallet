@@ -419,7 +419,7 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 	var leave *universerpc.AssetLeafResponse
 	for _, batch := range (*batchs).Batches {
 		var transaction *lnrpc.Transaction
-		transaction, err = GetTransactionByBatchTxid(transactions, batch.BatchTxid)
+		transaction, err = GetTransactionByBatchTxid(transactions, batch.Batch.BatchTxid)
 		// transaction not found
 		if err != nil {
 			//LogError("", err)
@@ -446,7 +446,7 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 				AssetType:            asset.AssetGenesis.AssetType,
 				IssuanceTime:         timestamp,
 				IssuanceAmount:       int(leaveAsset.Amount),
-				State:                int(batch.State),
+				State:                int(batch.Batch.State),
 			})
 		}
 	}
@@ -533,7 +533,7 @@ func GetAssetsByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAsse
 						AssetID:      hex.EncodeToString(asset.AssetGenesis.AssetId),
 						AssetType:    int(asset.AssetGenesis.AssetType),
 						OutputIndex:  int(asset.AssetGenesis.OutputIndex),
-						Version:      int(asset.AssetGenesis.Version),
+						Version:      int(asset.Version),
 					},
 					Amount:           int(asset.Amount),
 					LockTime:         int(asset.LockTime),
