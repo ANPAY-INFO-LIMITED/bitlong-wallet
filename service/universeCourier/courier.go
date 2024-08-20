@@ -32,11 +32,12 @@ func (c *courier) DeliverProof(ctx context.Context,
 	if err != nil {
 		return err
 	}
-
-	// Iterate over each proof in the proof file and submit to the courier
-	// service.
-	for i := 0; i < proofFile.NumProofs(); i++ {
-		transitionProof, err := proofFile.ProofAt(uint32(i))
+	var deliver func(ctx context.Context, proofFile *proof.File, numProofs int) error
+	deliver = func(ctx context.Context, proofFile *proof.File, numProofs int) error {
+		if numProofs < 0 {
+			return nil
+		}
+		transitionProof, err := proofFile.ProofAt(uint32(numProofs))
 		if err != nil {
 			return err
 		}
@@ -83,6 +84,14 @@ func (c *courier) DeliverProof(ctx context.Context,
 			Id:      universeID,
 			LeafKey: assetKey,
 		}
+		resp, _ := c.client.QueryProof(ctx, &universeKey)
+		if resp != nil {
+			return nil
+		}
+		err = deliver(ctx, proofFile, numProofs-1)
+		if err != nil {
+			return err
+		}
 		// Submit proof to courier.
 		_, err = c.client.InsertProof(ctx, &unirpc.AssetProof{
 			Key:       &universeKey,
@@ -93,8 +102,81 @@ func (c *courier) DeliverProof(ctx context.Context,
 				"into universe courier service: %w",
 				err)
 		}
-
+		return nil
 	}
+
+	i := proofFile.NumProofs() - 1
+	err = deliver(ctx, proofFile, i)
+	if err != nil {
+		return err
+	}
+
+	//// Iterate over each proof in the proof file and submit to the courier
+	//// service.
+	//for i := 0; i < proofFile.NumProofs(); i++ {
+	//	transitionProof, err := proofFile.ProofAt(uint32(i))
+	//	if err != nil {
+	//		return err
+	//	}
+	//	proofAsset := transitionProof.Asset
+	//
+	//	// Construct asset leaf.
+	//	rpcAsset, err := taprpc.MarshalAsset(
+	//		ctx, &proofAsset, true, true, nil,
+	//	)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	var proofBuf bytes.Buffer
+	//	if err := transitionProof.Encode(&proofBuf); err != nil {
+	//		return fmt.Errorf("error encoding proof file: %w", err)
+	//	}
+	//
+	//	assetLeaf := unirpc.AssetLeaf{
+	//		Asset: rpcAsset,
+	//		Proof: proofBuf.Bytes(),
+	//	}
+	//
+	//	// Construct universe key.
+	//	outPoint := transitionProof.OutPoint()
+	//	assetKey := unirpc.MarshalAssetKey(
+	//		outPoint, proofAsset.ScriptKey.PubKey,
+	//	)
+	//	assetID := proofAsset.ID()
+	//
+	//	var (
+	//		groupPubKey      *btcec.PublicKey
+	//		groupPubKeyBytes []byte
+	//	)
+	//	if proofAsset.GroupKey != nil {
+	//		groupPubKey = &proofAsset.GroupKey.GroupPubKey
+	//		groupPubKeyBytes = groupPubKey.SerializeCompressed()
+	//	}
+	//
+	//	universeID := unirpc.MarshalUniverseID(
+	//		assetID[:], groupPubKeyBytes,
+	//	)
+	//	universeKey := unirpc.UniverseKey{
+	//		Id:      universeID,
+	//		LeafKey: assetKey,
+	//	}
+	//	resp, _ := c.client.QueryProof(ctx, &universeKey)
+	//	if resp != nil {
+	//		continue
+	//	}
+	//	// Submit proof to courier.
+	//	_, err = c.client.InsertProof(ctx, &unirpc.AssetProof{
+	//		Key:       &universeKey,
+	//		AssetLeaf: &assetLeaf,
+	//	})
+	//	if err != nil {
+	//		return fmt.Errorf("error inserting proof "+
+	//			"into universe courier service: %w",
+	//			err)
+	//	}
+	//
+	//}
 	return err
 }
 func (c *courier) ReceiveProof(ctx context.Context,
@@ -126,9 +208,6 @@ func (c *courier) ReceiveProof(ctx context.Context,
 		receiveFunc := func() error {
 			// Retrieve proof from courier.
 			resp, err := c.client.QueryProof(ctx, &universeKey)
-			if err != nil {
-				return err
-			}
 			if err != nil {
 				return fmt.Errorf("error retreving proof "+
 					"from universe courier service: %w",
@@ -183,7 +262,8 @@ func (c *courier) QueryAssetKey(assetId string) (*unirpc.AssetLeafKeyResponse, e
 		ProofType: unirpc.ProofType_PROOF_TYPE_TRANSFER,
 	}
 	keys, err := c.client.AssetLeafKeys(context.Background(), &unirpc.AssetLeafKeysRequest{
-		Id: &i,
+		Id:    &i,
+		Limit: 5120,
 	})
 	if err != nil {
 		return nil, err

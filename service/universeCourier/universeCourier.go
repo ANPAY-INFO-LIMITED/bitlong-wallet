@@ -7,6 +7,7 @@ import (
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/base"
 	"path/filepath"
+	"time"
 )
 
 func DeliverProof(universeHost string, proofFile *proof.AnnotatedProof) error {
@@ -24,7 +25,10 @@ func DeliverProof(universeHost string, proofFile *proof.AnnotatedProof) error {
 			fmt.Println(err)
 		}
 	}(c)
+	start := time.Now()
 	err = c.DeliverProof(context.Background(), proofFile)
+	end := time.Now()
+	fmt.Printf("DeliverProof time: %s\n", end.Sub(start))
 	if err != nil {
 		return err
 	}
