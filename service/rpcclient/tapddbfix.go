@@ -126,3 +126,80 @@ const test = `
 		WHERE lower(hex(outpoint)) = $1
 	);
 	`
+
+func CheckTapdDb() (bool, error) {
+	dbPath := filepath.Join(base.Configure("tapd"), "data", base.NetWork, "tapd.db")
+	//dir, _ := os.Getwd()
+	//dbPath := filepath.Join(dir, "tapd.db")
+	//dbPath := "C:\\Users\\七月九\\Desktop\\tapd.db"
+	fmt.Printf("CheckTapdDb start, dbPath: %s\n", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		fmt.Println(err)
+		return false, err
+	}
+	defer db.Close()
+
+	_, err = db.Exec(checkpoint)
+	if err != nil {
+		return false, err
+	}
+
+	var name string
+	err = db.QueryRow(checktabl, "multiverse_roots").Scan(&name)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		fmt.Println("table not exist")
+		_, err = db.Exec(createrootstable)
+		if err != nil {
+			return false, err
+		}
+	}
+	fmt.Printf("CheckTapdDb start is false end\n")
+	return true, nil
+}
+
+const checkpoint = `
+	PRAGMA wal_checkpoint(FULL);
+`
+const checktabl = `
+SELECT name 
+FROM sqlite_master 
+WHERE type='table' AND name= ?
+`
+const createrootstable = `
+create table multiverse_roots
+(
+    id             INTEGER
+        primary key,
+    namespace_root VARCHAR not null
+        unique
+        references mssmt_roots
+            deferrable initially deferred,
+    proof_type     TEXT    not null,
+    check (proof_type IN ('issuance', 'transfer'))
+);
+INSERT INTO multiverse_roots ('namespace_root', 'proof_type') VALUES ('multiverse-issuance', 'issuance');
+INSERT INTO multiverse_roots ('namespace_root', 'proof_type') VALUES ('multiverse-transfer', 'transfer');
+create table multiverse_leaves
+(
+    id                  INTEGER
+        primary key,
+    multiverse_root_id  BIGINT  not null
+        references multiverse_roots,
+    asset_id            BLOB,
+    group_key           BLOB,
+    leaf_node_key       BLOB    not null,
+    leaf_node_namespace VARCHAR not null,
+    check ((asset_id IS NOT NULL AND group_key IS NULL) OR
+           (asset_id IS NULL AND group_key IS NOT NULL)),
+    check (LENGTH(group_key) = 32),
+    check (length(asset_id) = 32)
+);
+
+create unique index multiverse_leaves_unique
+    on multiverse_leaves (leaf_node_key, leaf_node_namespace);
+
+`
