@@ -8,6 +8,9 @@ pwsh ./pack.api.ps1
 
 ## Update log
 
+### v0.1.1
+- 增加查询宇宙资产记录的接口返回数据的最大值
+
 ### v0.1.0
 - 升级lit,lnd,tapd版本
 - 编译命令请增加 -tags "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi"
