@@ -134,7 +134,7 @@ func CheckTapdDb() (bool, error) {
 	//dbPath := filepath.Join(dir, "tapd.db")
 	//dbPath := "C:\\Users\\七月九\\Desktop\\tapd.db"
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return true, err
+		return true, nil
 	}
 	fmt.Printf("CheckTapdDb start, dbPath: %s\n", dbPath)
 	db, err := sql.Open("sqlite", dbPath)
