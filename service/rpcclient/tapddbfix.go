@@ -10,6 +10,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -132,6 +133,9 @@ func CheckTapdDb() (bool, error) {
 	//dir, _ := os.Getwd()
 	//dbPath := filepath.Join(dir, "tapd.db")
 	//dbPath := "C:\\Users\\七月九\\Desktop\\tapd.db"
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return true, nil
+	}
 	fmt.Printf("CheckTapdDb start, dbPath: %s\n", dbPath)
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {

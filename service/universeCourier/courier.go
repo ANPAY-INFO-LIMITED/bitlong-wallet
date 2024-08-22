@@ -9,6 +9,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/proof"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/lightninglabs/taproot-assets/universe"
 	"google.golang.org/grpc"
 	"net/url"
 )
@@ -262,14 +263,30 @@ func (c *courier) QueryAssetKey(assetId string) (*unirpc.AssetLeafKeyResponse, e
 		},
 		ProofType: unirpc.ProofType_PROOF_TYPE_TRANSFER,
 	}
-	keys, err := c.client.AssetLeafKeys(context.Background(), &unirpc.AssetLeafKeysRequest{
-		Id:    &i,
-		Limit: 5120,
-	})
-	if err != nil {
-		return nil, err
+
+	assetKeys := &unirpc.AssetLeafKeyResponse{}
+	offset := 0
+	for {
+		tempKeys, err := c.client.AssetLeafKeys(
+			context.Background(), &unirpc.AssetLeafKeysRequest{
+				Id:        &i,
+				Offset:    int32(offset),
+				Limit:     universe.MaxPageSize,
+				Direction: unirpc.SortDirection_SORT_DIRECTION_DESC,
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		if len(tempKeys.AssetKeys) == 0 {
+			break
+		}
+		assetKeys.AssetKeys = append(
+			assetKeys.AssetKeys, tempKeys.AssetKeys...,
+		)
+		offset += universe.MaxPageSize
 	}
-	return keys, nil
+	return assetKeys, nil
 }
 
 func newCourier(addr *url.URL) (*courier, error) {
