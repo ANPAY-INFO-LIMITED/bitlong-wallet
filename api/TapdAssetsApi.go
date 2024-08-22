@@ -5836,7 +5836,7 @@ func GetAssetRecommendUser(token string, assetId string, encoded string, deviceI
 		if err != nil {
 			return "", err
 		}
-		return GetPublicKey(), nil
+		return GetNPublicKey(), nil
 	}
 	return assetRecommend.RecommendUsername, nil
 }
