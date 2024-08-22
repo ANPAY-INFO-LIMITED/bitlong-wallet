@@ -7,6 +7,9 @@ pwsh ./pack.api.ps1
 ```
 
 ## Update log
+### v0.1.3
+- 修复一个bug，会导致GetAssetInfo输入的资产没有元数据时崩溃
+
 ### v0.1.2
 - 修复一个bug，会导致第一次安装时去打开一个不存在的数据库导致程序崩溃
 
