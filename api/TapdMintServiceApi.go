@@ -134,6 +134,7 @@ func (m *Meta) ToJsonStr() string {
 func (m *Meta) GetMetaFromStr(metaStr string) {
 	if metaStr == "" {
 		m.Description = "This asset has no meta."
+		return
 	}
 
 	first := metaStr[:1]

@@ -127,9 +127,16 @@ func GetAssetInfo(id string) string {
 	amount := p.Asset.Amount
 	createHeight := p.BlockHeight
 	createTime := p.BlockHeader.Timestamp
-	var newMeta Meta
+
+	var (
+		newMeta Meta
+		m       = ""
+	)
+	if p.MetaReveal != nil {
+		m = string(p.MetaReveal.Data)
+	}
 	//m := hex.EncodeToString(p.MetaReveal.Data)
-	m := string(p.MetaReveal.Data)
+
 	newMeta.GetMetaFromStr(m)
 	//proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
 	//if err != nil {
