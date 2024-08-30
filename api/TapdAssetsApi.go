@@ -4514,10 +4514,18 @@ func BatchTxidAndAssetMintInfoToAssetId(batchTxid string, pendingAsset *mintrpc.
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
 		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		var isMetaHashEqual bool
+		if pendingAsset.AssetMeta == nil || asset.AssetGenesis == nil {
+			isMetaHashEqual = true
+		} else if pendingAsset.AssetMeta.MetaHash == nil || asset.AssetGenesis.MetaHash == nil {
+			isMetaHashEqual = true
+		} else {
+			isMetaHashEqual = hex.EncodeToString(pendingAsset.AssetMeta.MetaHash) == hex.EncodeToString(asset.AssetGenesis.MetaHash)
+		}
 		if batchTxid == txid &&
 			pendingAsset.Name == asset.AssetGenesis.Name &&
 			pendingAsset.Amount == asset.Amount &&
-			hex.EncodeToString(pendingAsset.AssetMeta.MetaHash) == hex.EncodeToString(asset.AssetGenesis.MetaHash) &&
+			isMetaHashEqual &&
 			pendingAsset.AssetType == asset.AssetGenesis.AssetType {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}
@@ -4772,7 +4780,7 @@ type UserIdAndAssetId struct {
 	AssetId string `json:"asset_id"`
 }
 
-func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
+func PostToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_recommend/get/user_id_and_asset_id"
 	requestJsonBytes, err := json.Marshal(userIdAndAssetId)
@@ -4780,7 +4788,7 @@ func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId
 		return nil, err
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
-	req, err := http.NewRequest("GET", url, payload)
+	req, err := http.NewRequest("POST", url, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -4807,13 +4815,18 @@ func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId
 		return nil, err
 	}
 	if response.Error != "" {
-		return nil, errors.New(response.Error)
+		if response.Error == gorm.ErrRecordNotFound.Error() {
+			err = gorm.ErrRecordNotFound
+		} else {
+			err = errors.New(response.Error)
+		}
+		return nil, err
 	}
 	return response.Data, nil
 }
 
 func GetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
-	return RequestToGetAssetRecommendByUserIdAndAssetId(token, userIdAndAssetId)
+	return PostToGetAssetRecommendByUserIdAndAssetId(token, userIdAndAssetId)
 }
 
 func PostToSetAssetRecommendByAssetId(token string, assetRecommendSetRequest *AssetRecommendSetRequest) (*JsonResult, error) {
@@ -4994,13 +5007,25 @@ func BatchAssetToAssetLocalMintHistorySetRequest(batchKey string, batchTxid stri
 		// @dev: Do not return
 		//LogError("", err)
 	}
+	var assetMetaData string
+	var assetMetaHash string
+	var assetMetaType string
+	if asset.AssetMeta != nil {
+		if asset.AssetMeta.Data != nil {
+			assetMetaData = hex.EncodeToString(asset.AssetMeta.Data)
+		}
+		if asset.AssetMeta.MetaHash != nil {
+			assetMetaHash = hex.EncodeToString(asset.AssetMeta.MetaHash)
+		}
+		assetMetaType = asset.AssetMeta.Type.String()
+	}
 	return &AssetLocalMintHistorySetRequest{
 		AssetVersion:    asset.AssetVersion.String(),
 		AssetType:       asset.AssetType.String(),
 		Name:            asset.Name,
-		AssetMetaData:   hex.EncodeToString(asset.AssetMeta.Data),
-		AssetMetaType:   asset.AssetMeta.Type.String(),
-		AssetMetaHash:   hex.EncodeToString(asset.AssetMeta.MetaHash),
+		AssetMetaData:   assetMetaData,
+		AssetMetaType:   assetMetaType,
+		AssetMetaHash:   assetMetaHash,
 		Amount:          int(asset.Amount),
 		NewGroupedAsset: asset.NewGroupedAsset,
 		GroupKey:        groupKey,
@@ -5807,53 +5832,138 @@ func GetWalletBalanceTotalValue(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), totalValue)
 }
 
-// TODO
-// B query who is A's referer when he send asset to A
+type GetAssetBalanceByUserIdAndAssetIdRequest struct {
+	UserId  int    `json:"user_id"`
+	AssetId string `json:"asset_id"`
+}
+
+type GetAssetBalanceByUserIdAndAssetIdResponse struct {
+	Success bool          `json:"success"`
+	Error   string        `json:"error"`
+	Code    ErrCode       `json:"code"`
+	Data    *AssetBalance `json:"data"`
+}
+
+func PostToGetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndAssetIdRequest GetAssetBalanceByUserIdAndAssetIdRequest) (*AssetBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/balance/asset_id_and_user_id"
+	requestJsonBytes, err := json.Marshal(getAssetBalanceByUserIdAndAssetIdRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetBalanceByUserIdAndAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response.Data, nil
+}
+
+func GetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndAssetIdRequest GetAssetBalanceByUserIdAndAssetIdRequest) (*AssetBalance, error) {
+	return PostToGetAssetBalanceByUserIdAndAssetId(token, getAssetBalanceByUserIdAndAssetIdRequest)
+}
+
+// GetAssetRecommendUser
+// @note: B query who is A's referer when he sends asset to A
+// @dev: 1. Alice generates the asset address (invoice) and uploads it to the server
+// @dev: 2. Alice sends the asset address (invoice) to Bob.
 func GetAssetRecommendUser(token string, assetId string, encoded string, deviceId string) (string, error) {
 	//if IsLocalMintAsset(assetId) {
 	//	return "", errors.New("asset is local issuance")
 	//}
+	// @dev: 3. Bob queries the user ID and username of the creator of the asset address (invoice) (i.e. Alice)
+	//		   when he makes a payment to Alice's asset address.
+	assetRecipientIsAssetIssuer := errors.New("asset recipient is asset issuer")
 	addr, err := GetAssetAddrByEncoded(token, encoded)
 	if err != nil {
 		return "", err
 	}
 	addrUserId := addr.UserId
+	// @dev: 4. Bob queries Alice to see if the asset has been issued locally.
 	assetLocalMintHistory, err := GetAssetLocalMintHistoryAssetId(token, assetId)
 	if err != nil {
 		return "", err
 	}
 	if assetLocalMintHistory.UserId == addrUserId {
-		return "", errors.New("asset recipient is asset issuer")
+		return "", assetRecipientIsAssetIssuer
 	}
+	request := GetAssetBalanceByUserIdAndAssetIdRequest{
+		UserId:  addrUserId,
+		AssetId: addr.AssetId,
+	}
+	// @dev: Check if Alice had the asset
+	assetBalance, err := GetAssetBalanceByUserIdAndAssetId(token, request)
+	var userHadAsset bool
+	if err == nil && assetBalance != nil {
+		userHadAsset = true
+	}
+	userHadAssetErr := errors.New("user had asset")
 	var assetRecommend *AssetRecommend
-	// TODO: Need to test GetAssetRecommendByUserIdAndAssetId
+	// @dev: 5. Bob queries whether Alice already has a referrer for the asset.
 	assetRecommend, err = GetAssetRecommendByUserIdAndAssetId(token, UserIdAndAssetId{
 		UserId:  addrUserId,
 		AssetId: assetId,
 	})
 	if err != nil {
-		err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
-		if err != nil {
-			return "", err
+		if userHadAsset {
+			// @dev: Alice had the asset, but there is no referrer for the asset. Bob can't be Alice's referrer.
+			return "", userHadAssetErr
 		}
-		return GetNPublicKey(), nil
+		// @dev: Alice does not have a referer for the asset
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// QueryBalance
+
+			// @dev: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
+			err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
+			if err != nil {
+				return "", err
+			}
+			return GetNPublicKey(), nil
+		}
+		return "", err
 	}
 	return assetRecommend.RecommendUsername, nil
 }
 
-// TODO: Get Asset Recommend by AssetId And UserId
-
-// @dev: Process of Asset Recommend
-// @dev: 1. Alice generates the asset address (invoice) and uploads it to the server
-// @dev: 2. Alice sends the asset address (invoice) to Bob.
-// TODO: 3. Bob queries the user ID and user name of the creator of the asset address (invoice) (i.e. Alice)
-//		   when he makes a payment to Alice's asset address.
-// @dev: Use GetUsernameByEncoded or GetAssetAddrByEncoded
-// TODO: 4. Bob queries Alice to see if the asset has been issued locally.
-// TODO: 5. Bob queries whether Alice already has a referrer for the asset.
-// @dev: GetUserAssetRecommendByAssetId X
-// TODO: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
-// @dev: SetAssetRecommendByAssetId
+func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs string, deviceId string) (*map[string]string, error) {
+	var addrs []string
+	err := json.Unmarshal([]byte(jsonAddrs), &addrs)
+	if err != nil {
+		return nil, err
+	}
+	addrMapRecommendUser := make(map[string]string)
+	var recommendUser string
+	for _, addr := range addrs {
+		recommendUser, err = GetAssetRecommendUser(token, assetId, addr, deviceId)
+		if err != nil {
+			continue
+		}
+		addrMapRecommendUser[addr] = recommendUser
+	}
+	return &addrMapRecommendUser, nil
+}
 
 // TODO: Custody Asset
 //		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)

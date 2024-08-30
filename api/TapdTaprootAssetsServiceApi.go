@@ -550,44 +550,65 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	if err != nil {
 		return MakeJsonErrorResult(sendAssetsErr, err.Error(), nil)
 	}
-	// @dev: decode addrs
-	var batchTransfersRequest []BatchTransferRequest
-	var decodedAddr *taprpc.Addr
-	var totalAmount int
-	for index, addr := range addrs {
-		decodedAddr, err = rpcclient.DecodeAddr(addr)
-		if err != nil {
-			return MakeJsonErrorResult(DecodeAddrErr, err.Error(), nil)
+	{
+		// @dev: decode addrs
+		var batchTransfersRequest []BatchTransferRequest
+		var decodedAddr *taprpc.Addr
+		var totalAmount int
+		for index, addr := range addrs {
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if err != nil {
+				continue
+			}
+			totalAmount += int(decodedAddr.Amount)
+			txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+			batchTransfersRequest = append(batchTransfersRequest, BatchTransferRequest{
+				Encoded:            decodedAddr.Encoded,
+				AssetID:            hex.EncodeToString(decodedAddr.AssetId),
+				Amount:             int(decodedAddr.Amount),
+				ScriptKey:          hex.EncodeToString(decodedAddr.ScriptKey),
+				InternalKey:        hex.EncodeToString(decodedAddr.InternalKey),
+				TaprootOutputKey:   hex.EncodeToString(decodedAddr.TaprootOutputKey),
+				ProofCourierAddr:   decodedAddr.ProofCourierAddr,
+				Txid:               txid,
+				Index:              index,
+				TransferTimestamp:  GetTimestamp(),
+				AnchorTxHash:       hex.EncodeToString(response.Transfer.AnchorTxHash),
+				AnchorTxHeightHint: int(response.Transfer.AnchorTxHeightHint),
+				AnchorTxChainFees:  int(response.Transfer.AnchorTxChainFees),
+				DeviceID:           deviceId,
+			})
 		}
-		totalAmount += int(decodedAddr.Amount)
-		txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
-		batchTransfersRequest = append(batchTransfersRequest, BatchTransferRequest{
-			Encoded:            decodedAddr.Encoded,
-			AssetID:            hex.EncodeToString(decodedAddr.AssetId),
-			Amount:             int(decodedAddr.Amount),
-			ScriptKey:          hex.EncodeToString(decodedAddr.ScriptKey),
-			InternalKey:        hex.EncodeToString(decodedAddr.InternalKey),
-			TaprootOutputKey:   hex.EncodeToString(decodedAddr.TaprootOutputKey),
-			ProofCourierAddr:   decodedAddr.ProofCourierAddr,
-			Txid:               txid,
-			Index:              index,
-			TransferTimestamp:  GetTimestamp(),
-			AnchorTxHash:       hex.EncodeToString(response.Transfer.AnchorTxHash),
-			AnchorTxHeightHint: int(response.Transfer.AnchorTxHeightHint),
-			AnchorTxChainFees:  int(response.Transfer.AnchorTxChainFees),
-			DeviceID:           deviceId,
-		})
+		for i, _ := range batchTransfersRequest {
+			batchTransfersRequest[i].TxTotalAmount = totalAmount
+		}
+		// @dev: Upload
+		err = UploadBatchTransfers(token, &batchTransfersRequest)
+		if err != nil {
+			LogError("; Assets sent, but upload failed.", err)
+			// @dev: Do not return error
+		}
 	}
-	for i, _ := range batchTransfersRequest {
-		batchTransfersRequest[i].TxTotalAmount = totalAmount
+	{
+		var decodedAddr *taprpc.Addr
+		for _, addr := range addrs {
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if decodedAddr != nil {
+				break
+			}
+		}
+		if decodedAddr != nil {
+			assetId := hex.EncodeToString(decodedAddr.AssetId)
+			//var assetIdMapRecommendUser *map[string]string
+			_, err = GetAssetRecommendUserByJsonAddrs(token, assetId, jsonAddrs, deviceId)
+			if err != nil {
+				LogError("GetAssetRecommendUserByJsonAddrs failed", err)
+			} else {
+				//fmt.Println(ValueJsonString(assetIdMapRecommendUser))
+			}
+		}
 	}
 	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
-	// @dev: Upload
-	err = UploadBatchTransfers(token, &batchTransfersRequest)
-	if err != nil {
-		LogError("; Assets sent, but upload failed.", err)
-		// @dev: Do not return error
-	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
