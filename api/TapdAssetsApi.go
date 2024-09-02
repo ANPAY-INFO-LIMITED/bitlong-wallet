@@ -2323,6 +2323,10 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 		var assetTransferProcessedOutput []AssetTransferProcessedOutput
 		for _, output := range listTransfer.Outputs {
 			outOp := output.Anchor.Outpoint
+			outputType, ok := taprpc.OutputType_name[int32(output.OutputType)]
+			if !ok {
+				outputType = strconv.Itoa(int(int32(output.OutputType)))
+			}
 			assetTransferProcessedOutput = append(assetTransferProcessedOutput, AssetTransferProcessedOutput{
 				Address:                addressMap[outOp],
 				Amount:                 int(output.Amount),
@@ -2337,7 +2341,7 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 				ScriptKeyIsLocal:       output.ScriptKeyIsLocal,
 				NewProofBlob:           hex.EncodeToString(output.NewProofBlob),
 				SplitCommitRootHash:    hex.EncodeToString(output.SplitCommitRootHash),
-				OutputType:             output.OutputType.String(),
+				OutputType:             outputType,
 				AssetVersion:           output.AssetVersion.String(),
 			})
 		}
