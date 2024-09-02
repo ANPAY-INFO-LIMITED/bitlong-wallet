@@ -2363,7 +2363,7 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 func ListTransfersAndGetProcessedResponse(token string, deviceId string) (*[]AssetTransferProcessed, error) {
 	listTransfers, err := ListTransfersAndGetResponse()
 	if err != nil {
-		return nil, err
+		return nil, AppendErrorInfo(err, "ListTransfersAndGetResponse")
 	}
 	processedListTransfers := ProcessListTransfersResponse(token, listTransfers, deviceId)
 	return processedListTransfers, nil
