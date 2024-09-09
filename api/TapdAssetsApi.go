@@ -5976,6 +5976,13 @@ func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs st
 func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return nil, err
+	}
+	if stat.Size() > 10*1024*1024 {
+		return nil, errors.New("file too large, its size is more than 15MB")
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
