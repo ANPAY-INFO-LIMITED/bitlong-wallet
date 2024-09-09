@@ -5973,7 +5973,7 @@ func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs st
 	return &addrMapRecommendUser, nil
 }
 
-func UploadLogFile(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
+func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
 	file, err := os.Open(filePath)
@@ -6033,6 +6033,14 @@ func UploadLogFile(filePath string, deviceId string, info string, auth string) (
 		return nil, errors.New(response.Error)
 	}
 	return &response, nil
+}
+
+func UploadLogFile(filePath string, deviceId string, info string, auth string) string {
+	_, err := UploadLogFileAndGetJsonResult(filePath, deviceId, info, auth)
+	if err != nil {
+		return MakeJsonErrorResult(UploadLogFileAndGetJsonResultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
 }
 
 // TODO: Custody Asset

@@ -167,6 +167,7 @@ const (
 	ListBatchesAndPostToSetAssetLocalMintHistoriesErr
 	ListUtxosAndPostToSetAssetManagedUtxosErr
 	GetWalletBalanceCalculatedTotalValueErr
+	UploadLogFileAndGetJsonResultErr
 )
 
 func (e ErrCode) Error() string {
