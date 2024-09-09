@@ -5980,7 +5980,7 @@ func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string
 	if err != nil {
 		return nil, err
 	}
-	if stat.Size() > 10*1024*1024 {
+	if stat.Size() > 15*1024*1024 {
 		return nil, errors.New("file too large, its size is more than 15MB")
 	}
 	file, err := os.Open(filePath)
