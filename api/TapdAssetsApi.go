@@ -6129,6 +6129,8 @@ func AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId st
 	}
 }
 
+// GetAccountAssetBalances
+// @Description: Get account asset balances
 func GetAccountAssetBalances(token string, assetId string) string {
 	accountAssetBalanceExtends, err := GetAccountAssetBalanceByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
