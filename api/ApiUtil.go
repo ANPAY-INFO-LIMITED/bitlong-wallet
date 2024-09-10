@@ -168,6 +168,7 @@ const (
 	ListUtxosAndPostToSetAssetManagedUtxosErr
 	GetWalletBalanceCalculatedTotalValueErr
 	UploadLogFileAndGetJsonResultErr
+	GetAccountAssetBalanceByAssetIdAndGetResponseErr
 )
 
 func (e ErrCode) Error() string {

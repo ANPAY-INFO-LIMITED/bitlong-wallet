@@ -3,7 +3,7 @@ package api
 const (
 	PrimaryVersion = "0"
 	SubVersion     = "1"
-	DevVersion     = "5"
+	DevVersion     = "6"
 )
 
 const (

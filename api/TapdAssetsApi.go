@@ -6054,3 +6054,86 @@ func UploadLogFile(filePath string, deviceId string, info string, auth string) s
 //		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)
 //		2. Query all transfer records including the custody of asset (on-chain and custodial data)
 //		3. May need to use a separate table to record transfer records for custodial assets
+
+type AccountAssetBalanceExtend struct {
+	AccountID uint   ` json:"account_id"`
+	AssetId   string ` json:"asset_id"`
+	Amount    int    ` json:"amount"`
+	UserID    int    ` json:"user_id"`
+	Username  string ` json:"username"`
+}
+
+type GetAccountAssetBalanceByAssetId struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *[]AccountAssetBalanceExtend `json:"data"`
+}
+
+func RequestToGetAccountAssetBalanceByAssetId(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetBalanceByAssetId
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalanceByAssetIdAndGetResponse(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
+	return RequestToGetAccountAssetBalanceByAssetId(token, assetId)
+}
+
+type AssetIdAndAccountAssetBalanceExtends struct {
+	AssetId                    string                       `json:"asset_id"`
+	AccountAssetBalanceExtends *[]AccountAssetBalanceExtend `json:"account_asset_balance_extends"`
+}
+
+func AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId string, accountAssetBalanceExtends *[]AccountAssetBalanceExtend) *AssetIdAndAccountAssetBalanceExtends {
+	if accountAssetBalanceExtends == nil {
+		return nil
+	}
+	return &AssetIdAndAccountAssetBalanceExtends{
+		AssetId:                    assetId,
+		AccountAssetBalanceExtends: accountAssetBalanceExtends,
+	}
+}
+
+func GetAccountAssetBalances(token string, assetId string) string {
+	accountAssetBalanceExtends, err := GetAccountAssetBalanceByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalanceByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	assetIdAndAccountAssetBalanceExtends := AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId, accountAssetBalanceExtends)
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), assetIdAndAccountAssetBalanceExtends)
+}
