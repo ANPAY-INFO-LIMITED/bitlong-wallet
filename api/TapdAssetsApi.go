@@ -6139,3 +6139,77 @@ func GetAccountAssetBalances(token string, assetId string) string {
 	assetIdAndAccountAssetBalanceExtends := AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId, accountAssetBalanceExtends)
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), assetIdAndAccountAssetBalanceExtends)
 }
+
+type AccountAssetTransfer struct {
+	BillBalanceId int    `json:"bill_balance_id"`
+	AccountId     int    `json:"account_id"`
+	Username      string `json:"username"`
+	BillType      string `json:"bill_type"`
+	Away          string `json:"away"`
+	Amount        int    `json:"amount"`
+	ServerFee     int    `json:"server_fee"`
+	AssetId       string `json:"asset_id"`
+	Invoice       string `json:"invoice"`
+	Outpoint      string `json:"outpoint"`
+}
+
+type GetAccountAssetTransferByAssetId struct {
+	Success bool                    `json:"success"`
+	Error   string                  `json:"error"`
+	Code    ErrCode                 `json:"code"`
+	Data    *[]AccountAssetTransfer `json:"data"`
+}
+
+func RequestToGetAccountAssetTransferByAssetId(token string, assetId string) (*[]AccountAssetTransfer, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetTransferByAssetId
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*[]AccountAssetTransfer, error) {
+	return RequestToGetAccountAssetTransferByAssetId(token, assetId)
+}
+
+// GetAccountAssetTransfers
+// @Description: Get account asset transfers
+func GetAccountAssetTransfers(token string, assetId string) string {
+	accountAssetTransfers, err := GetAccountAssetTransferByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), accountAssetTransfers)
+}

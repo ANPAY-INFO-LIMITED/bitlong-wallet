@@ -7,6 +7,11 @@ pwsh ./pack.api.ps1
 ```
 
 ## Update log
+### v0.1.7
+- GetAccountAssetBalances
+- GetAccountAssetTransfers
+
+## Update log
 ### v0.1.5
 - UploadLogFile
 

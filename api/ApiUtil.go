@@ -169,6 +169,7 @@ const (
 	GetWalletBalanceCalculatedTotalValueErr
 	UploadLogFileAndGetJsonResultErr
 	GetAccountAssetBalanceByAssetIdAndGetResponseErr
+	GetAccountAssetTransferByAssetIdAndGetResponseErr
 )
 
 func (e ErrCode) Error() string {
