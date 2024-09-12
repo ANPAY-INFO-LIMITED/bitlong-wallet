@@ -170,6 +170,7 @@ const (
 	UploadLogFileAndGetJsonResultErr
 	GetAccountAssetBalanceByAssetIdAndGetResponseErr
 	GetAccountAssetTransferByAssetIdAndGetResponseErr
+	GetAssetHolderBalanceWithPageSizeAndPageNumberErr
 )
 
 func (e ErrCode) Error() string {
