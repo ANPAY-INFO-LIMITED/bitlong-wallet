@@ -4014,14 +4014,22 @@ func PostToGetAssetHolderBalancePageNumberByPageSize(token string, assetId strin
 	return response.Data, nil
 }
 
-// GetAssetHolderBalancePageNumberByPageSize
-// @Description: Get asset holder balance page number by page size
 func GetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
 	pageNumber, err := PostToGetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
 	if err != nil {
 		return 0, err
 	}
 	return pageNumber, nil
+}
+
+// GetAssetHolderBalancePageNumber
+// @Description: Get asset holder balance page number
+func GetAssetHolderBalancePageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
 }
 
 func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*AssetIdAndBalance, error) {
