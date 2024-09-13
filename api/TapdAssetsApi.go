@@ -6148,6 +6148,7 @@ type AccountAssetTransfer struct {
 	AssetId       string `json:"asset_id"`
 	Invoice       string `json:"invoice"`
 	Outpoint      string `json:"outpoint"`
+	Time          int    `json:"time"`
 }
 
 type GetAccountAssetTransferByAssetId struct {
