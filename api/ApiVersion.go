@@ -3,12 +3,12 @@ package api
 const (
 	PrimaryVersion = "0"
 	SubVersion     = "1"
-	DevVersion     = "8"
+	DevVersion     = "9"
 )
 
 const (
 	BaseVersion = "v" + PrimaryVersion + "." + SubVersion + "." + DevVersion
-	DateTime    = "2024-9-12 17:19:34"
+	DateTime    = "2024-09-13-10-49-32-771759"
 )
 
 func apiVersionWithMaker(maker string) string {

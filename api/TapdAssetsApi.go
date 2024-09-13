@@ -3846,7 +3846,7 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 	Data    *AssetIdAndBalance `json:"data"`
 }
 
-// TODO: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
+// @dev: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/all/" + assetId
@@ -3934,133 +3934,16 @@ func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string
 	return response.Data, nil
 }
 
-// TODO: Continue from here (page,size)
 func GetAssetHolderBalanceRecordsLengthNumber(token string, assetId string) (int, error) {
 	return RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token, assetId)
 }
 
-// TODO: Should add page and size
 func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
 		return nil, err
 	}
 	return holderBalance, nil
-}
-
-// GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset
-// @Description: Get asset holder balance by asset balances info limit and offset
-func GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
-	holderBalance, err := PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token, assetId, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	return holderBalance, nil
-}
-
-type GetAssetHolderBalancePageNumberByPageSizeResponse struct {
-	Success bool    `json:"success"`
-	Error   string  `json:"error"`
-	Code    ErrCode `json:"code"`
-	Data    int     `json:"data"`
-}
-
-type GetAssetHolderBalancePageNumberRequest struct {
-	AssetId  string `json:"asset_id"`
-	PageSize int    `json:"page_size"`
-}
-
-func PostToGetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
-	serverDomainOrSocket := Cfg.BtlServerHost
-	getAssetHolderBalancePageNumberRequest := GetAssetHolderBalancePageNumberRequest{
-		AssetId:  assetId,
-		PageSize: pageSize,
-	}
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/page_number"
-	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
-	if err != nil {
-		return 0, err
-	}
-	payload := bytes.NewBuffer(requestJsonBytes)
-	req, err := http.NewRequest("POST", url, payload)
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("accept", "application/json")
-	req.Header.Add("content-type", "application/json")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			return
-		}
-	}(res.Body)
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return 0, err
-	}
-	var response GetAssetHolderBalancePageNumberByPageSizeResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return 0, err
-	}
-	if response.Error != "" {
-		return 0, errors.New(response.Error)
-	}
-	return response.Data, nil
-}
-
-func GetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
-	pageNumber, err := PostToGetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return 0, err
-	}
-	return pageNumber, nil
-}
-
-// GetAssetHolderBalancePageNumber
-// @Description: Get asset holder balance page number
-func GetAssetHolderBalancePageNumber(token string, assetId string, pageSize int) string {
-	pageNumber, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), 0)
-	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
-}
-
-func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*AssetIdAndBalance, error) {
-	if !(pageSize > 0 && pageNumber > 0) {
-		return nil, errors.New("page size and page number must be greater than 0")
-	}
-	var limit int
-	var offset int
-	limit = pageSize
-	if pageNumber > 1 {
-		offset = (pageNumber - 1) * pageSize
-	}
-	number, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
-	}
-	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
-}
-
-// GetAssetHolderBalancePage
-// @Description: Get asset holder balance page
-func GetAssetHolderBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
-	holderBalance, err := GetAssetHolderBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
-	if err != nil {
-		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), nil)
-	}
-	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
-	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
 type AssetBalanceInfoSimplified struct {
@@ -4101,7 +3984,6 @@ func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAn
 }
 
 func GetAssetHolderBalance(token string, assetId string) string {
-	// TODO: Should update
 	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), nil)
@@ -6165,7 +6047,7 @@ func UploadLogFile(filePath string, deviceId string, info string, auth string) s
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
 }
 
-// TODO: Custody Asset
+// @dev: Custody Asset
 //		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)
 //		2. Query all transfer records including the custody of asset (on-chain and custodial data)
 //		3. May need to use a separate table to record transfer records for custodial assets
@@ -6328,3 +6210,122 @@ func GetAccountAssetTransfers(token string, assetId string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), accountAssetTransfers)
 }
+
+// GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset
+// @Description: Get asset holder balance by asset balances info limit and offset
+func GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
+	holderBalance, err := PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token, assetId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return holderBalance, nil
+}
+
+type GetAssetHolderBalancePageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+type GetAssetHolderBalancePageNumberRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+func PostToGetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAssetHolderBalancePageNumberRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetHolderBalancePageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+// GetAssetHolderBalancePageNumber
+// @Description: Get asset holder balance page number
+func GetAssetHolderBalancePageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*AssetIdAndBalance, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAssetHolderBalancePage
+// @Description: Get asset holder balance page
+func GetAssetHolderBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
+	holderBalance, err := GetAssetHolderBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+// TODO:	GetAccountAssetBalances
+//			GetAccountAssetTransfers
+//			QueryAssetTransfersByAssetIdFromServer

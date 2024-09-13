@@ -641,3 +641,9 @@ func GetRandomNumberSlice(maxValue int, n int) ([]int, error) {
 	}
 	return slice, nil
 }
+
+func GetNowTimeStringWithHyphens() string {
+	now := time.Now().Format("2006-01-02-15-04-05.000000")
+	now = strings.ReplaceAll(now, ".", "-")
+	return now
+}
