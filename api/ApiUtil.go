@@ -173,6 +173,8 @@ const (
 	GetAssetHolderBalanceWithPageSizeAndPageNumberErr
 	GetAccountAssetTransferPageNumberByPageSizeErr
 	GetAccountAssetTransferWithPageSizeAndPageNumberErr
+	GetAccountAssetBalancePageNumberByPageSizeErr
+	GetAccountAssetBalanceWithPageSizeAndPageNumberErr
 )
 
 func (e ErrCode) Error() string {

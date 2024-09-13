@@ -6212,6 +6212,172 @@ func GetAccountAssetTransfers(token string, assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), accountAssetTransfers)
 }
 
+type GetAccountAssetBalanceLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+type GetAccountAssetBalanceLimitAndOffsetResponse struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *[]AccountAssetBalanceExtend `json:"data"`
+}
+
+func PostToGetAccountAssetBalanceLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetBalanceExtend, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := GetAccountAssetBalanceLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetBalanceLimitAndOffsetResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalanceLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetBalanceExtend, error) {
+	return PostToGetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
+}
+
+type GetAccountAssetBalancePageNumberByPageSizeRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+type GetAccountAssetBalancePageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func PostToGetAccountAssetBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAccountAssetBalancePageNumberByPageSizeRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAccountAssetBalancePageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+// GetAccountAssetBalancePageNumber
+// @Description: Get account asset balance page number
+func GetAccountAssetBalancePageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalancePageNumberByPageSizeErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*[]AccountAssetBalanceExtend, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAccountAssetBalancePage
+// @Description: Get account asset balance page
+func GetAccountAssetBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
+	accountAssetTransfers, err := GetAccountAssetBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalanceWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, accountAssetTransfers)
+}
+
 type GetAccountAssetTransferLimitAndOffsetRequest struct {
 	AssetId string `json:"asset_id"`
 	Limit   int    `json:"limit"`
