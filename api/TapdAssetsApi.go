@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SimplifiedAssetsTransfer struct {
@@ -6659,6 +6660,232 @@ func GetAssetHolderBalancePage(token string, assetId string, pageSize int, pageN
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
-// TODO:	GetAccountAssetBalances
-//			GetAccountAssetTransfers
-//			QueryAssetTransfersByAssetIdFromServer
+type GetAssetManagedUtxoPageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+type GetAssetManagedUtxoPageNumberRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+func PostToGetAssetManagedUtxoPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAssetManagedUtxoPageNumberRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetManagedUtxoPageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetManagedUtxoPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+type GetAssetManagedUtxoLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+type GetAssetManagedUtxoLimitAndOffsetResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AssetManagedUtxo `json:"data"`
+}
+
+func PostToGetAssetManagedUtxoLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AssetManagedUtxo, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := GetAssetManagedUtxoLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetManagedUtxoLimitAndOffsetResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetManagedUtxoLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AssetManagedUtxo, error) {
+	assetManagedUtxo, err := PostToGetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return assetManagedUtxo, nil
+}
+
+func GetAssetManagedUtxoWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*[]AssetManagedUtxo, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAssetManagedUtxoPage
+// @Description: Get asset managed utxo page
+func GetAssetManagedUtxoPage(token string, assetId string, pageSize int, pageNumber int) string {
+	assetManagedUtxo, err := GetAssetManagedUtxoWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetManagedUtxoWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	result := AssetManagedUtxoSliceToAssetManagedUtxoSimplifiedSlice(assetManagedUtxo)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+// GetAssetManagedUtxoPageNumber
+// @Description: Get asset managed utxo page number
+func GetAssetManagedUtxoPageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetManagedUtxoPageNumberByPageSizeErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+type AssetManagedUtxoSimplified struct {
+	UpdatedAt             time.Time `json:"updated_at"`
+	OutPoint              string    `json:"out_point"`
+	Time                  int       `json:"time"`
+	AmtSat                int       `json:"amt_sat"`
+	AssetGenesisPoint     string    `json:"asset_genesis_point"`
+	AssetGenesisName      string    `json:"asset_genesis_name"`
+	AssetGenesisMetaHash  string    `json:"asset_genesis_meta_hash"`
+	AssetGenesisAssetID   string    `json:"asset_genesis_asset_id"`
+	AssetGenesisAssetType string    `json:"asset_genesis_asset_type"`
+	Amount                int       `json:"amount"`
+	LockTime              int       `json:"lock_time"`
+	RelativeLockTime      int       `json:"relative_lock_time"`
+	ScriptKey             string    `json:"script_key"`
+	AssetGroupRawGroupKey string    `json:"asset_group_raw_group_key"`
+	ChainAnchorOutpoint   string    `json:"chain_anchor_outpoint"`
+	IsSpent               bool      `json:"is_spent"`
+	IsBurn                bool      `json:"is_burn"`
+	DeviceId              string    `json:"device_id"`
+	Username              string    `json:"username"`
+}
+
+func AssetManagedUtxoToAssetManagedUtxoSimplified(assetManagedUtxo AssetManagedUtxo) AssetManagedUtxoSimplified {
+	return AssetManagedUtxoSimplified{
+		UpdatedAt:             assetManagedUtxo.UpdatedAt,
+		OutPoint:              assetManagedUtxo.OutPoint,
+		Time:                  assetManagedUtxo.Time,
+		AmtSat:                assetManagedUtxo.AmtSat,
+		AssetGenesisPoint:     assetManagedUtxo.AssetGenesisPoint,
+		AssetGenesisName:      assetManagedUtxo.AssetGenesisName,
+		AssetGenesisMetaHash:  assetManagedUtxo.AssetGenesisMetaHash,
+		AssetGenesisAssetID:   assetManagedUtxo.AssetGenesisAssetID,
+		AssetGenesisAssetType: assetManagedUtxo.AssetGenesisAssetType,
+		Amount:                assetManagedUtxo.Amount,
+		LockTime:              assetManagedUtxo.LockTime,
+		RelativeLockTime:      assetManagedUtxo.RelativeLockTime,
+		ScriptKey:             assetManagedUtxo.ScriptKey,
+		AssetGroupRawGroupKey: assetManagedUtxo.AssetGroupRawGroupKey,
+		ChainAnchorOutpoint:   assetManagedUtxo.ChainAnchorOutpoint,
+		IsSpent:               assetManagedUtxo.IsSpent,
+		IsBurn:                assetManagedUtxo.IsBurn,
+		DeviceId:              assetManagedUtxo.DeviceId,
+		Username:              assetManagedUtxo.Username,
+	}
+}
+
+func AssetManagedUtxoSliceToAssetManagedUtxoSimplifiedSlice(assetManagedUtxos *[]AssetManagedUtxo) *[]AssetManagedUtxoSimplified {
+	if assetManagedUtxos == nil {
+		return nil
+	}
+	var assetManagedUtxoSimplified []AssetManagedUtxoSimplified
+	for _, assetManagedUtxo := range *assetManagedUtxos {
+		assetManagedUtxoSimplified = append(assetManagedUtxoSimplified, AssetManagedUtxoToAssetManagedUtxoSimplified(assetManagedUtxo))
+	}
+	return &assetManagedUtxoSimplified
+}
+
+// TODO:	QueryAssetTransfersByAssetIdFromServer

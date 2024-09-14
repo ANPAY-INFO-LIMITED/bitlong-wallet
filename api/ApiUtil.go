@@ -175,6 +175,8 @@ const (
 	GetAccountAssetTransferWithPageSizeAndPageNumberErr
 	GetAccountAssetBalancePageNumberByPageSizeErr
 	GetAccountAssetBalanceWithPageSizeAndPageNumberErr
+	GetAssetManagedUtxoWithPageSizeAndPageNumberErr
+	GetAssetManagedUtxoPageNumberByPageSizeErr
 )
 
 func (e ErrCode) Error() string {
