@@ -100,7 +100,6 @@ func GetAssetInfo(id string) string {
 	if groupKey, ok := root.IssuanceRoot.Id.Id.(*universerpc.ID_GroupKey); ok {
 		isGroup = true
 		queryId = hex.EncodeToString(groupKey.GroupKey)
-
 	}
 	response, err := assetLeaves(isGroup, queryId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
@@ -127,7 +126,6 @@ func GetAssetInfo(id string) string {
 	amount := p.Asset.Amount
 	createHeight := p.BlockHeight
 	createTime := p.BlockHeader.Timestamp
-
 	var (
 		newMeta Meta
 		m       = ""
@@ -135,31 +133,7 @@ func GetAssetInfo(id string) string {
 	if p.MetaReveal != nil {
 		m = string(p.MetaReveal.Data)
 	}
-	//m := hex.EncodeToString(p.MetaReveal.Data)
-
 	newMeta.GetMetaFromStr(m)
-	//proof, err := rpcclient2.DecodeProof(response.Leaves[0].Proof, 0, false, false)
-	//if err != nil {
-	//	return MakeJsonErrorResult(DecodeProofErr, err.Error(), nil)
-	//}
-	//block, err := rpcclient2.GetBlock(proof.DecodedProof.Asset.ChainAnchor.AnchorBlockHash)
-	//if err != nil {
-	//	return MakeJsonErrorResult(GetBlockErr, err.Error(), nil)
-	//}
-	//msgBlock := &wire.MsgBlock{}
-	//blockReader := bytes.NewReader(block.RawBlock)
-	//err = msgBlock.Deserialize(blockReader)
-	//timeStamp := msgBlock.Header.Timestamp
-	//createTime := timeStamp.Unix()
-	//createHeight := proof.DecodedProof.Asset.ChainAnchor.BlockHeight
-	//assetId := hex.EncodeToString(proof.DecodedProof.Asset.AssetGenesis.GetAssetId())
-	//assetType := proof.DecodedProof.Asset.AssetGenesis.AssetType.String()
-	//assetPoint := proof.DecodedProof.Asset.AssetGenesis.GenesisPoint
-	//amount := proof.DecodedProof.Asset.Amount
-	//assetName := proof.DecodedProof.Asset.AssetGenesis.Name
-	//fmt.Println(proof)
-	//var newMeta Meta
-	//newMeta.FetchAssetMeta(false, id)
 	var assetInfo = struct {
 		AssetId      string  `json:"asset_Id"`
 		Name         string  `json:"name"`
@@ -184,15 +158,6 @@ func GetAssetInfo(id string) string {
 		CreateTime:   createTime.Unix(),
 		Universe:     "localhost",
 	}
-	//if proof.DecodedProof.Asset.AssetGroup != nil {
-	//	groupKey := hex.EncodeToString(proof.DecodedProof.Asset.AssetGroup.RawGroupKey)
-	//	assetInfo.GroupKey = &groupKey
-	//}
-	//if p.Asset.GroupKey != nil {
-	//	groupKeyBytes := p.Asset.GroupKey.RawKey.PubKey.SerializeUncompressed()
-	//	groupKey := hex.EncodeToString(groupKeyBytes)
-	//	assetInfo.GroupKey = &groupKey
-	//}
 	if isGroup {
 		assetInfo.GroupKey = &queryId
 	}

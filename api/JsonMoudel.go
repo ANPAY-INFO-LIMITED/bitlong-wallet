@@ -18,6 +18,7 @@ type JsonResultAddr struct {
 	TaprootOutputKey string `json:"taproot_output_key"`
 	ProofCourierAddr string `json:"proof_courier_addr"`
 	AssetVersion     int    `json:"asset_version"`
+	AddressVersion   int    `json:"address_version"`
 	ReceiveNum       int    `json:"receive_num"`
 }
 
@@ -29,10 +30,10 @@ func (r *JsonResultAddr) GetData(response *taprpc.Addr) {
 	r.GroupKey = hex.EncodeToString(response.GroupKey)
 	r.ScriptKey = hex.EncodeToString(response.ScriptKey)
 	r.InternalKey = hex.EncodeToString(response.InternalKey)
-	r.TapscriptSibling = hex.EncodeToString(response.TapscriptSibling)
 	r.TaprootOutputKey = hex.EncodeToString(response.TaprootOutputKey)
 	r.ProofCourierAddr = response.ProofCourierAddr
 	r.AssetVersion = int(response.AssetVersion)
+	r.AddressVersion = int(response.AddressVersion)
 }
 
 // Tapdroot AssetTransfer

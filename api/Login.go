@@ -90,6 +90,12 @@ func refresh(url string, username string, password string) (string, error) {
 	}
 	return result.Token, err
 }
+
+// TODU: upLoadLog
+func upLoadLog(url string, token string, requestBody []byte) (string, error) {
+	return "", nil
+}
+
 func SendPostRequest(url string, token string, requestBody []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lightninglabs/taproot-assets/tapfreighter"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/service/apiConnect"
@@ -610,8 +611,15 @@ func sendAssets(addrs []string, feeRate uint32) (*taprpc.SendAssetResponse, erro
 	if feeRate > 0 {
 		request.FeeRate = feeRate
 	}
+
 	response, err := client.SendAsset(context.Background(), request)
 	if err != nil {
+		if strings.Contains(err.Error(), tapfreighter.ErrMatchingAssetsNotFound.Error()) {
+			return nil, fmt.Errorf("无可使用的资产（资产余额不足 或 资产锁定中）")
+		}
+		if strings.Contains(err.Error(), "on total output value") {
+			return nil, fmt.Errorf("fee 比例过高，大于20%%，请调整 feeRate 参数 %w", err)
+		}
 		return nil, err
 	}
 	return response, nil
