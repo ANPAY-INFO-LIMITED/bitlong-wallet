@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,9 +18,13 @@ import (
 	"github.com/wallet/service/rpcclient"
 	"gorm.io/gorm"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SimplifiedAssetsTransfer struct {
@@ -2323,6 +2328,10 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 		var assetTransferProcessedOutput []AssetTransferProcessedOutput
 		for _, output := range listTransfer.Outputs {
 			outOp := output.Anchor.Outpoint
+			outputType, ok := taprpc.OutputType_name[int32(output.OutputType)]
+			if !ok {
+				outputType = strconv.Itoa(int(int32(output.OutputType)))
+			}
 			assetTransferProcessedOutput = append(assetTransferProcessedOutput, AssetTransferProcessedOutput{
 				Address:                addressMap[outOp],
 				Amount:                 int(output.Amount),
@@ -2337,7 +2346,7 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 				ScriptKeyIsLocal:       output.ScriptKeyIsLocal,
 				NewProofBlob:           hex.EncodeToString(output.NewProofBlob),
 				SplitCommitRootHash:    hex.EncodeToString(output.SplitCommitRootHash),
-				OutputType:             output.OutputType.String(),
+				OutputType:             outputType,
 				AssetVersion:           output.AssetVersion.String(),
 			})
 		}
@@ -2359,7 +2368,7 @@ func ProcessListTransfersResponse(token string, listTransfersResponse *taprpc.Li
 func ListTransfersAndGetProcessedResponse(token string, deviceId string) (*[]AssetTransferProcessed, error) {
 	listTransfers, err := ListTransfersAndGetResponse()
 	if err != nil {
-		return nil, err
+		return nil, AppendErrorInfo(err, "ListTransfersAndGetResponse")
 	}
 	processedListTransfers := ProcessListTransfersResponse(token, listTransfers, deviceId)
 	return processedListTransfers, nil
@@ -3838,7 +3847,7 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 	Data    *AssetIdAndBalance `json:"data"`
 }
 
-// TODO: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
+// @dev: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/all/" + assetId
@@ -3926,12 +3935,10 @@ func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string
 	return response.Data, nil
 }
 
-// TODO: Continue from here (page,size)
 func GetAssetHolderBalanceRecordsLengthNumber(token string, assetId string) (int, error) {
 	return RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token, assetId)
 }
 
-// TODO: Should add page and size
 func GetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	holderBalance, err := RequestToGetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
@@ -3978,10 +3985,9 @@ func AssetIdAndBalanceToAssetIdAndBalanceSimplified(assetIdAndBalance *AssetIdAn
 }
 
 func GetAssetHolderBalance(token string, assetId string) string {
-	// TODO: Should update
 	holderBalance, err := GetAssetHolderBalanceByAssetBalancesInfo(token, assetId)
 	if err != nil {
-		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), 0)
+		return MakeJsonErrorResult(GetAssetHolderBalanceByAssetBalancesInfoErr, err.Error(), nil)
 	}
 	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
@@ -4514,10 +4520,18 @@ func BatchTxidAndAssetMintInfoToAssetId(batchTxid string, pendingAsset *mintrpc.
 	assets, _ := listAssets(true, true, false)
 	for _, asset := range assets.Assets {
 		txid, _ := outpointToTransactionAndIndex(asset.GetChainAnchor().GetAnchorOutpoint())
+		var isMetaHashEqual bool
+		if pendingAsset.AssetMeta == nil || asset.AssetGenesis == nil {
+			isMetaHashEqual = true
+		} else if pendingAsset.AssetMeta.MetaHash == nil || asset.AssetGenesis.MetaHash == nil {
+			isMetaHashEqual = true
+		} else {
+			isMetaHashEqual = hex.EncodeToString(pendingAsset.AssetMeta.MetaHash) == hex.EncodeToString(asset.AssetGenesis.MetaHash)
+		}
 		if batchTxid == txid &&
 			pendingAsset.Name == asset.AssetGenesis.Name &&
 			pendingAsset.Amount == asset.Amount &&
-			hex.EncodeToString(pendingAsset.AssetMeta.MetaHash) == hex.EncodeToString(asset.AssetGenesis.MetaHash) &&
+			isMetaHashEqual &&
 			pendingAsset.AssetType == asset.AssetGenesis.AssetType {
 			return hex.EncodeToString(asset.GetAssetGenesis().AssetId), nil
 		}
@@ -4772,7 +4786,7 @@ type UserIdAndAssetId struct {
 	AssetId string `json:"asset_id"`
 }
 
-func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
+func PostToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/asset_recommend/get/user_id_and_asset_id"
 	requestJsonBytes, err := json.Marshal(userIdAndAssetId)
@@ -4780,7 +4794,7 @@ func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId
 		return nil, err
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
-	req, err := http.NewRequest("GET", url, payload)
+	req, err := http.NewRequest("POST", url, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -4807,13 +4821,18 @@ func RequestToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId
 		return nil, err
 	}
 	if response.Error != "" {
-		return nil, errors.New(response.Error)
+		if response.Error == gorm.ErrRecordNotFound.Error() {
+			err = gorm.ErrRecordNotFound
+		} else {
+			err = errors.New(response.Error)
+		}
+		return nil, err
 	}
 	return response.Data, nil
 }
 
 func GetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
-	return RequestToGetAssetRecommendByUserIdAndAssetId(token, userIdAndAssetId)
+	return PostToGetAssetRecommendByUserIdAndAssetId(token, userIdAndAssetId)
 }
 
 func PostToSetAssetRecommendByAssetId(token string, assetRecommendSetRequest *AssetRecommendSetRequest) (*JsonResult, error) {
@@ -4994,13 +5013,25 @@ func BatchAssetToAssetLocalMintHistorySetRequest(batchKey string, batchTxid stri
 		// @dev: Do not return
 		//LogError("", err)
 	}
+	var assetMetaData string
+	var assetMetaHash string
+	var assetMetaType string
+	if asset.AssetMeta != nil {
+		if asset.AssetMeta.Data != nil {
+			assetMetaData = hex.EncodeToString(asset.AssetMeta.Data)
+		}
+		if asset.AssetMeta.MetaHash != nil {
+			assetMetaHash = hex.EncodeToString(asset.AssetMeta.MetaHash)
+		}
+		assetMetaType = asset.AssetMeta.Type.String()
+	}
 	return &AssetLocalMintHistorySetRequest{
 		AssetVersion:    asset.AssetVersion.String(),
 		AssetType:       asset.AssetType.String(),
 		Name:            asset.Name,
-		AssetMetaData:   hex.EncodeToString(asset.AssetMeta.Data),
-		AssetMetaType:   asset.AssetMeta.Type.String(),
-		AssetMetaHash:   hex.EncodeToString(asset.AssetMeta.MetaHash),
+		AssetMetaData:   assetMetaData,
+		AssetMetaType:   assetMetaType,
+		AssetMetaHash:   assetMetaHash,
 		Amount:          int(asset.Amount),
 		NewGroupedAsset: asset.NewGroupedAsset,
 		GroupKey:        groupKey,
@@ -5807,55 +5838,1054 @@ func GetWalletBalanceTotalValue(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), totalValue)
 }
 
-// TODO
-// B query who is A's referer when he send asset to A
+type GetAssetBalanceByUserIdAndAssetIdRequest struct {
+	UserId  int    `json:"user_id"`
+	AssetId string `json:"asset_id"`
+}
+
+type GetAssetBalanceByUserIdAndAssetIdResponse struct {
+	Success bool          `json:"success"`
+	Error   string        `json:"error"`
+	Code    ErrCode       `json:"code"`
+	Data    *AssetBalance `json:"data"`
+}
+
+func PostToGetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndAssetIdRequest GetAssetBalanceByUserIdAndAssetIdRequest) (*AssetBalance, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/balance/asset_id_and_user_id"
+	requestJsonBytes, err := json.Marshal(getAssetBalanceByUserIdAndAssetIdRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetBalanceByUserIdAndAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response.Data, nil
+}
+
+func GetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndAssetIdRequest GetAssetBalanceByUserIdAndAssetIdRequest) (*AssetBalance, error) {
+	return PostToGetAssetBalanceByUserIdAndAssetId(token, getAssetBalanceByUserIdAndAssetIdRequest)
+}
+
+// GetAssetRecommendUser
+// @note: B query who is A's referer when he sends asset to A
+// @dev: 1. Alice generates the asset address (invoice) and uploads it to the server
+// @dev: 2. Alice sends the asset address (invoice) to Bob.
 func GetAssetRecommendUser(token string, assetId string, encoded string, deviceId string) (string, error) {
 	//if IsLocalMintAsset(assetId) {
 	//	return "", errors.New("asset is local issuance")
 	//}
+	// @dev: 3. Bob queries the user ID and username of the creator of the asset address (invoice) (i.e. Alice)
+	//		   when he makes a payment to Alice's asset address.
+	assetRecipientIsAssetIssuer := errors.New("asset recipient is asset issuer")
 	addr, err := GetAssetAddrByEncoded(token, encoded)
 	if err != nil {
 		return "", err
 	}
 	addrUserId := addr.UserId
+	// @dev: 4. Bob queries Alice to see if the asset has been issued locally.
 	assetLocalMintHistory, err := GetAssetLocalMintHistoryAssetId(token, assetId)
 	if err != nil {
 		return "", err
 	}
 	if assetLocalMintHistory.UserId == addrUserId {
-		return "", errors.New("asset recipient is asset issuer")
+		return "", assetRecipientIsAssetIssuer
 	}
+	request := GetAssetBalanceByUserIdAndAssetIdRequest{
+		UserId:  addrUserId,
+		AssetId: addr.AssetId,
+	}
+	// @dev: Check if Alice had the asset
+	assetBalance, err := GetAssetBalanceByUserIdAndAssetId(token, request)
+	var userHadAsset bool
+	if err == nil && assetBalance != nil {
+		userHadAsset = true
+	}
+	userHadAssetErr := errors.New("user had asset")
 	var assetRecommend *AssetRecommend
-	// TODO: Need to test GetAssetRecommendByUserIdAndAssetId
+	// @dev: 5. Bob queries whether Alice already has a referrer for the asset.
 	assetRecommend, err = GetAssetRecommendByUserIdAndAssetId(token, UserIdAndAssetId{
 		UserId:  addrUserId,
 		AssetId: assetId,
 	})
 	if err != nil {
-		err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
-		if err != nil {
-			return "", err
+		if userHadAsset {
+			// @dev: Alice had the asset, but there is no referrer for the asset. Bob can't be Alice's referrer.
+			return "", userHadAssetErr
 		}
-		return GetPublicKey(), nil
+		// @dev: Alice does not have a referer for the asset
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// QueryBalance
+
+			// @dev: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
+			err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
+			if err != nil {
+				return "", err
+			}
+			return GetNPublicKey(), nil
+		}
+		return "", err
 	}
 	return assetRecommend.RecommendUsername, nil
 }
 
-// TODO: Get Asset Recommend by AssetId And UserId
+func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs string, deviceId string) (*map[string]string, error) {
+	var addrs []string
+	err := json.Unmarshal([]byte(jsonAddrs), &addrs)
+	if err != nil {
+		return nil, err
+	}
+	addrMapRecommendUser := make(map[string]string)
+	var recommendUser string
+	for _, addr := range addrs {
+		recommendUser, err = GetAssetRecommendUser(token, assetId, addr, deviceId)
+		if err != nil {
+			continue
+		}
+		addrMapRecommendUser[addr] = recommendUser
+	}
+	return &addrMapRecommendUser, nil
+}
 
-// @dev: Process of Asset Recommend
-// @dev: 1. Alice generates the asset address (invoice) and uploads it to the server
-// @dev: 2. Alice sends the asset address (invoice) to Bob.
-// TODO: 3. Bob queries the user ID and user name of the creator of the asset address (invoice) (i.e. Alice)
-//		   when he makes a payment to Alice's asset address.
-// @dev: Use GetUsernameByEncoded or GetAssetAddrByEncoded
-// TODO: 4. Bob queries Alice to see if the asset has been issued locally.
-// TODO: 5. Bob queries whether Alice already has a referrer for the asset.
-// @dev: GetUserAssetRecommendByAssetId X
-// TODO: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
-// @dev: SetAssetRecommendByAssetId
+func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return nil, err
+	}
+	if stat.Size() > 15*1024*1024 {
+		return nil, errors.New("file too large, its size is more than 15MB")
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			LogError("", err)
+		}
+	}(file)
+	requestBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(requestBody)
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return nil, err
+	}
+	_ = writer.WriteField("device_id", deviceId)
+	_ = writer.WriteField("info", info)
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", url, requestBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
+	req.Header.Add("accept", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			LogError("", err)
+		}
+	}(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
 
-// TODO: Custody Asset
+func UploadLogFile(filePath string, deviceId string, info string, auth string) string {
+	_, err := UploadLogFileAndGetJsonResult(filePath, deviceId, info, auth)
+	if err != nil {
+		return MakeJsonErrorResult(UploadLogFileAndGetJsonResultErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
+}
+
+// @dev: Custody Asset
 //		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)
 //		2. Query all transfer records including the custody of asset (on-chain and custodial data)
 //		3. May need to use a separate table to record transfer records for custodial assets
+
+type AccountAssetBalanceExtend struct {
+	AccountID uint   ` json:"account_id"`
+	AssetId   string ` json:"asset_id"`
+	Amount    int    ` json:"amount"`
+	UserID    int    ` json:"user_id"`
+	Username  string ` json:"username"`
+}
+
+type GetAccountAssetBalanceByAssetId struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *[]AccountAssetBalanceExtend `json:"data"`
+}
+
+func RequestToGetAccountAssetBalanceByAssetId(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetBalanceByAssetId
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalanceByAssetIdAndGetResponse(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
+	return RequestToGetAccountAssetBalanceByAssetId(token, assetId)
+}
+
+type AssetIdAndAccountAssetBalanceExtends struct {
+	AssetId                    string                       `json:"asset_id"`
+	AccountAssetBalanceExtends *[]AccountAssetBalanceExtend `json:"account_asset_balance_extends"`
+}
+
+func AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId string, accountAssetBalanceExtends *[]AccountAssetBalanceExtend) *AssetIdAndAccountAssetBalanceExtends {
+	if accountAssetBalanceExtends == nil {
+		return nil
+	}
+	return &AssetIdAndAccountAssetBalanceExtends{
+		AssetId:                    assetId,
+		AccountAssetBalanceExtends: accountAssetBalanceExtends,
+	}
+}
+
+// GetAccountAssetBalances
+// @Description: Get account asset balances
+func GetAccountAssetBalances(token string, assetId string) string {
+	accountAssetBalanceExtends, err := GetAccountAssetBalanceByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalanceByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	assetIdAndAccountAssetBalanceExtends := AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId, accountAssetBalanceExtends)
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), assetIdAndAccountAssetBalanceExtends)
+}
+
+type AccountAssetTransfer struct {
+	BillBalanceId int    `json:"bill_balance_id"`
+	AccountId     int    `json:"account_id"`
+	Username      string `json:"username"`
+	BillType      string `json:"bill_type"`
+	Away          string `json:"away"`
+	Amount        int    `json:"amount"`
+	ServerFee     int    `json:"server_fee"`
+	AssetId       string `json:"asset_id"`
+	Invoice       string `json:"invoice"`
+	Outpoint      string `json:"outpoint"`
+	Time          int    `json:"time"`
+}
+
+type GetAccountAssetTransferByAssetId struct {
+	Success bool                    `json:"success"`
+	Error   string                  `json:"error"`
+	Code    ErrCode                 `json:"code"`
+	Data    *[]AccountAssetTransfer `json:"data"`
+}
+
+func RequestToGetAccountAssetTransferByAssetId(token string, assetId string) (*[]AccountAssetTransfer, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetTransferByAssetId
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*[]AccountAssetTransfer, error) {
+	return RequestToGetAccountAssetTransferByAssetId(token, assetId)
+}
+
+// GetAccountAssetTransfers
+// @Description: Get account asset transfers
+func GetAccountAssetTransfers(token string, assetId string) string {
+	accountAssetTransfers, err := GetAccountAssetTransferByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetTransferByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), accountAssetTransfers)
+}
+
+type GetAccountAssetBalanceLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+type GetAccountAssetBalanceLimitAndOffsetResponse struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *[]AccountAssetBalanceExtend `json:"data"`
+}
+
+func PostToGetAccountAssetBalanceLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetBalanceExtend, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := GetAccountAssetBalanceLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetBalanceLimitAndOffsetResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalanceLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetBalanceExtend, error) {
+	return PostToGetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
+}
+
+type GetAccountAssetBalancePageNumberByPageSizeRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+type GetAccountAssetBalancePageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func PostToGetAccountAssetBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAccountAssetBalancePageNumberByPageSizeRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAccountAssetBalancePageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+// GetAccountAssetBalancePageNumber
+// @Description: Get account asset balance page number
+func GetAccountAssetBalancePageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalancePageNumberByPageSizeErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*[]AccountAssetBalanceExtend, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAccountAssetBalancePage
+// @Description: Get account asset balance page
+func GetAccountAssetBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
+	accountAssetTransfers, err := GetAccountAssetBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalanceWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, accountAssetTransfers)
+}
+
+type GetAccountAssetTransferLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+type GetAccountAssetTransferLimitAndOffsetResponse struct {
+	Success bool                    `json:"success"`
+	Error   string                  `json:"error"`
+	Code    ErrCode                 `json:"code"`
+	Data    *[]AccountAssetTransfer `json:"data"`
+}
+
+func PostToGetAccountAssetTransferLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetTransfer, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := GetAccountAssetTransferLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAccountAssetTransferLimitAndOffsetResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetTransferLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AccountAssetTransfer, error) {
+	return PostToGetAccountAssetTransferLimitAndOffset(token, assetId, limit, offset)
+}
+
+type GetAccountAssetTransferPageNumberByPageSizeRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+type GetAccountAssetTransferPageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func PostToGetAccountAssetTransferPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAccountAssetTransferPageNumberByPageSizeRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAccountAssetTransferPageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetTransferPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+// GetAccountAssetTransferPageNumber
+// @Description: Get account asset transfer page number
+func GetAccountAssetTransferPageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetTransferPageNumberByPageSizeErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+func GetAccountAssetTransferWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*[]AccountAssetTransfer, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAccountAssetTransferLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAccountAssetTransfersPage
+// @Description: Get account asset transfer page
+func GetAccountAssetTransfersPage(token string, assetId string, pageSize int, pageNumber int) string {
+	accountAssetTransfers, err := GetAccountAssetTransferWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetTransferWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, accountAssetTransfers)
+}
+
+// GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset
+// @Description: Get asset holder balance by asset balances info limit and offset
+func GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
+	holderBalance, err := PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token, assetId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return holderBalance, nil
+}
+
+type GetAssetHolderBalancePageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+type GetAssetHolderBalancePageNumberRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+func PostToGetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAssetHolderBalancePageNumberRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetHolderBalancePageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+// GetAssetHolderBalancePageNumber
+// @Description: Get asset holder balance page number
+func GetAssetHolderBalancePageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*AssetIdAndBalance, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAssetHolderBalancePage
+// @Description: Get asset holder balance page
+func GetAssetHolderBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
+	holderBalance, err := GetAssetHolderBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetHolderBalanceWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	result := AssetIdAndBalanceToAssetIdAndBalanceSimplified(holderBalance)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+type GetAssetManagedUtxoPageNumberByPageSizeResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+type GetAssetManagedUtxoPageNumberRequest struct {
+	AssetId  string `json:"asset_id"`
+	PageSize int    `json:"page_size"`
+}
+
+func PostToGetAssetManagedUtxoPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	getAssetHolderBalancePageNumberRequest := GetAssetManagedUtxoPageNumberRequest{
+		AssetId:  assetId,
+		PageSize: pageSize,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/page_number"
+	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAssetManagedUtxoPageNumberByPageSizeResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetManagedUtxoPageNumberByPageSize(token string, assetId string, pageSize int) (int, error) {
+	pageNumber, err := PostToGetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return 0, err
+	}
+	return pageNumber, nil
+}
+
+type GetAssetManagedUtxoLimitAndOffsetRequest struct {
+	AssetId string `json:"asset_id"`
+	Limit   int    `json:"limit"`
+	Offset  int    `json:"offset"`
+}
+
+type GetAssetManagedUtxoLimitAndOffsetResponse struct {
+	Success bool                `json:"success"`
+	Error   string              `json:"error"`
+	Code    ErrCode             `json:"code"`
+	Data    *[]AssetManagedUtxo `json:"data"`
+}
+
+func PostToGetAssetManagedUtxoLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AssetManagedUtxo, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	assetIdLimitAndOffset := GetAssetManagedUtxoLimitAndOffsetRequest{
+		AssetId: assetId,
+		Limit:   limit,
+		Offset:  offset,
+	}
+	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/limit_offset"
+	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetManagedUtxoLimitAndOffsetResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetManagedUtxoLimitAndOffset(token string, assetId string, limit int, offset int) (*[]AssetManagedUtxo, error) {
+	assetManagedUtxo, err := PostToGetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return assetManagedUtxo, nil
+}
+
+func GetAssetManagedUtxoWithPageSizeAndPageNumber(token string, assetId string, pageSize int, pageNumber int) (*[]AssetManagedUtxo, error) {
+	if !(pageSize > 0 && pageNumber > 0) {
+		return nil, errors.New("page size and page number must be greater than 0")
+	}
+	var limit int
+	var offset int
+	limit = pageSize
+	if pageNumber > 1 {
+		offset = (pageNumber - 1) * pageSize
+	}
+	number, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	if pageNumber > number {
+		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+	}
+	return GetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
+}
+
+// GetAssetManagedUtxoPage
+// @Description: Get asset managed utxo page
+func GetAssetManagedUtxoPage(token string, assetId string, pageSize int, pageNumber int) string {
+	assetManagedUtxo, err := GetAssetManagedUtxoWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetManagedUtxoWithPageSizeAndPageNumberErr, err.Error(), nil)
+	}
+	result := AssetManagedUtxoSliceToAssetManagedUtxoSimplifiedSlice(assetManagedUtxo)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+// GetAssetManagedUtxoPageNumber
+// @Description: Get asset managed utxo page number
+func GetAssetManagedUtxoPageNumber(token string, assetId string, pageSize int) string {
+	pageNumber, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetManagedUtxoPageNumberByPageSizeErr, err.Error(), 0)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, pageNumber)
+}
+
+type AssetManagedUtxoSimplified struct {
+	UpdatedAt             time.Time `json:"updated_at"`
+	OutPoint              string    `json:"out_point"`
+	Time                  int       `json:"time"`
+	AmtSat                int       `json:"amt_sat"`
+	AssetGenesisPoint     string    `json:"asset_genesis_point"`
+	AssetGenesisName      string    `json:"asset_genesis_name"`
+	AssetGenesisMetaHash  string    `json:"asset_genesis_meta_hash"`
+	AssetGenesisAssetID   string    `json:"asset_genesis_asset_id"`
+	AssetGenesisAssetType string    `json:"asset_genesis_asset_type"`
+	Amount                int       `json:"amount"`
+	LockTime              int       `json:"lock_time"`
+	RelativeLockTime      int       `json:"relative_lock_time"`
+	ScriptKey             string    `json:"script_key"`
+	AssetGroupRawGroupKey string    `json:"asset_group_raw_group_key"`
+	ChainAnchorOutpoint   string    `json:"chain_anchor_outpoint"`
+	IsSpent               bool      `json:"is_spent"`
+	IsBurn                bool      `json:"is_burn"`
+	DeviceId              string    `json:"device_id"`
+	Username              string    `json:"username"`
+}
+
+func AssetManagedUtxoToAssetManagedUtxoSimplified(assetManagedUtxo AssetManagedUtxo) AssetManagedUtxoSimplified {
+	return AssetManagedUtxoSimplified{
+		UpdatedAt:             assetManagedUtxo.UpdatedAt,
+		OutPoint:              assetManagedUtxo.OutPoint,
+		Time:                  assetManagedUtxo.Time,
+		AmtSat:                assetManagedUtxo.AmtSat,
+		AssetGenesisPoint:     assetManagedUtxo.AssetGenesisPoint,
+		AssetGenesisName:      assetManagedUtxo.AssetGenesisName,
+		AssetGenesisMetaHash:  assetManagedUtxo.AssetGenesisMetaHash,
+		AssetGenesisAssetID:   assetManagedUtxo.AssetGenesisAssetID,
+		AssetGenesisAssetType: assetManagedUtxo.AssetGenesisAssetType,
+		Amount:                assetManagedUtxo.Amount,
+		LockTime:              assetManagedUtxo.LockTime,
+		RelativeLockTime:      assetManagedUtxo.RelativeLockTime,
+		ScriptKey:             assetManagedUtxo.ScriptKey,
+		AssetGroupRawGroupKey: assetManagedUtxo.AssetGroupRawGroupKey,
+		ChainAnchorOutpoint:   assetManagedUtxo.ChainAnchorOutpoint,
+		IsSpent:               assetManagedUtxo.IsSpent,
+		IsBurn:                assetManagedUtxo.IsBurn,
+		DeviceId:              assetManagedUtxo.DeviceId,
+		Username:              assetManagedUtxo.Username,
+	}
+}
+
+func AssetManagedUtxoSliceToAssetManagedUtxoSimplifiedSlice(assetManagedUtxos *[]AssetManagedUtxo) *[]AssetManagedUtxoSimplified {
+	if assetManagedUtxos == nil {
+		return nil
+	}
+	var assetManagedUtxoSimplified []AssetManagedUtxoSimplified
+	for _, assetManagedUtxo := range *assetManagedUtxos {
+		assetManagedUtxoSimplified = append(assetManagedUtxoSimplified, AssetManagedUtxoToAssetManagedUtxoSimplified(assetManagedUtxo))
+	}
+	return &assetManagedUtxoSimplified
+}
+
+// TODO:	QueryAssetTransfersByAssetIdFromServer

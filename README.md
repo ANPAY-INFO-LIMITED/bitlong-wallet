@@ -7,6 +7,15 @@ pwsh ./pack.api.ps1
 ```
 
 ## Update log
+### v0.1.7
+- GetAccountAssetBalances
+- GetAccountAssetTransfers
+
+## Update log
+### v0.1.5
+- UploadLogFile
+
+## Update log
 ### v0.1.3
 - 修复一个bug，会导致GetAssetInfo输入的资产没有元数据时崩溃
 
