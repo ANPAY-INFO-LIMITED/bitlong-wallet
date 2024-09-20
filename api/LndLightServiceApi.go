@@ -169,7 +169,9 @@ func GetNewAddress() string {
 
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
-	request := &lnrpc.NewAddressRequest{}
+	request := &lnrpc.NewAddressRequest{
+		Type: lnrpc.AddressType_TAPROOT_PUBKEY,
+	}
 	response, err := client.NewAddress(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc NewAddress err: %v\n", GetTimeNow(), err)
@@ -1111,6 +1113,21 @@ func SendPaymentSync0amt(invoice string, amt int64) string {
 	}
 	fmt.Printf(GetTimeNow() + stream.String())
 	return hex.EncodeToString(stream.PaymentHash)
+}
+
+func MergeUTXO(feeRate int64) string {
+	if feeRate > 500 {
+		err := errors.New("fee rate exceeds max(500)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
+	//创建一个地址
+	addrTarget := GetNewAddress()
+	//将所有utxo合并到这个地址
+	response, err := sendCoins(addrTarget, 0, uint64(feeRate), true)
+	if err != nil {
+		return MakeJsonErrorResult(sendCoinsErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
 // SendCoins
