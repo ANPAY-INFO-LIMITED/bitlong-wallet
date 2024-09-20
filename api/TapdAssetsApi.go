@@ -6364,7 +6364,7 @@ func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId strin
 		return nil, err
 	}
 	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
+		return nil, errors.New("page number must be less than max value " + strconv.Itoa(number))
 	}
 	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
 }
