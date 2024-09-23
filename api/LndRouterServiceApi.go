@@ -74,7 +74,7 @@ func TrackPaymentV2(payhash string) string {
 		if err != nil {
 			if err == io.EOF {
 				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
-				return MakeJsonErrorResult(streamRecvIoEofErr, err.Error(), nil)
+				return MakeJsonErrorResult(streamRecvInfoErr, err.Error(), nil)
 			}
 			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
 			return MakeJsonErrorResult(streamRecvErr, err.Error(), nil)

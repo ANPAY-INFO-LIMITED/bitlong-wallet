@@ -19,6 +19,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,7 +34,6 @@ const (
 	RequestError
 )
 
-// Err type:Unknown
 const (
 	GetBtcTransferOutInfosErr ErrCode = iota + 501
 	ListTransfersAndGetProcessedResponseErr
@@ -116,7 +116,7 @@ const (
 	AddrsLenZeroErr
 	sendManyErr
 	TrackPaymentV2Err
-	streamRecvIoEofErr
+	streamRecvInfoErr
 	streamRecvErr
 	listAccountsErr
 	AccountNotFoundErr
@@ -179,17 +179,176 @@ const (
 	GetAssetManagedUtxoPageNumberByPageSizeErr
 )
 
-func (e ErrCode) Error() string {
+var ErrCodeMapInfo = map[ErrCode]string{
+	GetBtcTransferOutInfosErr:                        "获取BTC转出记录错误",
+	ListTransfersAndGetProcessedResponseErr:          "列出转账记录并获取处理的响应错误",
+	PostToSetAssetTransferErr:                        "请求发送资产转账记录错误",
+	PostToGetAssetTransferAndGetResponseErr:          "请求获取资产转账记录和响应错误",
+	BatchTxidToAssetIdErr:                            "批量交易ID转换资产ID错误",
+	AddrReceivesAndGetEventsErr:                      "资产地址接收并获取事件错误",
+	PostToSetAddrReceivesEventsErr:                   "请求发送资产接收事件错误",
+	PostToGetAddrReceivesEventsErr:                   "请求获取资产接收事件错误",
+	jsonAddrsToAddrSliceErr:                          "资产地址数组JSON字符串转换资产地址切片错误",
+	DecodeAddrErr:                                    "解码资产地址错误",
+	sendAssetsErr:                                    "发送资产错误",
+	UploadBatchTransfersErr:                          "上传批量转账记录错误",
+	PostToGetBatchTransfersErr:                       "请求获取批量转账记录错误",
+	PostToSetAssetAddrErr:                            "请求发送资产地址记录错误",
+	PostToGetAssetAddrErr:                            "请求获取资产地址记录错误",
+	ListUtxosAndGetResponseErr:                       "列出资产UTXO并获取响应错误",
+	ListUnspentAndGetResponseErr:                     "列出BTC的UTXO并获取相应错误",
+	ListNftAssetsAndGetResponseErr:                   "列出NFT资产并获取响应错误",
+	PostToSetAssetLockErr:                            "请求发送资产锁定信息错误",
+	PostToGetAssetLockErr:                            "请求获取资产锁定信息错误",
+	IsTokenValidErr:                                  "Token无效错误",
+	JsonUnmarshalErr:                                 "JSON解码错误",
+	ListBalancesAndProcessErr:                        "列出BTC余额并获取处理结果错误",
+	PostToSetAssetBalanceInfoErr:                     "请求发送资产余额信息错误",
+	FeeRateExceedMaxErr:                              "费率超出最大值错误",
+	QueryAllAddrAndGetResponseErr:                    "查询所有资产地址并获取响应错误",
+	UpdateAllAddrByAccountWithAddressesErr:           "通过账户更新所有资产地址错误",
+	PostToGetAssetTransferByAssetIdAndGetResponseErr: "请求通过资产ID获取资产转账记录并获取响应错误",
+	QueryAssetTransferSimplifiedErr:                  "查询简化资产转账记录错误",
+	RequestToGetNonZeroAssetBalanceErr:               "请求获取非零资产余额信息错误",
+	GetZeroBalanceAssetBalanceSliceErr:               "获取零余额资产余额信息切片错误",
+	GetAssetHolderNumberByAssetBalancesInfoErr:       "通过资产余额信息获取资产持有人数量错误",
+	GetAssetHolderBalanceByAssetBalancesInfoErr:      "通过资产余额信息获取资产持有人持有信息错误",
+	AddrReceivesErr:                                  "资产接收记录错误",
+	BurnAssetErr:                                     "销毁资产错误",
+	fetchAssetMetaErr:                                "提取资产元数据错误",
+	GetInfoErr:                                       "获取信息错误",
+	GetConnectionErr:                                 "获取连接错误",
+	syncUniverseErr:                                  "同步宇宙错误",
+	ProcessListAllAssetsSimplifiedErr:                "处理列出的所有简化资产信息错误",
+	allAssetBalancesErr:                              "获取所有资产余额信息错误",
+	allAssetGroupBalancesErr:                         "获取所有资产组余额信息错误",
+	assetKeysTransferErr:                             "获取资产转账Key错误",
+	AssetLeavesSpecifiedErr:                          "获取指定类型资产叶子错误",
+	assetLeavesIssuanceErr:                           "获取发行资产叶子错误",
+	DecodeRawProofStringErr:                          "解码原始证明字符串错误",
+	allAssetListErr:                                  "获取列出所有资产信息错误",
+	GetAssetHoldInfosIncludeSpentErr:                 "获取包含已花费的资产持有信息错误",
+	GetAssetHoldInfosExcludeSpentErr:                 "获取不包含已花费的资产持有信息错误",
+	GetAssetTransactionInfosErr:                      "获取资产交易信息错误",
+	GetTimeForManagedUtxoByBitcoindErr:               "通过Bitcoind为BTC的UTXO获取时间错误",
+	subServerStatusErr:                               "获取子服务状态错误",
+	NewAddressP2trErr:                                "生成P2TR地址错误",
+	NewAddressP2wkhErr:                               "生成P2WKH地址错误",
+	NewAddressNp2wkhErr:                              "生成NP2WKH地址错误",
+	CreateOrUpdateAddrErr:                            "创建或更新资产地址信息错误",
+	ReadAddrErr:                                      "读取资产地址错误",
+	DeleteAddrErr:                                    "删除资产地址错误",
+	AllAddressesErr:                                  "获取所有资产地址错误",
+	ListAddressesErr:                                 "列出资产地址错误",
+	GetAccountWithAddressesErr:                       "获取账户与地址错误",
+	UnmarshalErr:                                     "解码错误",
+	resultIsNotSuccessErr:                            "结果未成功错误",
+	GetAllAccountsErr:                                "获取所有账户错误",
+	InvalidAddressTypeErr:                            "无效的资产地址类型错误",
+	GetBlockErr:                                      "获取区块错误",
+	GetBlockHashErr:                                  "获取区块哈希值错误",
+	getWalletBalanceErr:                              "获取钱包余额信息错误",
+	ProcessGetWalletBalanceResultErr:                 "处理获取钱包余额信息的结果错误",
+	getInfoOfLndErr:                                  "获取LND的信息错误",
+	DecodePayReqErr:                                  "解码支付请求错误",
+	ListChannelsErr:                                  "获取列出通道错误",
+	ListInvoicesErr:                                  "获取列出发票错误",
+	PendingChannelsErr:                               "获取等待中的通道错误",
+	ClosedChannelsErr:                                "关闭通道错误",
+	NoFindChannelErr:                                 "没有找到通道错误",
+	sendCoinsErr:                                     "发送BTC币错误",
+	SendPaymentSyncErr:                               "同步发起支付错误",
+	AddrsLenZeroErr:                                  "资产地址为零错误",
+	sendManyErr:                                      "发送多笔支付错误",
+	TrackPaymentV2Err:                                "跟踪支付V2错误",
+	streamRecvInfoErr:                                "流接收信息错误",
+	streamRecvErr:                                    "流接收错误",
+	listAccountsErr:                                  "获取列出账户错误",
+	AccountNotFoundErr:                               "账户未找到错误",
+	BumpFeeErr:                                       "碰撞费率错误",
+	HttpGetErr:                                       "HTTP的GET请求错误",
+	GetAddressTransferOutErr:                         "获取BTC地址转出错误",
+	GetAddressTransactionsErr:                        "通过Mempool获取BTC地址交易记录错误",
+	listAssetsErr:                                    "获取列出资产错误",
+	responseNotSuccessErr:                            "响应未成功错误",
+	assetNotFoundErr:                                 "资产未找到错误",
+	ListGroupsErr:                                    "获取列出资产组错误",
+	ListTransfersErr:                                 "获取列出BTC转账记录错误",
+	NewAddrErr:                                       "新资产地址错误",
+	QueryAddrErr:                                     "查询资产地址错误",
+	listBalancesErr:                                  "获取列出BTC余额错误",
+	assetLeafKeysErr:                                 "获取资产叶子Key错误",
+	ListBatchesAndGetResponseErr:                     "获取列出批次并获取响应错误",
+	assetLeavesErr:                                   "获取资产叶子错误",
+	GetTransactionsAndGetResponseErr:                 "获取交易记录和响应错误",
+	GetAssetInfoErr:                                  "获取资产信息错误",
+	ListAssetsProcessedErr:                           "获取列出已处理的资产信息错误",
+	responseAssetKeysZeroErr:                         "资产Key响应长度为零错误",
+	responseLeavesNullErr:                            "资产叶子响应为空错误",
+	QueryAssetRootsErr:                               "查询资产根错误",
+	blobLenZeroErr:                                   "Blob长度为零错误",
+	DecodeProofErr:                                   "解码证明错误",
+	clientInfoErr:                                    "客户端信息错误",
+	queryAssetRootErr:                                "查询资产根错误",
+	queryAssetStatsErr:                               "查询资产统计错误",
+	GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfosErr: "获取用户所有服务器和本地发行历史记录错误",
+	GetIssuanceTransactionCalculatedFeeErr:                 "获取发行交易计算费用错误",
+	GetMintTransactionCalculatedFeeErr:                     "获取铸造交易计算费用错误",
+	FinalizeBatchErr:                                       "提交批次错误",
+	DecodeStringErr:                                        "解码字符串错误",
+	MintAssetErr:                                           "本地铸造资产错误",
+	getTransactionByMempoolErr:                             "通过Mempool获取交易信息错误",
+	deliverIssuanceProofErr:                                "递送资产发行证明错误",
+	deliverProofErr:                                        "递送资产证明错误",
+	receiveProofErr:                                        "接收资产证明错误",
+	readProofErr:                                           "读取资产证明错误",
+	queryAssetProofsErr:                                    "查询资产证明错误",
+	UploadAssetBurnErr:                                     "上传资产销毁信息错误",
+	GetAssetBurnTotalAmountByAssetIdErr:                    "通过资产ID获取资产销毁总量错误",
+	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr: "获取简化的自己发行的公平发射资产信息并执行取回保留部分错误",
+	PostToSetFollowFairLaunchInfoErr:                              "请求关注公平发射信息错误",
+	PostToSetUnfollowFairLaunchInfoErr:                            "请求取消关注公平发射信息错误",
+	RequestToQueryIsFairLaunchFollowedErr:                         "请求查询是否已关注公平发射信息错误",
+	ListBatchesAndPostToSetAssetLocalMintHistoriesErr:             "获取列出批次并请求发送资产本地铸造历史记录错误",
+	ListUtxosAndPostToSetAssetManagedUtxosErr:                     "请求列出UTXO并请求发送资产UTXO信息错误",
+	GetWalletBalanceCalculatedTotalValueErr:                       "获取钱包余额计算总价值错误",
+	UploadLogFileAndGetJsonResultErr:                              "上传日志文件并获取JSON结果响应错误",
+	GetAccountAssetBalanceByAssetIdAndGetResponseErr:              "通过资产ID获取账户资产余额信息并获取响应错误",
+	GetAccountAssetTransferByAssetIdAndGetResponseErr:             "通过资产ID获取账户资产转账记录并获取响应错误",
+	GetAssetHolderBalanceWithPageSizeAndPageNumberErr:             "通过页面大小和页号获取资产持有信息错误",
+	GetAccountAssetTransferPageNumberByPageSizeErr:                "通过页面大小获取账户资产转账记录页数错误",
+	GetAccountAssetTransferWithPageSizeAndPageNumberErr:           "通过页面大小和页号获取资产转账信息错误",
+	GetAccountAssetBalancePageNumberByPageSizeErr:                 "通过页面大小获取账户资产余额信息页数错误",
+	GetAccountAssetBalanceWithPageSizeAndPageNumberErr:            "通过页面大小和页号获取账户资产余额信息错误",
+	GetAssetManagedUtxoWithPageSizeAndPageNumberErr:               "通过页面大小和页号获取资产UTXO信息错误",
+	GetAssetManagedUtxoPageNumberByPageSizeErr:                    "通过页面大小获取资产UTXO信息页数错误",
+}
+
+func GetIntErrCodeString(intErrCode int) string {
+	return GetErrCodeString(ErrCode(intErrCode))
+}
+
+func GetErrCodeString(errCode ErrCode) string {
+	return errCode.Error()
+}
+
+func (ec ErrCode) Error() string {
 	switch {
-	case errors.Is(e, NotFoundData):
+	case errors.Is(ec, NotFoundData):
 		return "not found Data"
-	case errors.Is(e, SUCCESS):
+	case errors.Is(ec, SUCCESS):
 		return ""
-	case errors.Is(e, RequestError):
+	case errors.Is(ec, RequestError):
 		return "request error"
 	default:
-		return ""
 	}
+	info, ok := ErrCodeMapInfo[ec]
+	if !ok {
+		info = "[无错误信息]"
+	} else {
+		info += strconv.Itoa(int(ec))
+	}
+	return info
 }
 
 var (
