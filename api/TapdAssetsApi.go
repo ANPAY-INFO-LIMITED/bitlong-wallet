@@ -4656,10 +4656,12 @@ func BatchPendingAssetToPendingBatchAsset(pendingAsset *mintrpc.PendingAsset) *P
 		return nil
 	}
 	return &PendingBatchAsset{
-		AssetVersion:      pendingAsset.AssetVersion.String(),
-		AssetType:         pendingAsset.AssetType.String(),
-		Name:              pendingAsset.Name,
-		AssetMetaData:     hex.EncodeToString(pendingAsset.AssetMeta.Data),
+		AssetVersion: pendingAsset.AssetVersion.String(),
+		AssetType:    pendingAsset.AssetType.String(),
+		Name:         pendingAsset.Name,
+		// @dev: 2024-9-24 17:42:15 Too many data, use null string.
+		AssetMetaData: "",
+		//AssetMetaData:     hex.EncodeToString(pendingAsset.AssetMeta.Data),
 		AssetMetaType:     pendingAsset.AssetMeta.Type.String(),
 		AssetMetaMetaHash: hex.EncodeToString(pendingAsset.AssetMeta.MetaHash),
 		Amount:            int(pendingAsset.Amount),
