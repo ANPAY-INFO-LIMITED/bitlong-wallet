@@ -996,6 +996,19 @@ func ListAssetsProcessed(withWitness, includeSpent, includeLeased bool) (*[]List
 	return &listAssetsResponse, nil
 }
 
+func FilterListAssetsNullGroupKey(listAssetsResponse *[]ListAssetsResponse) *[]ListAssetsResponse {
+	if listAssetsResponse == nil {
+		return nil
+	}
+	var results []ListAssetsResponse
+	for _, asset := range *listAssetsResponse {
+		if asset.AssetGroup.RawGroupKey == "" {
+			results = append(results, asset)
+		}
+	}
+	return &results
+}
+
 func ListNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 	processed, err := ListAssetsProcessed(false, false, false)
 	if err != nil {
@@ -1085,6 +1098,21 @@ func ListNftAssets() string {
 		}
 	}
 	return MakeJsonErrorResult(SUCCESS, "", &result)
+}
+
+func ListNonGroupNftAssets() string {
+	processed, err := ListAssetsProcessed(false, false, false)
+	if err != nil {
+		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
+	}
+	var result []ListAssetsResponse
+	for index, pr := range *processed {
+		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
+			result = append(result, (*processed)[index])
+		}
+	}
+	resultFiltered := FilterListAssetsNullGroupKey(&result)
+	return MakeJsonErrorResult(SUCCESS, "", resultFiltered)
 }
 
 func QueryAllNftByGroup(groupKey string) string {
