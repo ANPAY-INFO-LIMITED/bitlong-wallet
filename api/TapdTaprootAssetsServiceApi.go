@@ -1002,7 +1002,7 @@ func FilterListAssetsNullGroupKey(listAssetsResponse *[]ListAssetsResponse) *[]L
 	}
 	var results []ListAssetsResponse
 	for _, asset := range *listAssetsResponse {
-		if asset.AssetGroup.RawGroupKey == "" {
+		if asset.AssetGroup.TweakedGroupKey == "" {
 			results = append(results, asset)
 		}
 	}
@@ -1030,7 +1030,7 @@ func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 	}
 	var result []ListAssetsResponse
 	for _, asset := range *listNftAssets {
-		if asset.AssetGroup.RawGroupKey == groupKey {
+		if asset.AssetGroup.TweakedGroupKey == groupKey {
 			result = append(result, asset)
 		}
 	}
