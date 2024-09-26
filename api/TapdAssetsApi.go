@@ -7024,7 +7024,9 @@ func SetGroupFirstAssetMeta(token string, deviceId string, finalizeBatchResponse
 	var firstErr error
 	for _, request := range *assetLocalMintSetRequests {
 		tweakedGroupKey := request.GroupKey
-		if !(request.GroupedAsset) || !(request.NewGroupedAsset) || tweakedGroupKey == "" {
+		if tweakedGroupKey == "" {
+			// @dev: after mint, before finalize, new_grouped_asset is true
+			// @dev: after finalize, new_grouped_asset is false and grouped_asset is true
 			continue
 		}
 		firstAssetMeta := request.AssetMetaData
