@@ -179,6 +179,7 @@ const (
 	GetAssetManagedUtxoPageNumberByPageSizeErr
 	GetGroupFirstAssetMetaAndGetResponseErr
 	SetGroupFirstAssetMetaAndGetResponseErr
+	GetGroupFirstAssetIdAndGetResponseErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -326,6 +327,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetAssetManagedUtxoPageNumberByPageSizeErr:                    "通过页面大小获取资产UTXO信息页数错误",
 	GetGroupFirstAssetMetaAndGetResponseErr:                       "获取资产组的首个资产元数据并获取响应错误",
 	SetGroupFirstAssetMetaAndGetResponseErr:                       "请求上传资产组首个资产的元数据并获取响应错误",
+	GetGroupFirstAssetIdAndGetResponseErr:                         "获取资产组的首个资产ID并获取响应错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {

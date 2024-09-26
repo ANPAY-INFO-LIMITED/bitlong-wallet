@@ -7007,12 +7007,77 @@ func SetGroupFirstAssetMetaAndGetResponse(token string, tweakedGroupKey string, 
 	return PostToSetGroupFirstAssetMeta(token, assetGroupSetRequest)
 }
 
+type GetGroupFirstAssetIdResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    string  `json:"data"`
+}
+
+func RequestToGetGroupFirstAssetId(token string, groupKey string) (string, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_group/get/first_asset_id/group_key/" + groupKey
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response GetGroupFirstAssetMetaResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetGroupFirstAssetIdAndGetResponse(token string, groupKey string) (string, error) {
+	assetMeta, err := RequestToGetGroupFirstAssetId(token, groupKey)
+	if err != nil {
+		return "", err
+	}
+	return assetMeta, nil
+}
+
 // GetGroupFirstAssetMeta
 // @Description: Get group first asset meta
 func GetGroupFirstAssetMeta(token string, groupKey string) string {
 	assetMeta, err := GetGroupFirstAssetMetaAndGetResponse(token, groupKey)
 	if err != nil {
 		return MakeJsonErrorResult(GetGroupFirstAssetMetaAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
+}
+
+// GetGroupFirstAssetId
+// @Description: Get group first asset id
+func GetGroupFirstAssetId(token string, groupKey string) string {
+	assetMeta, err := GetGroupFirstAssetIdAndGetResponse(token, groupKey)
+	if err != nil {
+		return MakeJsonErrorResult(GetGroupFirstAssetIdAndGetResponseErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
 }
