@@ -240,6 +240,13 @@ func finalizeBatch(shortResponse bool, feeRate int, token string, deviceId strin
 		LogError("", err)
 		// @dev: Do not return
 	}
+	// @Description: Set group first asset meta
+	err = SetGroupFirstAssetMeta(token, deviceId, response)
+	if err != nil {
+		LogError("", err)
+		// @dev: Do not return
+	}
+
 	return MakeJsonErrorResult(SUCCESS, "", FinalizeBatchResponseToPendingBatch(response))
 }
 

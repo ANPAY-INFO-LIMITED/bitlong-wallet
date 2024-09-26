@@ -6890,4 +6890,152 @@ func AssetManagedUtxoSliceToAssetManagedUtxoSimplifiedSlice(assetManagedUtxos *[
 	return &assetManagedUtxoSimplified
 }
 
-// TODO:	QueryAssetTransfersByAssetIdFromServer
+type AssetGroupSetRequest struct {
+	TweakedGroupKey string `json:"tweaked_group_key"`
+	FirstAssetMeta  string `json:"first_asset_meta"`
+	FirstAssetId    string `json:"first_asset_id" gorm:"type:varchar(255)"`
+	DeviceId        string `json:"device_id" gorm:"type:varchar(255)"`
+}
+
+type GetGroupFirstAssetMetaResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    string  `json:"data"`
+}
+
+func RequestToGetGroupFirstAssetMeta(token string, groupKey string) (string, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_group/get/first_meta/group_key/" + groupKey
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response GetGroupFirstAssetMetaResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetGroupFirstAssetMetaAndGetResponse(token string, groupKey string) (string, error) {
+	assetMeta, err := RequestToGetGroupFirstAssetMeta(token, groupKey)
+	if err != nil {
+		return "", err
+	}
+	return assetMeta, nil
+}
+
+func PostToSetGroupFirstAssetMeta(token string, assetGroupSetRequest *AssetGroupSetRequest) (*JsonResult, error) {
+	if assetGroupSetRequest == nil {
+		return &JsonResult{
+			Success: true,
+		}, nil
+	}
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_group/set/first_meta/"
+	requestJsonBytes, err := json.Marshal(assetGroupSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func SetGroupFirstAssetMetaAndGetResponse(token string, tweakedGroupKey string, firstAssetMeta string, firstAssetId string, deviceId string) (*JsonResult, error) {
+	assetGroupSetRequest := &AssetGroupSetRequest{
+		TweakedGroupKey: tweakedGroupKey,
+		FirstAssetMeta:  firstAssetMeta,
+		FirstAssetId:    firstAssetId,
+		DeviceId:        deviceId,
+	}
+	return PostToSetGroupFirstAssetMeta(token, assetGroupSetRequest)
+}
+
+// GetGroupFirstAssetMeta
+// @Description: Get group first asset meta
+func GetGroupFirstAssetMeta(token string, groupKey string) string {
+	assetMeta, err := GetGroupFirstAssetMetaAndGetResponse(token, groupKey)
+	if err != nil {
+		return MakeJsonErrorResult(GetGroupFirstAssetMetaAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
+}
+
+// SetGroupFirstAssetMeta
+// @Description: Set group first asset meta
+func SetGroupFirstAssetMeta(token string, deviceId string, finalizeBatchResponse *mintrpc.FinalizeBatchResponse) error {
+	assetLocalMintSetRequests := FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId, finalizeBatchResponse)
+	var firstErr error
+	for _, request := range *assetLocalMintSetRequests {
+		tweakedGroupKey := request.GroupKey
+		if !(request.GroupedAsset) || !(request.NewGroupedAsset) || tweakedGroupKey == "" {
+			continue
+		}
+		firstAssetMeta := request.AssetMetaData
+		firstAssetId := request.AssetId
+		_, err := SetGroupFirstAssetMetaAndGetResponse(token, tweakedGroupKey, firstAssetMeta, firstAssetId, deviceId)
+		if err != nil {
+			fmt.Println(err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
