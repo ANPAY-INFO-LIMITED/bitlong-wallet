@@ -811,6 +811,8 @@ func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAsse
 		WithWitness:   withWitness,
 		IncludeSpent:  includeSpent,
 		IncludeLeased: includeLeased,
+		// @dev: default include unconfirmed
+		IncludeUnconfirmedMints: true,
 	}
 	response, err := client.ListAssets(context.Background(), request)
 	return response, err
