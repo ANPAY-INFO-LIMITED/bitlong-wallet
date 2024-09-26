@@ -1079,7 +1079,7 @@ func ListNftGroups() string {
 			meta.FetchAssetMeta(false, hex.EncodeToString(group.Assets[0].Id))
 			Groups = append(Groups, Group{
 				GroupKey:  key,
-				GroupName: meta.Name,
+				GroupName: meta.GroupName,
 				Supply:    len(group.Assets),
 				NftIds:    &nftIds,
 			})
