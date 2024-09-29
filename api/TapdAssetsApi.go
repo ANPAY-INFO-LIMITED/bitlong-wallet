@@ -7164,3 +7164,45 @@ func SetGroupFirstAssetMeta(token string, deviceId string, finalizeBatchResponse
 	}
 	return firstErr
 }
+
+type DeliverProofNeedInfo struct {
+	AssetId   string `json:"asset_id"`
+	GroupKey  string `json:"group_key"`
+	ScriptKey string `json:"script_key"`
+	Outpoint  string `json:"outpoint"`
+}
+
+func GetDeliverProofNeedInfoAndGetResponse(assetId string) (*DeliverProofNeedInfo, error) {
+	response, err := listAssets(true, true, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(response.Assets) == 0 {
+		return nil, errors.New("asset list response null")
+	}
+	for _, asset := range response.Assets {
+		assetGenesisAssetId := hex.EncodeToString(asset.AssetGenesis.AssetId)
+		if assetGenesisAssetId == assetId {
+			deliverProofNeedInfo := DeliverProofNeedInfo{
+				AssetId: assetId,
+			}
+			if asset.AssetGroup != nil && asset.AssetGroup.TweakedGroupKey != nil {
+				deliverProofNeedInfo.GroupKey = hex.EncodeToString(asset.AssetGroup.TweakedGroupKey)
+			}
+			if asset.ScriptKey != nil {
+				deliverProofNeedInfo.ScriptKey = hex.EncodeToString(asset.ScriptKey)
+			}
+			deliverProofNeedInfo.Outpoint = asset.ChainAnchor.AnchorOutpoint
+			return &deliverProofNeedInfo, nil
+		}
+	}
+	return nil, errors.New("asset not found")
+}
+
+func GetDeliverProofNeedInfo(assetId string) string {
+	deliverProofNeedInfo, err := GetDeliverProofNeedInfoAndGetResponse(assetId)
+	if err != nil {
+		MakeJsonErrorResult(GetDeliverProofNeedInfoAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, deliverProofNeedInfo)
+}
