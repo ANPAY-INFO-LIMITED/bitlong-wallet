@@ -15,21 +15,22 @@ import (
 	"strings"
 )
 
+type addrEvent struct {
+	CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
+	Addr                    *JsonResultAddr `json:"addr"`
+	Status                  string          `json:"status"`
+	Outpoint                string          `json:"outpoint"`
+	Txid                    string          `json:"txid"`
+	UtxoAmtSat              int64           `json:"utxo_amt_sat"`
+	TaprootSibling          string          `json:"taproot_sibling"`
+	ConfirmationHeight      int64           `json:"confirmation_height"`
+	HasProof                bool            `json:"has_proof"`
+}
+
 func AddrReceives(assetId string) string {
 	response, err := rpcclient.AddrReceives()
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
-	}
-	type addrEvent struct {
-		CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
-		Addr                    *JsonResultAddr `json:"addr"`
-		Status                  string          `json:"status"`
-		Outpoint                string          `json:"outpoint"`
-		Txid                    string          `json:"txid"`
-		UtxoAmtSat              int64           `json:"utxo_amt_sat"`
-		TaprootSibling          string          `json:"taproot_sibling"`
-		ConfirmationHeight      int64           `json:"confirmation_height"`
-		HasProof                bool            `json:"has_proof"`
 	}
 	var addrEvents []addrEvent
 	for _, event := range response.Events {
@@ -48,6 +49,38 @@ func AddrReceives(assetId string) string {
 		e.TaprootSibling = hex.EncodeToString(event.TaprootSibling)
 		e.ConfirmationHeight = int64(event.ConfirmationHeight)
 		e.HasProof = event.HasProof
+		addrEvents = append(addrEvents, e)
+	}
+	if len(addrEvents) == 0 {
+		return MakeJsonErrorResult(SUCCESS, "NOT_FOUND", nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
+}
+
+func AddrReceivesOfAllNft() string {
+	response, err := rpcclient.AddrReceives()
+	if err != nil {
+		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
+	}
+	var addrEvents []addrEvent
+	for _, event := range response.Events {
+		if event.Addr.AssetType != taprpc.AssetType_COLLECTIBLE {
+			continue
+		}
+		a := JsonResultAddr{}
+		a.GetData(event.Addr)
+		txid, _ := outpointToTransactionAndIndex(event.Outpoint)
+		e := addrEvent{
+			CreationTimeUnixSeconds: int64(event.CreationTimeUnixSeconds),
+			Addr:                    &a,
+			Status:                  event.Status.String(),
+			Outpoint:                event.Outpoint,
+			Txid:                    txid,
+			UtxoAmtSat:              int64(event.UtxoAmtSat),
+			TaprootSibling:          hex.EncodeToString(event.TaprootSibling),
+			ConfirmationHeight:      int64(event.ConfirmationHeight),
+			HasProof:                event.HasProof,
+		}
 		addrEvents = append(addrEvents, e)
 	}
 	if len(addrEvents) == 0 {
@@ -219,6 +252,15 @@ func QueryAssetTransfers(token string, assetId string) string {
 	response, err := QueryAssetTransferSimplified(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+func QueryAssetTransfersOfAllNft(token string) string {
+	// @dev: The token is actually not been used.
+	response, err := QueryAssetTransferSimplifiedOfAllNft(token)
+	if err != nil {
+		return MakeJsonErrorResult(QueryAssetTransferSimplifiedOfAllNftErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }

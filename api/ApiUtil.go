@@ -180,6 +180,7 @@ const (
 	GetGroupFirstAssetMetaAndGetResponseErr
 	SetGroupFirstAssetMetaAndGetResponseErr
 	GetGroupFirstAssetIdAndGetResponseErr
+	QueryAssetTransferSimplifiedOfAllNftErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -328,6 +329,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetGroupFirstAssetMetaAndGetResponseErr:                       "获取资产组的首个资产元数据并获取响应错误",
 	SetGroupFirstAssetMetaAndGetResponseErr:                       "请求上传资产组首个资产的元数据并获取响应错误",
 	GetGroupFirstAssetIdAndGetResponseErr:                         "获取资产组的首个资产ID并获取响应错误",
+	QueryAssetTransferSimplifiedOfAllNftErr:                       "查询所有NFT简化资产转账记录错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {

@@ -3699,6 +3699,42 @@ func QueryAssetTransfersAndGetResponse(assetId string) (*[]Transfer, error) {
 	return &transfers, nil
 }
 
+func GetAllNftAssetIdOfListAssets() (map[string]bool, error) {
+	listAssetResponse, err := ListAssetAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	assetIdExists := make(map[string]bool)
+	for _, asset := range listAssetResponse.Assets {
+		if asset.AssetGenesis.AssetType == taprpc.AssetType_COLLECTIBLE {
+			assetId := hex.EncodeToString(asset.AssetGenesis.AssetId)
+			assetIdExists[assetId] = true
+		}
+	}
+	return assetIdExists, nil
+}
+
+func QueryAssetTransfersAndGetResponseOfAllNft(assetIdExists map[string]bool) (*[]Transfer, error) {
+	response, err := rpcclient.ListTransfers()
+	if err != nil {
+		return nil, err
+	}
+	var transfers []Transfer
+	for _, t := range response.Transfers {
+		assetId := hex.EncodeToString(t.Inputs[0].AssetId)
+		if !assetIdExists[assetId] {
+			continue
+		}
+		newTransfer := Transfer{}
+		newTransfer.GetData(t)
+		transfers = append(transfers, newTransfer)
+	}
+	if len(transfers) == 0 {
+		return nil, err
+	}
+	return &transfers, nil
+}
+
 type AssetTransferSimplified struct {
 	AssetID     string    `json:"asset_id"`
 	Txid        string    `json:"txid"`
@@ -3755,6 +3791,28 @@ func ProcessAssetTransfer(assetTransfers *[]Transfer) (*[]AssetTransferSimplifie
 func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransferSimplified, error) {
 	var assetTransferSimplified *[]AssetTransferSimplified
 	assetTransfers, err := QueryAssetTransfersAndGetResponse(assetId)
+	if err != nil {
+		return nil, err
+	}
+	if assetTransfers == nil {
+		return nil, nil
+	}
+	// reserved
+	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
+	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
+	// @dev: Request spent a lot of time, do not use token now
+	_ = token
+	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
+	return assetTransferSimplified, nil
+}
+
+func QueryAssetTransferSimplifiedOfAllNft(token string) (*[]AssetTransferSimplified, error) {
+	var assetTransferSimplified *[]AssetTransferSimplified
+	assetIdExists, err := GetAllNftAssetIdOfListAssets()
+	if err != nil {
+		return nil, err
+	}
+	assetTransfers, err := QueryAssetTransfersAndGetResponseOfAllNft(assetIdExists)
 	if err != nil {
 		return nil, err
 	}
