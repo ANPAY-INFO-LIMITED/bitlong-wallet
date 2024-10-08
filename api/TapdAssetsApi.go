@@ -7206,3 +7206,172 @@ func GetDeliverProofNeedInfo(assetId string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, deliverProofNeedInfo)
 }
+
+type NftTransfer struct {
+	gorm.Model
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+	FromInfo string `json:"from_info"`
+	ToInfo   string `json:"to_info"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255);index"`
+	UserId   int    `json:"user_id" gorm:"index"`
+	Username string `json:"username" gorm:"type:varchar(255);index"`
+}
+
+type NftTransferSetRequest struct {
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+	FromInfo string `json:"from_info"`
+	ToInfo   string `json:"to_info"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255);index"`
+}
+
+func PostToSetNftTransfer(token string, nftTransferSetRequest *NftTransferSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/nft_transfer/set"
+	requestJsonBytes, err := json.Marshal(nftTransferSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func SetNftTransferAndGetResponse(token string, txid string, assetId string, time int, fromAddr string, toAddr string, fromInfo string, toInfo string, deviceId string) (*JsonResult, error) {
+	assetGroupSetRequest := &NftTransferSetRequest{
+		Txid:     txid,
+		AssetId:  assetId,
+		Time:     time,
+		FromAddr: fromAddr,
+		ToAddr:   toAddr,
+		FromInfo: fromInfo,
+		ToInfo:   toInfo,
+		DeviceId: deviceId,
+	}
+	return PostToSetNftTransfer(token, assetGroupSetRequest)
+}
+
+type GetNftTransferByAssetIdResponse struct {
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Code    ErrCode        `json:"code"`
+	Data    *[]NftTransfer `json:"data"`
+}
+
+func RequestToGetNftTransferByAssetId(token string, assetId string) (*[]NftTransfer, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/nft_transfer/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetNftTransferByAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetNftTransferByAssetIdAndGetResponse(token string, assetId string) (*[]NftTransfer, error) {
+	nftTransfers, err := RequestToGetNftTransferByAssetId(token, assetId)
+	if err != nil {
+		return nil, err
+	}
+	return nftTransfers, nil
+}
+
+func GetReceiveAddrByAssetId(assetId string) (string, error) {
+	addrEvents, err := AddrReceivesAndGetEvents("")
+	if err != nil {
+		return "", err
+	}
+	for _, event := range *addrEvents {
+		if event.Addr.AssetID == assetId {
+			return event.Addr.Encoded, nil
+		}
+	}
+	return "", errors.New("not found match addr by asset id")
+}
+
+func SetNftTransferWithoutInfo(token string, txid string, assetId string, time int, fromAddr string, toAddr string, deviceId string) error {
+	_, err := SetNftTransferAndGetResponse(token, txid, assetId, time, fromAddr, toAddr, "", "", deviceId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UploadNftTransfer(token string, deviceId string, txid string, assetId string, _time int, fromAddr string, toAddr string) error {
+	return SetNftTransferWithoutInfo(token, txid, assetId, _time, fromAddr, toAddr, deviceId)
+}
+
+// GetNftTransferByAssetId
+// @Description: Get nft transfer by assetId
+func GetNftTransferByAssetId(token string, assetId string) string {
+	nftTransfers, err := GetNftTransferByAssetIdAndGetResponse(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetNftTransferByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nftTransfers)
+}

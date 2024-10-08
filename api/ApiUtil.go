@@ -182,6 +182,7 @@ const (
 	GetGroupFirstAssetIdAndGetResponseErr
 	QueryAssetTransferSimplifiedOfAllNftErr
 	GetDeliverProofNeedInfoAndGetResponseErr
+	GetNftTransferByAssetIdAndGetResponseErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -332,6 +333,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetGroupFirstAssetIdAndGetResponseErr:                         "获取资产组的首个资产ID并获取响应错误",
 	QueryAssetTransferSimplifiedOfAllNftErr:                       "查询所有NFT简化资产转账记录错误",
 	GetDeliverProofNeedInfoAndGetResponseErr:                      "获取发送证明文件操作所需前置信息并获取响应错误",
+	GetNftTransferByAssetIdAndGetResponseErr:                      "通过资产ID查询NFT转账记录并获取响应错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {

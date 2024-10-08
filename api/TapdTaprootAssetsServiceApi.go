@@ -589,10 +589,34 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	if err != nil {
 		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", nil)
 	}
+
+	// Get from addr
+	var formAddr string
+	{
+		if len(addrs) == 1 {
+			addr := addrs[0]
+			var decodedAddr *taprpc.Addr
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if err != nil {
+				LogError("Decode Addr[0] (before send assets)", err)
+			} else {
+				if decodedAddr.AssetType == taprpc.AssetType_COLLECTIBLE {
+					assetId := hex.EncodeToString(decodedAddr.AssetId)
+					formAddr, err = GetReceiveAddrByAssetId(assetId)
+					if err != nil {
+						LogError("Get Receive Addr By AssetId (before send assets)", err)
+					}
+				}
+			}
+		}
+	}
+
 	response, err := sendAssets(addrs, uint32(feeRate))
 	if err != nil {
 		return MakeJsonErrorResult(sendAssetsErr, err.Error(), nil)
 	}
+
+	// Upload Batch Transfer
 	{
 		// @dev: decode addrs
 		var batchTransfersRequest []BatchTransferRequest
@@ -632,6 +656,8 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			// @dev: Do not return error
 		}
 	}
+
+	// Asset Recommend
 	{
 		var decodedAddr *taprpc.Addr
 		for _, addr := range addrs {
@@ -651,7 +677,32 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			}
 		}
 	}
+
 	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+
+	// Upload Nft transfer
+	{
+		// only one addr when send collectible asset
+		if len(addrs) == 1 {
+			addr := addrs[0]
+			var decodedAddr *taprpc.Addr
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if err != nil {
+				LogError("Decode Addr[0]", err)
+			} else {
+				// decode success and type is right
+				if decodedAddr.AssetType == taprpc.AssetType_COLLECTIBLE {
+					assetId := hex.EncodeToString(decodedAddr.AssetId)
+					_time := GetTimestamp()
+					err = UploadNftTransfer(token, deviceId, txid, assetId, _time, formAddr, addr)
+					if err != nil {
+						LogError("Upload NftTransfer", err)
+					}
+				}
+			}
+		}
+	}
+
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
