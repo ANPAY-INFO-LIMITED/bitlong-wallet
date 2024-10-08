@@ -7232,6 +7232,15 @@ type NftTransferSetRequest struct {
 	DeviceId string `json:"device_id" gorm:"type:varchar(255);index"`
 }
 
+type NftTransferSimplified struct {
+	ID       uint   `gorm:"primarykey"`
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+}
+
 func PostToSetNftTransfer(token string, nftTransferSetRequest *NftTransferSetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/nft_transfer/set"
@@ -7341,6 +7350,28 @@ func GetNftTransferByAssetIdAndGetResponse(token string, assetId string) (*[]Nft
 	return nftTransfers, nil
 }
 
+func NftTransferToNftTransferSimplified(nftTransfer NftTransfer) NftTransferSimplified {
+	return NftTransferSimplified{
+		ID:       nftTransfer.ID,
+		Txid:     nftTransfer.Txid,
+		AssetId:  nftTransfer.AssetId,
+		Time:     nftTransfer.Time,
+		FromAddr: nftTransfer.FromAddr,
+		ToAddr:   nftTransfer.ToAddr,
+	}
+}
+
+func NftTransferSliceToNftTransferSimplifiedSlice(nftTransfers *[]NftTransfer) *[]NftTransferSimplified {
+	if nftTransfers == nil {
+		return nil
+	}
+	var NftTransferSimplifiedSlice []NftTransferSimplified
+	for _, nftTransfer := range *nftTransfers {
+		NftTransferSimplifiedSlice = append(NftTransferSimplifiedSlice, NftTransferToNftTransferSimplified(nftTransfer))
+	}
+	return &NftTransferSimplifiedSlice
+}
+
 func GetReceiveAddrByAssetId(assetId string) (string, error) {
 	addrEvents, err := AddrReceivesAndGetEvents("")
 	if err != nil {
@@ -7370,8 +7401,9 @@ func UploadNftTransfer(token string, deviceId string, txid string, assetId strin
 // @Description: Get nft transfer by assetId
 func GetNftTransferByAssetId(token string, assetId string) string {
 	nftTransfers, err := GetNftTransferByAssetIdAndGetResponse(token, assetId)
+	result := NftTransferSliceToNftTransferSimplifiedSlice(nftTransfers)
 	if err != nil {
 		return MakeJsonErrorResult(GetNftTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, nftTransfers)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
