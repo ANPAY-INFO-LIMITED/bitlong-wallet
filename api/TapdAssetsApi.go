@@ -6419,13 +6419,6 @@ func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId strin
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
 	}
-	number, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be less than max value " + strconv.Itoa(number))
-	}
 	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
 }
 
@@ -6585,13 +6578,6 @@ func GetAccountAssetTransferWithPageSizeAndPageNumber(token string, assetId stri
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
 	}
-	number, err := GetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
-	}
 	return GetAccountAssetTransferLimitAndOffset(token, assetId, limit, offset)
 }
 
@@ -6698,13 +6684,6 @@ func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string
 	limit = pageSize
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
-	}
-	number, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
 	}
 	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
 }
@@ -6859,13 +6838,6 @@ func GetAssetManagedUtxoWithPageSizeAndPageNumber(token string, assetId string, 
 	limit = pageSize
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
-	}
-	number, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
 	}
 	return GetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
 }
