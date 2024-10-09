@@ -3699,6 +3699,42 @@ func QueryAssetTransfersAndGetResponse(assetId string) (*[]Transfer, error) {
 	return &transfers, nil
 }
 
+func GetAllNftAssetIdOfListAssets() (map[string]bool, error) {
+	listAssetResponse, err := ListAssetAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	assetIdExists := make(map[string]bool)
+	for _, asset := range listAssetResponse.Assets {
+		if asset.AssetGenesis.AssetType == taprpc.AssetType_COLLECTIBLE {
+			assetId := hex.EncodeToString(asset.AssetGenesis.AssetId)
+			assetIdExists[assetId] = true
+		}
+	}
+	return assetIdExists, nil
+}
+
+func QueryAssetTransfersAndGetResponseOfAllNft(assetIdExists map[string]bool) (*[]Transfer, error) {
+	response, err := rpcclient.ListTransfers()
+	if err != nil {
+		return nil, err
+	}
+	var transfers []Transfer
+	for _, t := range response.Transfers {
+		assetId := hex.EncodeToString(t.Inputs[0].AssetId)
+		if !assetIdExists[assetId] {
+			continue
+		}
+		newTransfer := Transfer{}
+		newTransfer.GetData(t)
+		transfers = append(transfers, newTransfer)
+	}
+	if len(transfers) == 0 {
+		return nil, err
+	}
+	return &transfers, nil
+}
+
 type AssetTransferSimplified struct {
 	AssetID     string    `json:"asset_id"`
 	Txid        string    `json:"txid"`
@@ -3755,6 +3791,28 @@ func ProcessAssetTransfer(assetTransfers *[]Transfer) (*[]AssetTransferSimplifie
 func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransferSimplified, error) {
 	var assetTransferSimplified *[]AssetTransferSimplified
 	assetTransfers, err := QueryAssetTransfersAndGetResponse(assetId)
+	if err != nil {
+		return nil, err
+	}
+	if assetTransfers == nil {
+		return nil, nil
+	}
+	// reserved
+	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
+	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
+	// @dev: Request spent a lot of time, do not use token now
+	_ = token
+	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
+	return assetTransferSimplified, nil
+}
+
+func QueryAssetTransferSimplifiedOfAllNft(token string) (*[]AssetTransferSimplified, error) {
+	var assetTransferSimplified *[]AssetTransferSimplified
+	assetIdExists, err := GetAllNftAssetIdOfListAssets()
+	if err != nil {
+		return nil, err
+	}
+	assetTransfers, err := QueryAssetTransfersAndGetResponseOfAllNft(assetIdExists)
 	if err != nil {
 		return nil, err
 	}
@@ -6361,13 +6419,6 @@ func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId strin
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
 	}
-	number, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be less than max value " + strconv.Itoa(number))
-	}
 	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
 }
 
@@ -6527,13 +6578,6 @@ func GetAccountAssetTransferWithPageSizeAndPageNumber(token string, assetId stri
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
 	}
-	number, err := GetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
-	}
 	return GetAccountAssetTransferLimitAndOffset(token, assetId, limit, offset)
 }
 
@@ -6640,13 +6684,6 @@ func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string
 	limit = pageSize
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
-	}
-	number, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
 	}
 	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
 }
@@ -6801,13 +6838,6 @@ func GetAssetManagedUtxoWithPageSizeAndPageNumber(token string, assetId string, 
 	limit = pageSize
 	if pageNumber > 1 {
 		offset = (pageNumber - 1) * pageSize
-	}
-	number, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
-	if err != nil {
-		return nil, err
-	}
-	if pageNumber > number {
-		return nil, errors.New("page number must be greater than max value " + strconv.Itoa(number))
 	}
 	return GetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
 }
@@ -7007,12 +7037,77 @@ func SetGroupFirstAssetMetaAndGetResponse(token string, tweakedGroupKey string, 
 	return PostToSetGroupFirstAssetMeta(token, assetGroupSetRequest)
 }
 
+type GetGroupFirstAssetIdResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    string  `json:"data"`
+}
+
+func RequestToGetGroupFirstAssetId(token string, groupKey string) (string, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_group/get/first_asset_id/group_key/" + groupKey
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response GetGroupFirstAssetMetaResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetGroupFirstAssetIdAndGetResponse(token string, groupKey string) (string, error) {
+	assetMeta, err := RequestToGetGroupFirstAssetId(token, groupKey)
+	if err != nil {
+		return "", err
+	}
+	return assetMeta, nil
+}
+
 // GetGroupFirstAssetMeta
 // @Description: Get group first asset meta
 func GetGroupFirstAssetMeta(token string, groupKey string) string {
 	assetMeta, err := GetGroupFirstAssetMetaAndGetResponse(token, groupKey)
 	if err != nil {
 		return MakeJsonErrorResult(GetGroupFirstAssetMetaAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
+}
+
+// GetGroupFirstAssetId
+// @Description: Get group first asset id
+func GetGroupFirstAssetId(token string, groupKey string) string {
+	assetMeta, err := GetGroupFirstAssetIdAndGetResponse(token, groupKey)
+	if err != nil {
+		return MakeJsonErrorResult(GetGroupFirstAssetIdAndGetResponseErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
 }
@@ -7040,4 +7135,247 @@ func SetGroupFirstAssetMeta(token string, deviceId string, finalizeBatchResponse
 		}
 	}
 	return firstErr
+}
+
+type DeliverProofNeedInfo struct {
+	AssetId   string `json:"asset_id"`
+	GroupKey  string `json:"group_key"`
+	ScriptKey string `json:"script_key"`
+	Outpoint  string `json:"outpoint"`
+}
+
+func GetDeliverProofNeedInfoAndGetResponse(assetId string) (*DeliverProofNeedInfo, error) {
+	response, err := listAssets(true, true, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(response.Assets) == 0 {
+		return nil, errors.New("asset list response null")
+	}
+	for _, asset := range response.Assets {
+		assetGenesisAssetId := hex.EncodeToString(asset.AssetGenesis.AssetId)
+		if assetGenesisAssetId == assetId {
+			deliverProofNeedInfo := DeliverProofNeedInfo{
+				AssetId: assetId,
+			}
+			if asset.AssetGroup != nil && asset.AssetGroup.TweakedGroupKey != nil {
+				deliverProofNeedInfo.GroupKey = hex.EncodeToString(asset.AssetGroup.TweakedGroupKey)
+			}
+			if asset.ScriptKey != nil {
+				deliverProofNeedInfo.ScriptKey = hex.EncodeToString(asset.ScriptKey)
+			}
+			deliverProofNeedInfo.Outpoint = asset.ChainAnchor.AnchorOutpoint
+			return &deliverProofNeedInfo, nil
+		}
+	}
+	return nil, errors.New("asset not found")
+}
+
+func GetDeliverProofNeedInfo(assetId string) string {
+	deliverProofNeedInfo, err := GetDeliverProofNeedInfoAndGetResponse(assetId)
+	if err != nil {
+		MakeJsonErrorResult(GetDeliverProofNeedInfoAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, deliverProofNeedInfo)
+}
+
+type NftTransfer struct {
+	gorm.Model
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+	FromInfo string `json:"from_info"`
+	ToInfo   string `json:"to_info"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255);index"`
+	UserId   int    `json:"user_id" gorm:"index"`
+	Username string `json:"username" gorm:"type:varchar(255);index"`
+}
+
+type NftTransferSetRequest struct {
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+	FromInfo string `json:"from_info"`
+	ToInfo   string `json:"to_info"`
+	DeviceId string `json:"device_id" gorm:"type:varchar(255);index"`
+}
+
+type NftTransferSimplified struct {
+	ID       uint   `gorm:"primarykey"`
+	Txid     string `json:"txid" gorm:"type:varchar(255)"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Time     int    `json:"time"`
+	FromAddr string `json:"from_addr"`
+	ToAddr   string `json:"to_addr"`
+}
+
+func PostToSetNftTransfer(token string, nftTransferSetRequest *NftTransferSetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/nft_transfer/set"
+	requestJsonBytes, err := json.Marshal(nftTransferSetRequest)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func SetNftTransferAndGetResponse(token string, txid string, assetId string, time int, fromAddr string, toAddr string, fromInfo string, toInfo string, deviceId string) (*JsonResult, error) {
+	assetGroupSetRequest := &NftTransferSetRequest{
+		Txid:     txid,
+		AssetId:  assetId,
+		Time:     time,
+		FromAddr: fromAddr,
+		ToAddr:   toAddr,
+		FromInfo: fromInfo,
+		ToInfo:   toInfo,
+		DeviceId: deviceId,
+	}
+	return PostToSetNftTransfer(token, assetGroupSetRequest)
+}
+
+type GetNftTransferByAssetIdResponse struct {
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Code    ErrCode        `json:"code"`
+	Data    *[]NftTransfer `json:"data"`
+}
+
+func RequestToGetNftTransferByAssetId(token string, assetId string) (*[]NftTransfer, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/nft_transfer/get/asset_id/" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetNftTransferByAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetNftTransferByAssetIdAndGetResponse(token string, assetId string) (*[]NftTransfer, error) {
+	nftTransfers, err := RequestToGetNftTransferByAssetId(token, assetId)
+	if err != nil {
+		return nil, err
+	}
+	return nftTransfers, nil
+}
+
+func NftTransferToNftTransferSimplified(nftTransfer NftTransfer) NftTransferSimplified {
+	return NftTransferSimplified{
+		ID:       nftTransfer.ID,
+		Txid:     nftTransfer.Txid,
+		AssetId:  nftTransfer.AssetId,
+		Time:     nftTransfer.Time,
+		FromAddr: nftTransfer.FromAddr,
+		ToAddr:   nftTransfer.ToAddr,
+	}
+}
+
+func NftTransferSliceToNftTransferSimplifiedSlice(nftTransfers *[]NftTransfer) *[]NftTransferSimplified {
+	if nftTransfers == nil {
+		return nil
+	}
+	var NftTransferSimplifiedSlice []NftTransferSimplified
+	for _, nftTransfer := range *nftTransfers {
+		NftTransferSimplifiedSlice = append(NftTransferSimplifiedSlice, NftTransferToNftTransferSimplified(nftTransfer))
+	}
+	return &NftTransferSimplifiedSlice
+}
+
+func GetReceiveAddrByAssetId(assetId string) (string, error) {
+	addrEvents, err := AddrReceivesAndGetEvents("")
+	if err != nil {
+		return "", err
+	}
+	for _, event := range *addrEvents {
+		if event.Addr.AssetID == assetId {
+			return event.Addr.Encoded, nil
+		}
+	}
+	return "", errors.New("not found match addr by asset id")
+}
+
+func SetNftTransferWithoutInfo(token string, txid string, assetId string, time int, fromAddr string, toAddr string, deviceId string) error {
+	_, err := SetNftTransferAndGetResponse(token, txid, assetId, time, fromAddr, toAddr, "", "", deviceId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UploadNftTransfer(token string, deviceId string, txid string, assetId string, _time int, fromAddr string, toAddr string) error {
+	return SetNftTransferWithoutInfo(token, txid, assetId, _time, fromAddr, toAddr, deviceId)
+}
+
+// GetNftTransferByAssetId
+// @Description: Get nft transfer by assetId
+func GetNftTransferByAssetId(token string, assetId string) string {
+	nftTransfers, err := GetNftTransferByAssetIdAndGetResponse(token, assetId)
+	result := NftTransferSliceToNftTransferSimplifiedSlice(nftTransfers)
+	if err != nil {
+		return MakeJsonErrorResult(GetNftTransferByAssetIdAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }

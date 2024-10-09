@@ -438,6 +438,9 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 			if err != nil {
 				return nil, err
 			}
+			if len(leave.Leaves) == 0 {
+				continue
+			}
 			leaveAsset := leave.Leaves[0].Asset
 			issuanceHistoryInfos = append(issuanceHistoryInfos, IssuanceHistoryInfo{
 				IsFairLaunchIssuance: false,
@@ -460,12 +463,12 @@ func GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token string) (*[]Issua
 	serverResult, err := GetServerIssuanceHistoryInfos(token)
 	if err != nil {
 		LogError("", err)
-		return nil, err
+		serverResult = &[]IssuanceHistoryInfo{}
 	}
 	localTapdResult, err := GetLocalTapdIssuanceHistoryInfos()
 	if err != nil {
 		LogError("", err)
-		return nil, err
+		localTapdResult = &[]IssuanceHistoryInfo{}
 	}
 	issuanceHistoryInfos = append(issuanceHistoryInfos, *serverResult...)
 	issuanceHistoryInfos = append(issuanceHistoryInfos, *localTapdResult...)

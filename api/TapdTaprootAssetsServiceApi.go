@@ -15,21 +15,22 @@ import (
 	"strings"
 )
 
+type addrEvent struct {
+	CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
+	Addr                    *JsonResultAddr `json:"addr"`
+	Status                  string          `json:"status"`
+	Outpoint                string          `json:"outpoint"`
+	Txid                    string          `json:"txid"`
+	UtxoAmtSat              int64           `json:"utxo_amt_sat"`
+	TaprootSibling          string          `json:"taproot_sibling"`
+	ConfirmationHeight      int64           `json:"confirmation_height"`
+	HasProof                bool            `json:"has_proof"`
+}
+
 func AddrReceives(assetId string) string {
 	response, err := rpcclient.AddrReceives()
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
-	}
-	type addrEvent struct {
-		CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
-		Addr                    *JsonResultAddr `json:"addr"`
-		Status                  string          `json:"status"`
-		Outpoint                string          `json:"outpoint"`
-		Txid                    string          `json:"txid"`
-		UtxoAmtSat              int64           `json:"utxo_amt_sat"`
-		TaprootSibling          string          `json:"taproot_sibling"`
-		ConfirmationHeight      int64           `json:"confirmation_height"`
-		HasProof                bool            `json:"has_proof"`
 	}
 	var addrEvents []addrEvent
 	for _, event := range response.Events {
@@ -48,6 +49,38 @@ func AddrReceives(assetId string) string {
 		e.TaprootSibling = hex.EncodeToString(event.TaprootSibling)
 		e.ConfirmationHeight = int64(event.ConfirmationHeight)
 		e.HasProof = event.HasProof
+		addrEvents = append(addrEvents, e)
+	}
+	if len(addrEvents) == 0 {
+		return MakeJsonErrorResult(SUCCESS, "NOT_FOUND", nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
+}
+
+func AddrReceivesOfAllNft() string {
+	response, err := rpcclient.AddrReceives()
+	if err != nil {
+		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
+	}
+	var addrEvents []addrEvent
+	for _, event := range response.Events {
+		if event.Addr.AssetType != taprpc.AssetType_COLLECTIBLE {
+			continue
+		}
+		a := JsonResultAddr{}
+		a.GetData(event.Addr)
+		txid, _ := outpointToTransactionAndIndex(event.Outpoint)
+		e := addrEvent{
+			CreationTimeUnixSeconds: int64(event.CreationTimeUnixSeconds),
+			Addr:                    &a,
+			Status:                  event.Status.String(),
+			Outpoint:                event.Outpoint,
+			Txid:                    txid,
+			UtxoAmtSat:              int64(event.UtxoAmtSat),
+			TaprootSibling:          hex.EncodeToString(event.TaprootSibling),
+			ConfirmationHeight:      int64(event.ConfirmationHeight),
+			HasProof:                event.HasProof,
+		}
 		addrEvents = append(addrEvents, e)
 	}
 	if len(addrEvents) == 0 {
@@ -219,6 +252,15 @@ func QueryAssetTransfers(token string, assetId string) string {
 	response, err := QueryAssetTransferSimplified(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+}
+
+func QueryAssetTransfersOfAllNft(token string) string {
+	// @dev: The token is actually not been used.
+	response, err := QueryAssetTransferSimplifiedOfAllNft(token)
+	if err != nil {
+		return MakeJsonErrorResult(QueryAssetTransferSimplifiedOfAllNftErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
@@ -547,10 +589,34 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	if err != nil {
 		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", nil)
 	}
+
+	// Get from addr
+	var formAddr string
+	{
+		if len(addrs) == 1 {
+			addr := addrs[0]
+			var decodedAddr *taprpc.Addr
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if err != nil {
+				LogError("Decode Addr[0] (before send assets)", err)
+			} else {
+				if decodedAddr.AssetType == taprpc.AssetType_COLLECTIBLE {
+					assetId := hex.EncodeToString(decodedAddr.AssetId)
+					formAddr, err = GetReceiveAddrByAssetId(assetId)
+					if err != nil {
+						LogError("Get Receive Addr By AssetId (before send assets)", err)
+					}
+				}
+			}
+		}
+	}
+
 	response, err := sendAssets(addrs, uint32(feeRate))
 	if err != nil {
 		return MakeJsonErrorResult(sendAssetsErr, err.Error(), nil)
 	}
+
+	// Upload Batch Transfer
 	{
 		// @dev: decode addrs
 		var batchTransfersRequest []BatchTransferRequest
@@ -590,6 +656,8 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			// @dev: Do not return error
 		}
 	}
+
+	// Asset Recommend
 	{
 		var decodedAddr *taprpc.Addr
 		for _, addr := range addrs {
@@ -609,7 +677,32 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			}
 		}
 	}
+
 	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
+
+	// Upload Nft transfer
+	{
+		// only one addr when send collectible asset
+		if len(addrs) == 1 {
+			addr := addrs[0]
+			var decodedAddr *taprpc.Addr
+			decodedAddr, err = rpcclient.DecodeAddr(addr)
+			if err != nil {
+				LogError("Decode Addr[0]", err)
+			} else {
+				// decode success and type is right
+				if decodedAddr.AssetType == taprpc.AssetType_COLLECTIBLE {
+					assetId := hex.EncodeToString(decodedAddr.AssetId)
+					_time := GetTimestamp()
+					err = UploadNftTransfer(token, deviceId, txid, assetId, _time, formAddr, addr)
+					if err != nil {
+						LogError("Upload NftTransfer", err)
+					}
+				}
+			}
+		}
+	}
+
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
@@ -1025,6 +1118,105 @@ func ListNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 	return &result, nil
 }
 
+func ListNftAssetsIncludeSpentAndGetResponse() (*[]ListAssetsResponse, error) {
+	processed, err := ListAssetsProcessed(false, true, false)
+	if err != nil {
+		return nil, err
+	}
+	var result []ListAssetsResponse
+	for index, pr := range *processed {
+		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
+			//pr.IsSpent = true
+			result = append(result, (*processed)[index])
+		}
+	}
+	return &result, nil
+}
+
+func ListSpentNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
+	response, err := ListNftAssetsIncludeSpentAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	assetNotZero := make(map[string]bool)
+	var spentAssets []ListAssetsResponse
+	for _, asset := range *response {
+		// record not zero assets
+		if asset.Amount != 0 {
+			assetNotZero[asset.AssetGenesis.AssetType] = true
+		}
+		// extract spent records
+		if asset.IsSpent {
+			spentAssets = append(spentAssets, asset)
+		}
+	}
+	zeroAsset := make(map[string]ListAssetsResponse)
+	for _, asset := range spentAssets {
+		// filter not zero assets
+		if !(assetNotZero[asset.AssetGenesis.AssetID]) {
+			// replace new record
+			zeroAsset[asset.AssetGenesis.AssetID] = asset
+		}
+	}
+	var result []ListAssetsResponse
+	for _, asset := range zeroAsset {
+		result = append(result, asset)
+	}
+	return &result, nil
+}
+
+// GetSpentNftAssets
+// @Description: Get spent nft assets
+func GetSpentNftAssets() string {
+	response, err := GetSpentNftAssetsAndGetResponse()
+	if err != nil {
+		return MakeJsonErrorResult(GetSpentNftAssetsAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func GetSpentNftAssetsAndGetResponse() (*[]ListAssetsSimplifiedResponse, error) {
+	response, err := ListSpentNftAssetsAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	result := ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice(response)
+	return result, nil
+}
+
+type ListAssetsSimplifiedResponse struct {
+	AssetID         string `json:"asset_id"`
+	Name            string `json:"name"`
+	AssetType       string `json:"asset_type"`
+	Amount          int    `json:"amount"`
+	IsSpent         bool   `json:"is_spent"`
+	TweakedGroupKey string `json:"tweaked_group_key"`
+}
+
+func ListAssetsResponseToListAssetsSimplifiedResponse(listAssetsResponse ListAssetsResponse) ListAssetsSimplifiedResponse {
+	return ListAssetsSimplifiedResponse{
+		AssetID:         listAssetsResponse.AssetGenesis.AssetID,
+		Name:            listAssetsResponse.AssetGenesis.Name,
+		AssetType:       listAssetsResponse.AssetGenesis.AssetType,
+		Amount:          listAssetsResponse.Amount,
+		IsSpent:         listAssetsResponse.IsSpent,
+		TweakedGroupKey: listAssetsResponse.AssetGroup.TweakedGroupKey,
+	}
+}
+
+// ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice
+// @Description: Simplify ListAssetsResponse
+func ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice(listAssetsResponseSlice *[]ListAssetsResponse) *[]ListAssetsSimplifiedResponse {
+	if listAssetsResponseSlice == nil {
+		return nil
+	}
+	var listAssetsSimplifiedResponseSlice []ListAssetsSimplifiedResponse
+	for _, asset := range *listAssetsResponseSlice {
+		listAssetsSimplifiedResponseSlice = append(listAssetsSimplifiedResponseSlice, ListAssetsResponseToListAssetsSimplifiedResponse(asset))
+	}
+	return &listAssetsSimplifiedResponseSlice
+}
+
 func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 	listNftAssets, err := ListNftAssetsAndGetResponse()
 	if err != nil {
@@ -1077,6 +1269,13 @@ func ListNftGroups() string {
 			}
 			meta := Meta{}
 			meta.FetchAssetMeta(false, hex.EncodeToString(group.Assets[0].Id))
+			// @fix: Do not return group if we cannot find assets in group
+			{
+				assets, err := GetGroupAssets(key)
+				if err != nil || assets == nil || len(*assets) == 0 {
+					continue
+				}
+			}
 			Groups = append(Groups, Group{
 				GroupKey:  key,
 				GroupName: meta.GroupName,

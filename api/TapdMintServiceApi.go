@@ -246,7 +246,6 @@ func finalizeBatch(shortResponse bool, feeRate int, token string, deviceId strin
 		LogError("", err)
 		// @dev: Do not return
 	}
-
 	return MakeJsonErrorResult(SUCCESS, "", FinalizeBatchResponseToPendingBatch(response))
 }
 
