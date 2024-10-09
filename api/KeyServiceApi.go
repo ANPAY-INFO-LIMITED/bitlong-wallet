@@ -16,6 +16,9 @@ func GenerateKeys(mnemonic string) string {
 	fmt.Printf("errl1:%x", err)
 	return publicKeyHex
 }
+func GetPrivateKey() string {
+	return service.GetPrivateKey()
+}
 
 func GetPublicKey() string {
 	pb, err := service.GetPublicRawKey()
