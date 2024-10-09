@@ -74,6 +74,9 @@ func deliverProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) (s
 		return "", InputErr
 	}
 	loc := universeCourier.NewProofLoc(assetId, groupKey, scriptkey, outpoint)
+	if loc == nil {
+		return "", FetchProofErr
+	}
 	fetchProof, err := universeCourier.FetchProof(*loc)
 	if err != nil {
 		return "", FetchProofErr
