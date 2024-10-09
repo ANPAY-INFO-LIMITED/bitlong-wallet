@@ -1269,6 +1269,13 @@ func ListNftGroups() string {
 			}
 			meta := Meta{}
 			meta.FetchAssetMeta(false, hex.EncodeToString(group.Assets[0].Id))
+			// @fix: Do not return group if we cannot find assets in group
+			{
+				assets, err := GetGroupAssets(key)
+				if err != nil || assets == nil || len(*assets) == 0 {
+					continue
+				}
+			}
 			Groups = append(Groups, Group{
 				GroupKey:  key,
 				GroupName: meta.GroupName,
