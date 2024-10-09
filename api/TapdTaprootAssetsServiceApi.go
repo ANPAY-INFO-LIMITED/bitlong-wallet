@@ -1118,6 +1118,97 @@ func ListNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 	return &result, nil
 }
 
+func ListNftAssetsIncludeSpentAndGetResponse() (*[]ListAssetsResponse, error) {
+	processed, err := ListAssetsProcessed(false, true, false)
+	if err != nil {
+		return nil, err
+	}
+	var result []ListAssetsResponse
+	for index, pr := range *processed {
+		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
+			//pr.IsSpent = true
+			result = append(result, (*processed)[index])
+		}
+	}
+	return &result, nil
+}
+
+func ListSpentNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
+	response, err := ListNftAssetsIncludeSpentAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	assetNotZero := make(map[string]bool)
+	var spentAssets []ListAssetsResponse
+	for _, asset := range *response {
+		// record not zero assets
+		if asset.Amount != 0 {
+			assetNotZero[asset.AssetGenesis.AssetType] = true
+		}
+		// extract spent records
+		if asset.IsSpent {
+			spentAssets = append(spentAssets, asset)
+		}
+	}
+	zeroAsset := make(map[string]ListAssetsResponse)
+	for _, asset := range spentAssets {
+		// filter not zero assets
+		if !(assetNotZero[asset.AssetGenesis.AssetID]) {
+			// replace new record
+			zeroAsset[asset.AssetGenesis.AssetID] = asset
+		}
+	}
+	var result []ListAssetsResponse
+	for _, asset := range zeroAsset {
+		result = append(result, asset)
+	}
+	return &result, nil
+}
+
+// GetSpentNftAssets
+// @Description: Get spent nft assets
+func GetSpentNftAssets() (*[]ListAssetsSimplifiedResponse, error) {
+	response, err := ListSpentNftAssetsAndGetResponse()
+	if err != nil {
+		return nil, err
+	}
+	result := ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice(response)
+	return result, nil
+}
+
+type ListAssetsSimplifiedResponse struct {
+	AssetID         string `json:"asset_id"`
+	Name            string `json:"name"`
+	AssetType       string `json:"asset_type"`
+	Amount          int    `json:"amount"`
+	IsSpent         bool   `json:"is_spent"`
+	TweakedGroupKey string `json:"tweaked_group_key"`
+}
+
+func ListAssetsResponseToListAssetsSimplifiedResponse(listAssetsResponse ListAssetsResponse) ListAssetsSimplifiedResponse {
+	return ListAssetsSimplifiedResponse{
+		AssetID:         listAssetsResponse.AssetGenesis.AssetID,
+		Name:            listAssetsResponse.AssetGenesis.Name,
+		AssetType:       listAssetsResponse.AssetGenesis.AssetType,
+		Amount:          listAssetsResponse.Amount,
+		IsSpent:         listAssetsResponse.IsSpent,
+		TweakedGroupKey: listAssetsResponse.AssetGroup.TweakedGroupKey,
+	}
+}
+
+// ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice
+// @Description: Simplify ListAssetsResponse
+func ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice(listAssetsResponseSlice *[]ListAssetsResponse) *[]ListAssetsSimplifiedResponse {
+	if listAssetsResponseSlice == nil {
+		return nil
+	}
+	var listAssetsSimplifiedResponseSlice []ListAssetsSimplifiedResponse
+	for _, asset := range *listAssetsResponseSlice {
+		listAssetsSimplifiedResponseSlice = append(listAssetsSimplifiedResponseSlice, ListAssetsResponseToListAssetsSimplifiedResponse(asset))
+	}
+	return &listAssetsSimplifiedResponseSlice
+}
+
 func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 	listNftAssets, err := ListNftAssetsAndGetResponse()
 	if err != nil {
