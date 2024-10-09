@@ -1167,7 +1167,15 @@ func ListSpentNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 
 // GetSpentNftAssets
 // @Description: Get spent nft assets
-func GetSpentNftAssets() (*[]ListAssetsSimplifiedResponse, error) {
+func GetSpentNftAssets() string {
+	response, err := GetSpentNftAssetsAndGetResponse()
+	if err != nil {
+		return MakeJsonErrorResult(GetSpentNftAssetsAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func GetSpentNftAssetsAndGetResponse() (*[]ListAssetsSimplifiedResponse, error) {
 	response, err := ListSpentNftAssetsAndGetResponse()
 	if err != nil {
 		return nil, err
