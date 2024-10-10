@@ -16,7 +16,7 @@ func GenerateKeys(mnemonic string) string {
 	fmt.Printf("errl1:%x", err)
 	return publicKeyHex
 }
-func GetPrivateKey() string {
+func GetPrivateKey() (string, error) {
 	return service.GetPrivateKey()
 }
 
