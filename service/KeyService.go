@@ -24,10 +24,17 @@ type PkInfo struct {
 	NpubKey string `json:"npubKey"`
 }
 
-var privateKeyHex string
-
-func GetPrivateKey() string {
-	return privateKeyHex
+func GetPrivateKey() (string, error) {
+	retrievedKey, err := readDb()
+	if err != nil {
+		fmt.Println("err:", err)
+	}
+	if retrievedKey != nil {
+		PrivateKeyHex := fmt.Sprintf("%064x", retrievedKey.PrivateKey)
+		fmt.Println("PrivateKey:", PrivateKeyHex)
+		return PrivateKeyHex, nil
+	}
+	return "", fmt.Errorf("no key found")
 }
 
 func GenerateKeys(mnemonic, passphrase string) (string, error) {
@@ -52,7 +59,7 @@ func GenerateKeys(mnemonic, passphrase string) (string, error) {
 	}
 	privKey, _ := btcec.PrivKeyFromBytes(childKey.Key)
 
-	privateKeyHex = fmt.Sprintf("%064x", privKey.Serialize())
+	privateKeyHex := fmt.Sprintf("%064x", privKey.Serialize())
 	publicKeyHex, err := getPublicKey(privateKeyHex)
 	if err != nil {
 		return "", err
