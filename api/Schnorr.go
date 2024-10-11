@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	_ "golang.org/x/crypto/sha3"
 )
 
 func SignSchnorr(hexPrivateKey string, message string) (string, error) {
