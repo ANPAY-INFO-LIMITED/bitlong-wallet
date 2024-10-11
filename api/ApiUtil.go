@@ -184,6 +184,8 @@ const (
 	GetDeliverProofNeedInfoAndGetResponseErr
 	GetNftTransferByAssetIdAndGetResponseErr
 	GetSpentNftAssetsAndGetResponseErr
+	SchnorrSignErr
+	SchnorrVerifyErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -336,6 +338,8 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetDeliverProofNeedInfoAndGetResponseErr:                      "获取发送证明文件操作所需前置信息并获取响应错误",
 	GetNftTransferByAssetIdAndGetResponseErr:                      "通过资产ID查询NFT转账记录并获取响应错误",
 	GetSpentNftAssetsAndGetResponseErr:                            "获取已转出的NFT资产并获取响应错误",
+	SchnorrSignErr:                                                "Schnorr签名错误",
+	SchnorrVerifyErr:                                              "Schnorr验证错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
