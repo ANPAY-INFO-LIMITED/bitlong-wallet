@@ -11,6 +11,7 @@ import (
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,6 +26,17 @@ type addrEvent struct {
 	TaprootSibling          string          `json:"taproot_sibling"`
 	ConfirmationHeight      int64           `json:"confirmation_height"`
 	HasProof                bool            `json:"has_proof"`
+}
+
+func SortAddrEvents(addrEvents *[]addrEvent) *[]addrEvent {
+	if addrEvents == nil {
+		return nil
+	}
+	SortTimeDescInAssetTransfers := func(i, j int) bool {
+		return (*addrEvents)[i].CreationTimeUnixSeconds > (*addrEvents)[j].CreationTimeUnixSeconds
+	}
+	sort.Slice(*addrEvents, SortTimeDescInAssetTransfers)
+	return addrEvents
 }
 
 func AddrReceives(assetId string) string {
@@ -54,7 +66,8 @@ func AddrReceives(assetId string) string {
 	if len(addrEvents) == 0 {
 		return MakeJsonErrorResult(SUCCESS, "NOT_FOUND", nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, "", addrEvents)
+	result := SortAddrEvents(&addrEvents)
+	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
 func AddrReceivesOfAllNft() string {
@@ -245,15 +258,27 @@ func ListGroups() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
+func SortAssetTransferSimplified(assetTransfers *[]AssetTransferSimplified) *[]AssetTransferSimplified {
+	if assetTransfers == nil {
+		return nil
+	}
+	SortTimeDescInAssetTransfers := func(i, j int) bool {
+		return (*assetTransfers)[i].Time > (*assetTransfers)[j].Time
+	}
+	sort.Slice(*assetTransfers, SortTimeDescInAssetTransfers)
+	return assetTransfers
+}
+
 // QueryAssetTransfers
 // @Description: ListTransfers lists outbound asset transfer tracked by the target daemon.
 func QueryAssetTransfers(token string, assetId string) string {
 	// @dev: The token is actually not been used.
-	response, err := QueryAssetTransferSimplified(token, assetId)
+	assetTransfers, err := QueryAssetTransferSimplified(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
+	assetTransfers = SortAssetTransferSimplified(assetTransfers)
+	return MakeJsonErrorResult(SUCCESS, SuccessError, assetTransfers)
 }
 
 func QueryAssetTransfersOfAllNft(token string) string {
@@ -441,6 +466,17 @@ func GetTimeForManagedUtxoByBitcoind(token string, managedUtxos *[]ManagedUtxo) 
 	return managedUtxos, nil
 }
 
+func SortAssetUtxos(managedUtxos *[]ManagedUtxo) *[]ManagedUtxo {
+	if managedUtxos == nil {
+		return nil
+	}
+	SortTimeDescInAssetUtxos := func(i, j int) bool {
+		return (*managedUtxos)[i].Time > (*managedUtxos)[j].Time
+	}
+	sort.Slice(*managedUtxos, SortTimeDescInAssetUtxos)
+	return managedUtxos
+}
+
 func AssetUtxos(token string, assetId string) string {
 	response, err := ListUtxosAndGetResponse(true)
 	if err != nil {
@@ -450,8 +486,9 @@ func AssetUtxos(token string, assetId string) string {
 	managedUtxos = ManagedUtxosFilterByAssetId(managedUtxos, assetId)
 	managedUtxos, err = GetTimeForManagedUtxoByBitcoind(token, managedUtxos)
 	if err != nil {
-		return MakeJsonErrorResult(GetTimeForManagedUtxoByBitcoindErr, err.Error(), nil)
+		LogError("GetTimeForManagedUtxoByBitcoind", err)
 	}
+	managedUtxos = SortAssetUtxos(managedUtxos)
 	return MakeJsonErrorResult(SUCCESS, SuccessError, managedUtxos)
 }
 

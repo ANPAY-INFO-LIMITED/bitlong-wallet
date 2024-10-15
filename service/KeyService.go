@@ -30,9 +30,11 @@ func GetPrivateKey() (string, error) {
 		fmt.Println("err:", err)
 	}
 	if retrievedKey != nil {
-		PrivateKeyHex := fmt.Sprintf("%064x", retrievedKey.PrivateKey)
-		fmt.Println("PrivateKey:", PrivateKeyHex)
-		return PrivateKeyHex, nil
+		//PrivateKeyHex := fmt.Sprintf("%064x", retrievedKey.PrivateKey)
+		//fmt.Println("PrivateKey:", PrivateKeyHex)
+		//return PrivateKeyHex, nil
+		privateKey := retrievedKey.PrivateKey
+		return privateKey, nil
 	}
 	return "", fmt.Errorf("no key found")
 }
@@ -139,7 +141,7 @@ func readDb() (*KeyInfo, error) {
 		log.Printf("Failed to read key %s: %s", keyId, err)
 		return nil, err
 	} else {
-		fmt.Printf("Key: %+v\n", keyInfo)
+		//fmt.Printf("Key: %+v\n", keyInfo)
 		return keyInfo, nil
 	}
 }
