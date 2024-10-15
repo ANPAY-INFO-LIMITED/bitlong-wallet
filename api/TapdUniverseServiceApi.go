@@ -269,6 +269,36 @@ func SyncUniverse(universeHost string, assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
+func SyncUniverseByGroup(universeHost string, groupKey string) string {
+	var targets []*universerpc.SyncTarget
+	universeID := &universerpc.ID{
+		Id: &universerpc.ID_GroupKeyStr{
+			GroupKeyStr: groupKey,
+		},
+		ProofType: universerpc.ProofType_PROOF_TYPE_ISSUANCE,
+	}
+	if universeID != nil {
+		targets = append(targets, &universerpc.SyncTarget{
+			Id: universeID,
+		})
+	}
+	var defaultHost string
+	switch base.NetWork {
+	case base.UseMainNet:
+		defaultHost = "universe.lightning.finance:10029"
+	case base.UseTestNet:
+		defaultHost = "testnet.universe.lightning.finance:10029"
+	}
+	if universeHost == "" {
+		universeHost = defaultHost
+	}
+	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	if err != nil {
+		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
 func UniverseStats() {}
 
 func queryAssetRoot(id string) (*universerpc.QueryRootResponse, error) {
