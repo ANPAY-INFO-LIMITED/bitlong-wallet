@@ -9,7 +9,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
-	"github.com/wallet/service/rpcclient"
 	"google.golang.org/protobuf/proto"
 	"log"
 	"math"
@@ -776,13 +775,13 @@ func TxHashConversion(txHash string) string {
 }
 
 func FixAsset(output string) string {
-	str, err := rpcclient.FixAsset(output, false)
-	if err != nil {
-		fmt.Println(err)
-		return MakeJsonErrorResult(DefaultErr, "FixAsset error, please check the output parameter and whether the asset needs to be repaired", nil)
-	}
-	fmt.Println(str)
-	return MakeJsonErrorResult(SUCCESS, "", str)
+	//str, err := rpcclient.FixAsset(output, false)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return MakeJsonErrorResult(DefaultErr, "FixAsset error, please check the output parameter and whether the asset needs to be repaired", nil)
+	//}
+	//fmt.Println(str)
+	return MakeJsonErrorResult(SUCCESS, "", "str")
 }
 
 // GetRandomNumber
