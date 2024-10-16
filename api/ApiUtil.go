@@ -186,6 +186,7 @@ const (
 	GetSpentNftAssetsAndGetResponseErr
 	SchnorrSignErr
 	SchnorrVerifyErr
+	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -340,6 +341,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetSpentNftAssetsAndGetResponseErr:                            "获取已转出的NFT资产并获取响应错误",
 	SchnorrSignErr:                                                "Schnorr签名错误",
 	SchnorrVerifyErr:                                              "Schnorr验证错误",
+	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr:         "通过资产ID获取托管资产余额用户持有总量错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {

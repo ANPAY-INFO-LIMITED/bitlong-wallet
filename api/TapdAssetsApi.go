@@ -6121,7 +6121,7 @@ type AccountAssetBalanceExtend struct {
 	Username  string ` json:"username"`
 }
 
-type GetAccountAssetBalanceByAssetId struct {
+type GetAccountAssetBalanceByAssetIdResponse struct {
 	Success bool                         `json:"success"`
 	Error   string                       `json:"error"`
 	Code    ErrCode                      `json:"code"`
@@ -6157,7 +6157,7 @@ func RequestToGetAccountAssetBalanceByAssetId(token string, assetId string) (*[]
 	if err != nil {
 		return nil, err
 	}
-	var response GetAccountAssetBalanceByAssetId
+	var response GetAccountAssetBalanceByAssetIdResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
@@ -6170,6 +6170,67 @@ func RequestToGetAccountAssetBalanceByAssetId(token string, assetId string) (*[]
 
 func GetAccountAssetBalanceByAssetIdAndGetResponse(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
 	return RequestToGetAccountAssetBalanceByAssetId(token, assetId)
+}
+
+type GetAccountAssetBalanceUserHoldByAssetIdResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    int     `json:"data"`
+}
+
+func RequestToGetAccountAssetBalanceUserHoldTotalAmountByAssetId(token string, assetId string) (int, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/account_asset/balance/query/total_amount?asset_id=" + assetId
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return 0, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return 0, err
+	}
+	var response GetAccountAssetBalanceUserHoldByAssetIdResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	if response.Error != "" {
+		return 0, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAccountAssetBalanceUserHoldTotalAmountByAssetId(token string, assetId string) (int, error) {
+	return RequestToGetAccountAssetBalanceUserHoldTotalAmountByAssetId(token, assetId)
+}
+
+// GetAccountAssetBalanceUserHoldTotalAmount
+// @Description: Get account asset balance user hold total amount
+func GetAccountAssetBalanceUserHoldTotalAmount(token string, assetId string) string {
+	totalAmount, err := GetAccountAssetBalanceUserHoldTotalAmountByAssetId(token, assetId)
+	if err != nil {
+		return MakeJsonErrorResult(GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), totalAmount)
 }
 
 type AssetIdAndAccountAssetBalanceExtends struct {
