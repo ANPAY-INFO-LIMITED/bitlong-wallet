@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
+	"github.com/lightninglabs/taproot-assets/tapdb"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"google.golang.org/protobuf/proto"
@@ -830,4 +831,30 @@ func GetNowTimeStringWithHyphens() string {
 	now := time.Now().Format("2006-01-02-15-04-05.000000")
 	now = strings.ReplaceAll(now, ".", "-")
 	return now
+}
+
+// todo:To be optimized
+// 1.Memory risk
+// 2.Use db
+
+func DbSetTempStoreMemory() {
+	db := tapdb.GetTestDB()
+	// 设置PRAGMA temp_store=2，将临时文件存储在内存中
+	_, err := db.Exec("PRAGMA temp_store = 2;")
+	if err != nil {
+		fmt.Println("设置PRAGMA失败:", err)
+		return
+	}
+	fmt.Println("成功设置PRAGMA temp_store=2")
+}
+
+func DbSetTempStoreDefault() {
+	db := tapdb.GetTestDB()
+	// 设置PRAGMA temp_store=2，将临时文件存储在内存中
+	_, err := db.Exec("PRAGMA temp_store = 0;")
+	if err != nil {
+		fmt.Println("设置PRAGMA失败:", err)
+		return
+	}
+	fmt.Println("成功设置PRAGMA temp_store=0")
 }

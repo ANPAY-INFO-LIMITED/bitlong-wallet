@@ -1,5 +1,5 @@
-//go:build !btlapi
-// +build !btlapi
+//go:build btlapi
+// +build btlapi
 
 package tapdb
 
@@ -75,6 +75,12 @@ type SqliteStore struct {
 	*BaseDB
 }
 
+var TestDB *sql.DB
+
+func GetTestDB() *sql.DB {
+	return TestDB
+}
+
 // NewSqliteStore attempts to open a new sqlite database based on the passed
 // config.
 func NewSqliteStore(cfg *SqliteConfig) (*SqliteStore, error) {
@@ -146,6 +152,7 @@ func NewSqliteStore(cfg *SqliteConfig) (*SqliteStore, error) {
 			Queries: queries,
 		},
 	}
+	TestDB = db
 
 	// Now that the database is open, populate the database with our set of
 	// schemas based on our embedded in-memory file system.
