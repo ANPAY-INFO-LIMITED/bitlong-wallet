@@ -292,7 +292,7 @@ func SyncUniverseByGroup(universeHost string, groupKey string) string {
 	if universeHost == "" {
 		universeHost = defaultHost
 	}
-	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	response, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_ISSUANCE_ONLY)
 	if err != nil {
 		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
