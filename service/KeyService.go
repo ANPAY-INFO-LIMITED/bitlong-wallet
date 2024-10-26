@@ -1,6 +1,9 @@
 package service
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -8,6 +11,8 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/nbd-wtf/go-nostr"
+	"math/rand"
+	"strings"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/tyler-smith/go-bip32"
@@ -205,6 +210,129 @@ func GetPublicKey() (string, string, error) {
 	return publicKeyHex, address, nil
 }
 
+// GetPublicKey 增强版获取公钥函数
+func GetNewPublicKey() (string, string, error) {
+	// 1. 从数据库读取密钥
+	retrievedKey, err := readDb()
+	if err != nil {
+		fmt.Printf("err is :%v\n", err)
+		return "", "", err
+	}
+
+	// 2. 转换为64位十六进制格式
+	publicKeyHex := fmt.Sprintf("%064X", retrievedKey.PublicKey)
+	fmt.Println("publicKeyHex", publicKeyHex)
+
+	// 3. 获取nostr地址
+	nostrAddress, err := getNoStrAddress(publicKeyHex)
+	if err != nil {
+		return "", "", err
+	}
+
+	// 4. 加密nostr地址
+	encryptedAddress, err := encryptNostrAddress(nostrAddress)
+	if err != nil {
+		return "", "", fmt.Errorf("encrypt address error: %v", err)
+	}
+
+	return publicKeyHex, encryptedAddress, nil
+}
+
+// insertRandomValues 在固定位置插入随机值
+func insertRandomValues(publicKeyHex string) (string, error) {
+	// 生成8位随机值
+	randomBytes := make([]byte, 4)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", err
+	}
+	randomValue := hex.EncodeToString(randomBytes) // 8位十六进制
+
+	// 每16个字符插入随机值
+	var result strings.Builder
+	for i := 0; i < len(publicKeyHex); i += 16 {
+		end := i + 16
+		if end > len(publicKeyHex) {
+			end = len(publicKeyHex)
+		}
+		result.WriteString(publicKeyHex[i:end])
+		if end < len(publicKeyHex) {
+			result.WriteString("_")
+			result.WriteString(randomValue)
+		}
+	}
+
+	return result.String(), nil
+}
+
+// encryptPublicKey AES加密公钥
+func encryptNostrAddress(address string) (string, error) {
+	// 1. 插入随机值
+	addressWithRandom, err := insertRandomValues(address)
+	if err != nil {
+		return "", err
+	}
+	// 2. AES加密
+	return aesEncrypt(addressWithRandom)
+}
+func aesEncrypt(data string) (string, error) {
+	// 1. 验证输入
+	if len(data) == 0 {
+		return "", fmt.Errorf("empty data")
+	}
+
+	// 2. AES密钥 (32字节 for AES-256)
+	key := []byte("YourAESKey32BytesLongForSecurity!")
+	if len(key) != 32 {
+		return "", fmt.Errorf("invalid key size: must be 32 bytes")
+	}
+
+	// 3. 创建cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("create cipher error: %v", err)
+	}
+
+	// 4. 生成随机IV
+	iv := make([]byte, aes.BlockSize)
+	if _, err := rand.Read(iv); err != nil {
+		return "", fmt.Errorf("generate IV error: %v", err)
+	}
+
+	// 5. PKCS7填充（使用正确的块大小）
+	paddedData := pkcs7Pad([]byte(data), aes.BlockSize)
+
+	// 6. 创建加密文本缓冲区
+	ciphertext := make([]byte, len(paddedData))
+
+	// 7. 加密
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(ciphertext, paddedData)
+
+	// 8. 组合IV和密文
+	combined := make([]byte, len(iv)+len(ciphertext))
+	copy(combined, iv)
+	copy(combined[len(iv):], ciphertext)
+
+	// 9. 返回十六进制编码的结果
+	return hex.EncodeToString(combined), nil
+}
+
+// PKCS7填充函数
+func pkcs7Pad(data []byte, blockSize int) []byte {
+	// 1. 验证块大小
+	if blockSize <= 0 || blockSize > 256 {
+		panic("invalid block size")
+	}
+
+	// 2. 计算需要填充的长度
+	padding := blockSize - len(data)%blockSize
+
+	// 3. 创建填充数据
+	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+
+	// 4. 添加填充
+	return append(data, padText...)
+}
 func GetJsonPublicKey() (string, error) {
 	var pkInfo PkInfo
 	retrievedKey, err := readDb()

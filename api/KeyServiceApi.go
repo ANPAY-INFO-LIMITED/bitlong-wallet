@@ -44,6 +44,14 @@ func GetNPublicKey() string {
 	}
 	return nPub
 }
+func GetNBPublicKey() string {
+	_, nPub, err := service.GetNewPublicKey()
+	if err != nil {
+		fmt.Printf("GetNPublicKey->errl1:%x", err)
+		return ""
+	}
+	return nPub
+}
 func GetJsonPublicKey() string {
 	keyInfo, err := service.GetJsonPublicKey()
 	if err != nil {
