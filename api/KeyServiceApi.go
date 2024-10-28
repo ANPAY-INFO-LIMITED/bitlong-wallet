@@ -69,3 +69,7 @@ func SignMess(message string) string {
 	}
 	return sign
 }
+func Main111() {
+	GenerateKeys("about system unfair bullet bean endorse control wrist isolate pulse warfare risk picnic owner fantasy chase truck amazing clip marine rib baby attract blade")
+	fmt.Printf("NBPublicKey:->" + GetNBPublicKey())
+}

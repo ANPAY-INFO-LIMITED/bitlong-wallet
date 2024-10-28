@@ -281,7 +281,7 @@ func aesEncrypt(data string) (string, error) {
 	}
 
 	// 2. AES密钥 (32字节 for AES-256)
-	key := []byte("YourAESKey32BytesLongForSecurity!")
+	key := []byte("YourAESKey32BytesLongForSecurity")
 	if len(key) != 32 {
 		return "", fmt.Errorf("invalid key size: must be 32 bytes")
 	}
