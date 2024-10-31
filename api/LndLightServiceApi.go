@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -8,9 +9,11 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
+	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 )
@@ -47,12 +50,189 @@ func getInfoOfLnd() (*lnrpc.GetInfoResponse, error) {
 	if err != nil {
 		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
 	}
-
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.GetInfoRequest{}
 	response, err := client.GetInfo(context.Background(), request)
 	return response, err
+}
+
+type GetInfoFeature struct {
+	Key        uint32 `json:"key"`
+	Name       string `json:"name"`
+	IsRequired bool   `json:"is_required"`
+	IsKnown    bool   `json:"is_known"`
+}
+
+type GetInfoChain struct {
+	Chain   string `json:"chain"`
+	Network string `json:"network"`
+}
+
+type GetInfoResponse struct {
+	Version                   string                       `json:"version"`
+	CommitHash                string                       `json:"commit_hash"`
+	IdentityPubkey            string                       `json:"identity_pubkey"`
+	Alias                     string                       `json:"alias"`
+	Color                     string                       `json:"color"`
+	NumPendingChannels        uint32                       `json:"num_pending_channels"`
+	NumActiveChannels         uint32                       `json:"num_active_channels"`
+	NumInactiveChannels       uint32                       `json:"num_inactive_channels"`
+	NumPeers                  uint32                       `json:"num_peers"`
+	BlockHeight               uint32                       `json:"block_height"`
+	BlockHash                 string                       `json:"block_hash"`
+	BestHeaderTimestamp       int64                        `json:"best_header_timestamp"`
+	SyncedToChain             bool                         `json:"synced_to_chain"`
+	SyncedToGraph             bool                         `json:"synced_to_graph"`
+	Testnet                   bool                         `json:"testnet"`
+	Chains                    []GetInfoChain               `json:"chains"`
+	Uris                      []string                     `json:"uris"`
+	Features                  []GetInfoFeature             `json:"features"`
+	RequireHtlcInterceptor    bool                         `json:"require_htlc_interceptor"`
+	StoreFinalHtlcResolutions bool                         `json:"store_final_htlc_resolutions"`
+	BitcoindGetBlockchainInfo *PostGetBlockchainInfoResult `json:"bitcoind_get_blockchain_info"`
+}
+
+type PostGetBlockchainInfoResult struct {
+	Chain                string  `json:"chain"`
+	Blocks               int     `json:"blocks"`
+	Headers              int     `json:"headers"`
+	Bestblockhash        string  `json:"bestblockhash"`
+	Difficulty           float64 `json:"difficulty"`
+	Time                 int     `json:"time"`
+	Mediantime           int     `json:"mediantime"`
+	Verificationprogress float64 `json:"verificationprogress"`
+	Initialblockdownload bool    `json:"initialblockdownload"`
+	Chainwork            string  `json:"chainwork"`
+	SizeOnDisk           int     `json:"size_on_disk"`
+	Pruned               bool    `json:"pruned"`
+	Warnings             string  `json:"warnings"`
+}
+
+type GetBlockchainInfoResponse struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *PostGetBlockchainInfoResult `json:"data"`
+}
+
+func ProcessGetInfoResponse(getInfoResponse *lnrpc.GetInfoResponse, getBlockchainInfo *PostGetBlockchainInfoResult) *GetInfoResponse {
+	if getInfoResponse == nil {
+		return nil
+	}
+	var chains []GetInfoChain
+	var features []GetInfoFeature
+	if getInfoResponse.Features != nil {
+		for k, f := range getInfoResponse.Features {
+			features = append(features, GetInfoFeature{
+				Key:        k,
+				Name:       f.Name,
+				IsRequired: f.IsRequired,
+				IsKnown:    f.IsKnown,
+			})
+		}
+	}
+	if getInfoResponse.Chains != nil {
+		for _, c := range getInfoResponse.Chains {
+			chains = append(chains, GetInfoChain{
+				Chain:   c.Chain,
+				Network: c.Network,
+			})
+		}
+	}
+	return &GetInfoResponse{
+		Version:                   getInfoResponse.Version,
+		CommitHash:                getInfoResponse.CommitHash,
+		IdentityPubkey:            getInfoResponse.IdentityPubkey,
+		Alias:                     getInfoResponse.Alias,
+		Color:                     getInfoResponse.Color,
+		NumPendingChannels:        getInfoResponse.NumPendingChannels,
+		NumActiveChannels:         getInfoResponse.NumActiveChannels,
+		NumInactiveChannels:       getInfoResponse.NumInactiveChannels,
+		NumPeers:                  getInfoResponse.NumPeers,
+		BlockHeight:               getInfoResponse.BlockHeight,
+		BlockHash:                 getInfoResponse.BlockHash,
+		BestHeaderTimestamp:       getInfoResponse.BestHeaderTimestamp,
+		SyncedToChain:             getInfoResponse.SyncedToChain,
+		SyncedToGraph:             getInfoResponse.SyncedToGraph,
+		Testnet:                   getInfoResponse.Testnet,
+		Chains:                    chains,
+		Uris:                      getInfoResponse.Uris,
+		Features:                  features,
+		RequireHtlcInterceptor:    getInfoResponse.RequireHtlcInterceptor,
+		StoreFinalHtlcResolutions: getInfoResponse.StoreFinalHtlcResolutions,
+		BitcoindGetBlockchainInfo: getBlockchainInfo,
+	}
+}
+
+func RequestToGetBlockchainInfo(token string) (*PostGetBlockchainInfoResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/blockchain/get_blockchain_info"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetBlockchainInfoResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetBlockchainInfoAndGetResponse(token string) (*PostGetBlockchainInfoResult, error) {
+	return RequestToGetBlockchainInfo(token)
+}
+
+func LndGetInfoAndGetResponse(token string) (*GetInfoResponse, error) {
+	response, err := getInfoOfLnd()
+	if err != nil {
+		return nil, AppendErrorInfo(err, "getInfoOfLnd")
+	}
+	getBlockchainInfoResult, err := GetBlockchainInfoAndGetResponse(token)
+	if err != nil {
+		// @dev: Do not return
+		LogError("GetBlockchainInfoAndGetResponse", err)
+		getBlockchainInfoResult = &PostGetBlockchainInfoResult{}
+	}
+	result := ProcessGetInfoResponse(response, getBlockchainInfoResult)
+	return result, nil
+}
+
+// LndGetInfo
+// @Description: Replace GetInfoOfLnd
+func LndGetInfo(token string) string {
+	response, err := LndGetInfoAndGetResponse(token)
+	if err != nil {
+		return MakeJsonErrorResult(LndGetInfoAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), response)
 }
 
 func sendCoins(addr string, amount int64, feeRate uint64, all bool) (*lnrpc.SendCoinsResponse, error) {

@@ -187,6 +187,7 @@ const (
 	SchnorrSignErr
 	SchnorrVerifyErr
 	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr
+	LndGetInfoAndGetResponseErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -342,6 +343,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	SchnorrSignErr:                                                "Schnorr签名错误",
 	SchnorrVerifyErr:                                              "Schnorr验证错误",
 	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr:         "通过资产ID获取托管资产余额用户持有总量错误",
+	LndGetInfoAndGetResponseErr:                                   "Lnd获取信息并获取相应错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
