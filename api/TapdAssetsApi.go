@@ -3448,30 +3448,32 @@ func ListBalancesAndProcess() (*[]ListBalanceInfo, error) {
 
 type AssetBalanceInfo struct {
 	gorm.Model
-	GenesisPoint string `json:"genesis_point" gorm:"type:varchar(255)"`
-	Name         string `json:"name" gorm:"type:varchar(255)"`
-	MetaHash     string `json:"meta_hash" gorm:"type:varchar(255)"`
-	AssetID      string `json:"asset_id" gorm:"type:varchar(255)"`
-	AssetType    string `json:"asset_type" gorm:"type:varchar(255)"`
-	OutputIndex  int    `json:"output_index"`
-	Version      int    `json:"version"`
-	Balance      int    `json:"balance"`
-	DeviceId     string `json:"device_id" gorm:"type:varchar(255)"`
-	UserId       int    `json:"user_id"`
-	Username     string `json:"username" gorm:"type:varchar(255)"`
-	Status       int    `json:"status" gorm:"default:1"`
+	GenesisPoint  string `json:"genesis_point" gorm:"type:varchar(255)"`
+	Name          string `json:"name" gorm:"type:varchar(255)"`
+	MetaHash      string `json:"meta_hash" gorm:"type:varchar(255)"`
+	AssetID       string `json:"asset_id" gorm:"type:varchar(255)"`
+	AssetType     string `json:"asset_type" gorm:"type:varchar(255)"`
+	OutputIndex   int    `json:"output_index"`
+	Version       int    `json:"version"`
+	Balance       int    `json:"balance"`
+	DeviceId      string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId        int    `json:"user_id"`
+	Username      string `json:"username" gorm:"type:varchar(255)"`
+	Status        int    `json:"status" gorm:"default:1"`
+	FromListAsset bool   `json:"from_list_asset"`
 }
 
 type AssetBalanceSetRequest struct {
-	GenesisPoint string `json:"genesis_point"`
-	Name         string `json:"name"`
-	MetaHash     string `json:"meta_hash"`
-	AssetID      string `json:"asset_id"`
-	AssetType    string `json:"asset_type"`
-	OutputIndex  int    `json:"output_index"`
-	Version      int    `json:"version"`
-	Balance      int    `json:"balance"`
-	DeviceId     string `json:"device_id" gorm:"type:varchar(255)"`
+	GenesisPoint  string `json:"genesis_point"`
+	Name          string `json:"name"`
+	MetaHash      string `json:"meta_hash"`
+	AssetID       string `json:"asset_id"`
+	AssetType     string `json:"asset_type"`
+	OutputIndex   int    `json:"output_index"`
+	Version       int    `json:"version"`
+	Balance       int    `json:"balance"`
+	DeviceId      string `json:"device_id" gorm:"type:varchar(255)"`
+	FromListAsset bool   `json:"from_list_asset"`
 }
 
 func PostToSetAssetBalanceInfo(assetBalanceSetRequest *[]AssetBalanceSetRequest, token string) (*JsonResult, error) {
@@ -3514,19 +3516,20 @@ func PostToSetAssetBalanceInfo(assetBalanceSetRequest *[]AssetBalanceSetRequest,
 	return &response, nil
 }
 
-func ListBalanceInfosToAssetBalanceSetRequests(listBalanceInfos *[]ListBalanceInfo, deviceId string) *[]AssetBalanceSetRequest {
+func ListBalanceInfosToAssetBalanceSetRequests(listBalanceInfos *[]ListBalanceInfo, deviceId string, fromListAsset bool) *[]AssetBalanceSetRequest {
 	var result []AssetBalanceSetRequest
 	for _, listBalanceInfo := range *listBalanceInfos {
 		result = append(result, AssetBalanceSetRequest{
-			GenesisPoint: listBalanceInfo.GenesisPoint,
-			Name:         listBalanceInfo.Name,
-			MetaHash:     listBalanceInfo.MetaHash,
-			AssetID:      listBalanceInfo.AssetID,
-			AssetType:    listBalanceInfo.AssetType,
-			OutputIndex:  listBalanceInfo.OutputIndex,
-			Version:      listBalanceInfo.Version,
-			Balance:      listBalanceInfo.Balance,
-			DeviceId:     deviceId,
+			GenesisPoint:  listBalanceInfo.GenesisPoint,
+			Name:          listBalanceInfo.Name,
+			MetaHash:      listBalanceInfo.MetaHash,
+			AssetID:       listBalanceInfo.AssetID,
+			AssetType:     listBalanceInfo.AssetType,
+			OutputIndex:   listBalanceInfo.OutputIndex,
+			Version:       listBalanceInfo.Version,
+			Balance:       listBalanceInfo.Balance,
+			DeviceId:      deviceId,
+			FromListAsset: fromListAsset,
 		})
 	}
 	return &result
@@ -3550,7 +3553,54 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 	}
 	zeroListBalance := AssetBalanceInfosToListBalanceInfos(zeroBalances)
 	setBalances := append(*balances, *zeroListBalance...)
-	requests := ListBalanceInfosToAssetBalanceSetRequests(&setBalances, deviceId)
+	requests := ListBalanceInfosToAssetBalanceSetRequests(&setBalances, deviceId, false)
+	result, err := PostToSetAssetBalanceInfo(requests, token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetAssetBalanceInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result.Data)
+}
+
+func ListAssetsResponseSliceToListBalanceInfoSlice(listAssetsResponseSlice *[]ListAssetsResponse) *[]ListBalanceInfo {
+	if listAssetsResponseSlice == nil {
+		return nil
+	}
+	var listBalanceInfos []ListBalanceInfo
+	for _, listAssetResponse := range *listAssetsResponseSlice {
+		listBalanceInfos = append(listBalanceInfos, ListBalanceInfo{
+			GenesisPoint: listAssetResponse.AssetGenesis.GenesisPoint,
+			Name:         listAssetResponse.AssetGenesis.Name,
+			MetaHash:     listAssetResponse.AssetGenesis.MetaHash,
+			AssetID:      listAssetResponse.AssetGenesis.AssetID,
+			AssetType:    listAssetResponse.AssetGenesis.AssetType,
+			OutputIndex:  listAssetResponse.AssetGenesis.OutputIndex,
+			Version:      listAssetResponse.AssetGenesis.Version,
+			Balance:      listAssetResponse.Amount,
+		})
+	}
+	return &listBalanceInfos
+}
+
+func UploadListBalancesProcessedInfoFromListAsset(token string, deviceId string) string {
+	isTokenValid, err := IsTokenValid(token)
+	if err != nil {
+		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", nil)
+	} else if !isTokenValid {
+		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
+	}
+	response, err := ListAssetsProcessed(true, false, false)
+	if err != nil {
+		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
+	}
+	balances := ListAssetsResponseSliceToListBalanceInfoSlice(response)
+	// @dev: Update the asset balance info with the asset ID and zero balance
+	zeroBalances, err := GetZeroBalanceAssetBalanceSlice(token, balances)
+	if err != nil {
+		return MakeJsonErrorResult(GetZeroBalanceAssetBalanceSliceErr, err.Error(), nil)
+	}
+	zeroListBalance := AssetBalanceInfosToListBalanceInfos(zeroBalances)
+	setBalances := append(*balances, *zeroListBalance...)
+	requests := ListBalanceInfosToAssetBalanceSetRequests(&setBalances, deviceId, true)
 	result, err := PostToSetAssetBalanceInfo(requests, token)
 	if err != nil {
 		return MakeJsonErrorResult(PostToSetAssetBalanceInfoErr, err.Error(), nil)
@@ -3561,6 +3611,10 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
+
+//func UploadListAssetBalanceInfo(token string, deviceId string) string {
+//	return UploadListBalancesProcessedInfoFromListAsset(token, deviceId)
+//}
 
 type GetAssetBalanceInfoResponse struct {
 	Success bool                `json:"success"`
@@ -3652,6 +3706,188 @@ func GetZeroBalanceAssetBalanceSlice(token string, listBalanceInfos *[]ListBalan
 	}
 	zeroAssetIds := CompareToGetZeroBalanceAssetIdWithListBalance(*listBalanceInfos, *assetBalances)
 	return zeroAssetIds, nil
+}
+
+func GetZeroAmountAssetListSlice(token string, listAssetsResponse *[]ListAssetsResponse) (*[]AssetListInfo, error) {
+	assetLists, err := GetNonZeroAmountAssetListSlice(token)
+	if err != nil {
+		return nil, err
+	}
+	zeroAssetIds := CompareToGetZeroAmountAssetIdWithListAssets(*listAssetsResponse, *assetLists)
+	return zeroAssetIds, nil
+}
+
+func AssetBalanceInfosToListAssetsResponseSlice(assetListInfos *[]AssetListInfo) *[]ListAssetsResponse {
+	var listAssetsResponse []ListAssetsResponse
+	for _, assetListInfo := range *assetListInfos {
+		listAssetsResponse = append(listAssetsResponse, *AssetListInfoToListAssetsResponse(&assetListInfo))
+	}
+	return &listAssetsResponse
+}
+
+func ListAssetsResponseSliceToAssetListSetRequests(listAssetsResponseSlice *[]ListAssetsResponse, deviceId string) *[]AssetListSetRequest {
+	var result []AssetListSetRequest
+	for _, listAssetsResponse := range *listAssetsResponseSlice {
+		result = append(result, AssetListSetRequest{
+			Version:          listAssetsResponse.Version,
+			GenesisPoint:     listAssetsResponse.AssetGenesis.GenesisPoint,
+			Name:             listAssetsResponse.AssetGenesis.Name,
+			MetaHash:         listAssetsResponse.AssetGenesis.MetaHash,
+			AssetID:          listAssetsResponse.AssetGenesis.AssetID,
+			AssetType:        listAssetsResponse.AssetGenesis.AssetType,
+			OutputIndex:      listAssetsResponse.AssetGenesis.OutputIndex,
+			Amount:           listAssetsResponse.Amount,
+			LockTime:         listAssetsResponse.LockTime,
+			RelativeLockTime: listAssetsResponse.RelativeLockTime,
+			ScriptKey:        listAssetsResponse.ScriptKey,
+			AnchorOutpoint:   listAssetsResponse.ChainAnchor.AnchorOutpoint,
+			TweakedGroupKey:  listAssetsResponse.AssetGroup.TweakedGroupKey,
+			DeviceId:         deviceId,
+		})
+	}
+	return &result
+}
+
+func PostToSetAssetListInfo(assetListSetRequests *[]AssetListSetRequest, token string) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_list/set_slice"
+	requestJsonBytes, err := json.Marshal(assetListSetRequests)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+func AssetListInfoToListAssetsResponse(assetListInfo *AssetListInfo) *ListAssetsResponse {
+	if assetListInfo == nil {
+		return nil
+	}
+	return &ListAssetsResponse{
+		Version: assetListInfo.Version,
+		AssetGenesis: ListAssetsResponseAssetGenesis{
+			GenesisPoint: assetListInfo.GenesisPoint,
+			Name:         assetListInfo.Name,
+			MetaHash:     assetListInfo.MetaHash,
+			AssetID:      assetListInfo.AssetID,
+			AssetType:    assetListInfo.AssetType,
+			OutputIndex:  assetListInfo.OutputIndex,
+		},
+		Amount:           assetListInfo.Amount,
+		LockTime:         assetListInfo.LockTime,
+		RelativeLockTime: assetListInfo.RelativeLockTime,
+		ScriptKey:        assetListInfo.ScriptKey,
+		ChainAnchor: ListAssetsResponseChainAnchor{
+			AnchorOutpoint: assetListInfo.AnchorOutpoint,
+		},
+		AssetGroup: ListAssetsResponseAssetGroup{
+			TweakedGroupKey: assetListInfo.TweakedGroupKey,
+		},
+	}
+}
+
+func CompareToGetZeroAmountAssetIdWithListAssets(listAssetsResponse []ListAssetsResponse, assetLists []AssetListInfo) *[]AssetListInfo {
+	isAssetIdsOfListAssetsResponseExists := make(map[string]bool)
+	for _, listAsset := range listAssetsResponse {
+		isAssetIdsOfListAssetsResponseExists[listAsset.AssetGenesis.AssetID] = true
+	}
+	var zeroAmountAssetLists []AssetListInfo
+	for _, assetList := range assetLists {
+		isExists, ok := isAssetIdsOfListAssetsResponseExists[assetList.AssetID]
+		if !ok || isExists == false {
+			assetList.Amount = 0
+			zeroAmountAssetLists = append(zeroAmountAssetLists, assetList)
+		}
+	}
+	return &zeroAmountAssetLists
+}
+
+func GetNonZeroAmountAssetListSlice(token string) (*[]AssetListInfo, error) {
+	var assetLists []AssetListInfo
+	response, err := RequestToGetNonZeroAmountAssetList(token)
+	if err != nil {
+		return nil, err
+	}
+	for _, assetList := range *response {
+		assetLists = append(assetLists, assetList)
+	}
+	return &assetLists, nil
+}
+
+type GetNonZeroAmountAssetListResponse struct {
+	Success bool             `json:"success"`
+	Error   string           `json:"error"`
+	Code    ErrCode          `json:"code"`
+	Data    *[]AssetListInfo `json:"data"`
+}
+
+func RequestToGetNonZeroAmountAssetList(token string) (*[]AssetListInfo, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_list/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetNonZeroAmountAssetListResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
 }
 
 func AssetBalanceInfoToListBalanceInfo(assetBalanceInfo *AssetBalanceInfo) *ListBalanceInfo {
@@ -7439,4 +7675,94 @@ func GetNftTransferByAssetId(token string, assetId string) string {
 		return MakeJsonErrorResult(GetNftTransferByAssetIdAndGetResponseErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
+}
+
+type AssetListInfo struct {
+	Version string `json:"version"`
+	//@dev: AssetGenesis
+	GenesisPoint string `json:"genesis_point"`
+	Name         string `json:"name"`
+	MetaHash     string `json:"meta_hash"`
+	AssetID      string `json:"asset_id"`
+	AssetType    string `json:"asset_type"`
+	OutputIndex  int    `json:"output_index"`
+	//GenesisVersion int    `json:"genesis_version"`
+
+	Amount           int   `json:"amount"`
+	LockTime         int32 `json:"lock_time"`
+	RelativeLockTime int32 `json:"relative_lock_time"`
+	//ScriptVersion    int32  `json:"script_version"`
+	ScriptKey string `json:"script_key"`
+	//ScriptKeyIsLocal bool   `json:"script_key_is_local"`
+
+	//@dev: ChainAnchor
+	//AnchorTx         string `json:"anchor_tx"`
+	//AnchorBlockHash string `json:"anchor_block_hash"`
+	AnchorOutpoint string `json:"anchor_outpoint"`
+	//InternalKey     string `json:"internal_key"`
+	//MerkleRoot      string `json:"merkle_root"`
+	//TapscriptSibling string `json:"tapscript_sibling"`
+	//BlockHeight int `json:"block_height"`
+
+	//@dev: _AssetGroup
+	//RawGroupKey     string `json:"raw_group_key"`
+	TweakedGroupKey string `json:"tweaked_group_key"`
+	//AssetWitness    string `json:"asset_witness"`
+
+	//IsSpent     bool   `json:"is_spent"`
+	//LeaseOwner  string `json:"lease_owner"`
+	//LeaseExpiry int    `json:"lease_expiry"`
+	//IsBurn      bool   `json:"is_burn"`
+
+	DeviceId string `json:"device_id" gorm:"type:varchar(255)"`
+	UserId   int    `json:"user_id"`
+	Username string `json:"username" gorm:"type:varchar(255)"`
+}
+
+type AssetListSetRequest struct {
+	Version          string `json:"version" gorm:"type:varchar(255);index"`
+	GenesisPoint     string `json:"genesis_point" gorm:"type:varchar(255)"`
+	Name             string `json:"name" gorm:"type:varchar(255);index"`
+	MetaHash         string `json:"meta_hash" gorm:"type:varchar(255);index"`
+	AssetID          string `json:"asset_id" gorm:"type:varchar(255);index"`
+	AssetType        string `json:"asset_type" gorm:"type:varchar(255);index"`
+	OutputIndex      int    `json:"output_index"`
+	Amount           int    `json:"amount"`
+	LockTime         int32  `json:"lock_time"`
+	RelativeLockTime int32  `json:"relative_lock_time"`
+	ScriptKey        string `json:"script_key" gorm:"type:varchar(255);index"`
+	AnchorOutpoint   string `json:"anchor_outpoint" gorm:"type:varchar(255);index"`
+	TweakedGroupKey  string `json:"tweaked_group_key" gorm:"type:varchar(255);index"`
+	DeviceId         string `json:"device_id" gorm:"type:varchar(255);index"`
+}
+
+// UploadAssetListInfo
+// @Description: Upload AssetListInfo
+func UploadAssetListInfo(token string, deviceId string) string {
+	return UploadAssetListProcessedInfo(token, deviceId)
+}
+
+func UploadAssetListProcessedInfo(token string, deviceId string) string {
+	isTokenValid, err := IsTokenValid(token)
+	if err != nil {
+		return MakeJsonErrorResult(IsTokenValidErr, "server "+err.Error()+"; token is invalid, did not send.", nil)
+	} else if !isTokenValid {
+		return MakeJsonErrorResult(IsTokenValidErr, "token is invalid, did not send.", nil)
+	}
+	assets, err := ListAssetsProcessed(true, false, false)
+	if err != nil {
+		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
+	}
+	zeroAmountAssetLists, err := GetZeroAmountAssetListSlice(token, assets)
+	if err != nil {
+		return MakeJsonErrorResult(GetZeroAmountAssetListSliceErr, err.Error(), nil)
+	}
+	listAssetsResponseSlice := AssetBalanceInfosToListAssetsResponseSlice(zeroAmountAssetLists)
+	setListAssetsResponseSlice := append(*assets, *listAssetsResponseSlice...)
+	requests := ListAssetsResponseSliceToAssetListSetRequests(&setListAssetsResponseSlice, deviceId)
+	result, err := PostToSetAssetListInfo(requests, token)
+	if err != nil {
+		return MakeJsonErrorResult(PostToSetAssetListInfoErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, result.Data)
 }

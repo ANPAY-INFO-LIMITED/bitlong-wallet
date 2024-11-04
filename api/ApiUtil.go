@@ -188,6 +188,8 @@ const (
 	SchnorrVerifyErr
 	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr
 	LndGetInfoAndGetResponseErr
+	GetZeroAmountAssetListSliceErr
+	PostToSetAssetListInfoErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -344,6 +346,8 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	SchnorrVerifyErr:                                              "Schnorr验证错误",
 	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr:         "通过资产ID获取托管资产余额用户持有总量错误",
 	LndGetInfoAndGetResponseErr:                                   "Lnd获取信息并获取相应错误",
+	GetZeroAmountAssetListSliceErr:                                "获取零余额资产列表信息切片错误",
+	PostToSetAssetListInfoErr:                                     "请求发送资产列表信息错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
