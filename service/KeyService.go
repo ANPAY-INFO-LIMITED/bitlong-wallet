@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/base58"
 	"github.com/nbd-wtf/go-nostr"
+	"golang.org/x/crypto/pbkdf2"
 	"math/rand"
 	"strings"
 
@@ -353,4 +356,42 @@ func GetJsonPublicKey() (string, error) {
 		return "", err
 	}
 	return string(marshal), nil
+}
+func decryptNew(cipherText, key []byte) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(string(cipherText))
+	if err != nil {
+		return "", err
+	}
+
+	// 提取IV
+	iv := decoded[:16]
+	encrypted := decoded[16:]
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	mode := cipher.NewCBCDecrypter(block, iv)
+	decrypted := make([]byte, len(encrypted))
+	mode.CryptBlocks(decrypted, encrypted)
+
+	// 去除填充
+	unpadding := int(decrypted[len(decrypted)-1])
+	return string(decrypted[:len(decrypted)-unpadding]), nil
+}
+func BuildDecrypt(saltBase64 string, encryptedDeviceID string) string {
+	password := []byte("thisisaverysecretkey1234567890")
+	salt, err := base64.StdEncoding.DecodeString(saltBase64)
+	if err != nil {
+		fmt.Println("解码盐值失败:", err)
+		return ""
+	}
+	key := pbkdf2.Key(password, salt, 10000, 32, sha256.New)
+	decryptedID, err := decryptNew([]byte(encryptedDeviceID), key)
+	if err != nil {
+		fmt.Println("解密失败:", err)
+		return ""
+	}
+	return decryptedID
 }

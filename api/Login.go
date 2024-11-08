@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/wallet/service"
 	"github.com/wallet/service/untils"
 	"io"
 	"net/http"
@@ -14,9 +15,11 @@ import (
 var serverHost string = "http://132.232.109.84:8090"
 
 const (
-	LoginUrl   = "/login"
-	RefreshUrl = "/refresh"
-	HttpsUrl   = "http://"
+	LoginUrl       = "/login"
+	RefreshUrl     = "/refresh"
+	GetNonceUrl    = "/getNonce"
+	GetDeviceIdUrl = "/getDeviceId"
+	HttpsUrl       = "http://"
 )
 
 func setServerHost(server string) string {
@@ -35,6 +38,69 @@ func Login(username, password string) (string, error) {
 func Refresh(username, password string) (string, error) {
 	url := GetServerHost() + RefreshUrl
 	return refresh(url, username, password)
+}
+func Nonce(username string) (string, error) {
+	url := GetServerHost() + GetNonceUrl
+	return getNonce(url, username)
+}
+func DeviceID(username, nonce string) (string, error) {
+	url := GetServerHost() + GetDeviceIdUrl
+	return getDeviceID(url, username, nonce)
+}
+
+func getNonce(url string, username string) (string, error) {
+	nonce_Info := struct {
+		Username string `json:"userName"`
+		Nonce    string `json:"nonce"`
+	}{
+		Username: username,
+		Nonce:    "",
+	}
+	requestBody, _ := json.Marshal(nonce_Info)
+	a, err := SendPostRequest(url, "", requestBody)
+	if err != nil {
+		return "", err
+	}
+	result := struct {
+		Error string `json:"error"`
+		Nonce string `json:"nonce"`
+	}{}
+	err = json.Unmarshal(a, &result)
+	if err != nil {
+		fmt.Println("An error occurred while unmarshalling the response body:", err)
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf(result.Error)
+	}
+	return result.Nonce, err
+}
+func getDeviceID(url string, nonce, username string) (string, error) {
+	nonce_Info := struct {
+		Username string `json:"userName"`
+		Nonce    string `json:"nonce"`
+	}{
+		Username: username,
+		Nonce:    nonce,
+	}
+	requestBody, _ := json.Marshal(nonce_Info)
+	a, err := SendPostRequest(url, "", requestBody)
+	if err != nil {
+		return "", err
+	}
+	result := struct {
+		Error           string `json:"error"`
+		EncryptDeviceID string `json:"encryptDeviceID"`
+		EncodedSalt     string `json:"encodedSalt"`
+	}{}
+	err = json.Unmarshal(a, &result)
+	if err != nil {
+		fmt.Println("An error occurred while unmarshalling the response body:", err)
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf(result.Error)
+	}
+	deviceID := service.BuildDecrypt(result.EncodedSalt, result.EncryptDeviceID)
+	return deviceID, err
 }
 
 func login(url string, username string, password string) (string, error) {
