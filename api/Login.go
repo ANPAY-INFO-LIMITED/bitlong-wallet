@@ -45,7 +45,7 @@ func Nonce(username string) (string, error) {
 }
 func DeviceID(username, nonce string) (string, error) {
 	url := GetServerHost() + GetDeviceIdUrl
-	return getDeviceID(url, username, nonce)
+	return getDeviceID(url, nonce, username)
 }
 
 func getNonce(url string, username string) (string, error) {
