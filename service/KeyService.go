@@ -380,18 +380,18 @@ func decryptNew(cipherText, key []byte) (string, error) {
 	unpadding := int(decrypted[len(decrypted)-1])
 	return string(decrypted[:len(decrypted)-unpadding]), nil
 }
-func BuildDecrypt(saltBase64 string, encryptedDeviceID string) string {
+func BuildDecrypt(saltBase64 string, encryptedDeviceID string) (string, error) {
 	password := []byte("thisisaverysecretkey1234567890")
 	salt, err := base64.StdEncoding.DecodeString(saltBase64)
 	if err != nil {
 		fmt.Println("解码盐值失败:", err)
-		return ""
+		return "", err
 	}
 	key := pbkdf2.Key(password, salt, 10000, 32, sha256.New)
 	decryptedID, err := decryptNew([]byte(encryptedDeviceID), key)
 	if err != nil {
 		fmt.Println("解密失败:", err)
-		return ""
+		return "", err
 	}
-	return decryptedID
+	return decryptedID, nil
 }

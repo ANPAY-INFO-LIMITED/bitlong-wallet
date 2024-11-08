@@ -99,7 +99,12 @@ func getDeviceID(url string, nonce, username string) (string, error) {
 	if result.Error != "" {
 		return "", fmt.Errorf(result.Error)
 	}
-	deviceID := service.BuildDecrypt(result.EncodedSalt, result.EncryptDeviceID)
+	fmt.Println("get encryptDeviceID:", result.EncryptDeviceID)
+	fmt.Println("get EncodedSalt:", result.EncodedSalt)
+	deviceID, err := service.BuildDecrypt(result.EncodedSalt, result.EncryptDeviceID)
+	if err != nil {
+		fmt.Println("get deviceID err:", err)
+	}
 	return deviceID, err
 }
 
