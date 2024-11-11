@@ -6353,12 +6353,9 @@ type UploadLogFileResponse struct {
 func UploadBigFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload_big"
-	stat, err := os.Stat(filePath)
+	_, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
-	}
-	if stat.Size() > 15*1024*1024 {
-		return nil, errors.New("file too large, its size is more than 15MB")
 	}
 	file, err := os.Open(filePath)
 	if err != nil {
