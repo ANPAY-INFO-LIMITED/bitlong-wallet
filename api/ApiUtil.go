@@ -191,6 +191,7 @@ const (
 	GetZeroAmountAssetListSliceErr
 	PostToSetAssetListInfoErr
 	UploadBigFileAndGetResponseErr
+	DuplicateAddrErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -350,6 +351,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetZeroAmountAssetListSliceErr:                                "获取零余额资产列表信息切片错误",
 	PostToSetAssetListInfoErr:                                     "请求发送资产列表信息错误",
 	UploadBigFileAndGetResponseErr:                                "上传大文件并获取响应错误",
+	DuplicateAddrErr:                                              "重复地址错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
