@@ -6267,7 +6267,7 @@ func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs st
 	return &addrMapRecommendUser, nil
 }
 
-func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
+func UploadLogFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
 	stat, err := os.Stat(filePath)
@@ -6325,7 +6325,7 @@ func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string
 	if err != nil {
 		return nil, err
 	}
-	var response JsonResult
+	var response UploadLogFileResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
 		return nil, err
@@ -6333,10 +6333,17 @@ func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string
 	if response.Error != "" {
 		return nil, errors.New(response.Error)
 	}
-	return &response, nil
+	return response.Data, nil
 }
 
 type UploadBigFileResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    *uint   `json:"data"`
+}
+
+type UploadLogFileResponse struct {
 	Success bool    `json:"success"`
 	Error   string  `json:"error"`
 	Code    ErrCode `json:"code"`
@@ -6413,19 +6420,19 @@ func UploadBigFileAndGetResponse(filePath string, deviceId string, info string, 
 }
 
 func UploadLogFile(filePath string, deviceId string, info string, auth string) string {
-	_, err := UploadLogFileAndGetJsonResult(filePath, deviceId, info, auth)
+	id, err := UploadLogFileAndGetResponse(filePath, deviceId, info, auth)
 	if err != nil {
-		return MakeJsonErrorResult(UploadLogFileAndGetJsonResultErr, err.Error(), nil)
+		return MakeJsonErrorResult(UploadLogFileAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), id)
 }
 
 func UploadBigFile(filePath string, deviceId string, info string, auth string) string {
-	_, err := UploadBigFileAndGetResponse(filePath, deviceId, info, auth)
+	id, err := UploadBigFileAndGetResponse(filePath, deviceId, info, auth)
 	if err != nil {
 		return MakeJsonErrorResult(UploadBigFileAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), id)
 }
 
 // @dev: Custody Asset

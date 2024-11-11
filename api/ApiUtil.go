@@ -167,7 +167,7 @@ const (
 	ListBatchesAndPostToSetAssetLocalMintHistoriesErr
 	ListUtxosAndPostToSetAssetManagedUtxosErr
 	GetWalletBalanceCalculatedTotalValueErr
-	UploadLogFileAndGetJsonResultErr
+	UploadLogFileAndGetResponseErr
 	GetAccountAssetBalanceByAssetIdAndGetResponseErr
 	GetAccountAssetTransferByAssetIdAndGetResponseErr
 	GetAssetHolderBalanceWithPageSizeAndPageNumberErr
@@ -326,7 +326,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	ListBatchesAndPostToSetAssetLocalMintHistoriesErr:             "获取列出批次并请求发送资产本地铸造历史记录错误",
 	ListUtxosAndPostToSetAssetManagedUtxosErr:                     "请求列出UTXO并请求发送资产UTXO信息错误",
 	GetWalletBalanceCalculatedTotalValueErr:                       "获取钱包余额计算总价值错误",
-	UploadLogFileAndGetJsonResultErr:                              "上传日志文件并获取JSON结果响应错误",
+	UploadLogFileAndGetResponseErr:                                "上传日志文件并获取响应错误",
 	GetAccountAssetBalanceByAssetIdAndGetResponseErr:              "通过资产ID获取账户资产余额信息并获取响应错误",
 	GetAccountAssetTransferByAssetIdAndGetResponseErr:             "通过资产ID获取账户资产转账记录并获取响应错误",
 	GetAssetHolderBalanceWithPageSizeAndPageNumberErr:             "通过页面大小和页号获取资产持有信息错误",
