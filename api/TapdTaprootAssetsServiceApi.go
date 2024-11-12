@@ -626,7 +626,15 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	if err != nil {
 		return MakeJsonErrorResult(JsonUnmarshalErr, "Please use the correct json format", nil)
 	}
-
+	{
+		addrMap := make(map[string]bool)
+		for _, addr := range addrs {
+			if addrMap[addr] {
+				return MakeJsonErrorResult(DuplicateAddrErr, "Duplicate addr("+addr+")", nil)
+			}
+			addrMap[addr] = true
+		}
+	}
 	// Get from addr
 	var formAddr string
 	{

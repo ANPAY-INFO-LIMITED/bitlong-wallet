@@ -6267,7 +6267,7 @@ func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs st
 	return &addrMapRecommendUser, nil
 }
 
-func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string, auth string) (*JsonResult, error) {
+func UploadLogFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
 	stat, err := os.Stat(filePath)
@@ -6325,7 +6325,7 @@ func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string
 	if err != nil {
 		return nil, err
 	}
-	var response JsonResult
+	var response UploadLogFileResponse
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
 		return nil, err
@@ -6333,15 +6333,103 @@ func UploadLogFileAndGetJsonResult(filePath string, deviceId string, info string
 	if response.Error != "" {
 		return nil, errors.New(response.Error)
 	}
-	return &response, nil
+	return response.Data, nil
+}
+
+type UploadBigFileResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    *uint   `json:"data"`
+}
+
+type UploadLogFileResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    *uint   `json:"data"`
+}
+
+func UploadBigFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload_big"
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			LogError("", err)
+		}
+	}(file)
+	requestBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(requestBody)
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return nil, err
+	}
+	_ = writer.WriteField("device_id", deviceId)
+	_ = writer.WriteField("info", info)
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", url, requestBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
+	req.Header.Add("accept", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			LogError("", err)
+		}
+	}(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response UploadBigFileResponse
+	err = json.Unmarshal(responseBody, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
 }
 
 func UploadLogFile(filePath string, deviceId string, info string, auth string) string {
-	_, err := UploadLogFileAndGetJsonResult(filePath, deviceId, info, auth)
+	id, err := UploadLogFileAndGetResponse(filePath, deviceId, info, auth)
 	if err != nil {
-		return MakeJsonErrorResult(UploadLogFileAndGetJsonResultErr, err.Error(), nil)
+		return MakeJsonErrorResult(UploadLogFileAndGetResponseErr, err.Error(), nil)
 	}
-	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), id)
+}
+
+func UploadBigFile(filePath string, deviceId string, info string, auth string) string {
+	id, err := UploadBigFileAndGetResponse(filePath, deviceId, info, auth)
+	if err != nil {
+		return MakeJsonErrorResult(UploadBigFileAndGetResponseErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), id)
 }
 
 // @dev: Custody Asset

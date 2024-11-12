@@ -3,13 +3,13 @@ package api
 const (
 	PrimaryVersion = "0"
 	SubVersion     = "1"
-	DevVersion     = "40"
+	DevVersion     = "44"
 )
 
 const (
 	BaseVersion = "v" + PrimaryVersion + "." + SubVersion + "." + DevVersion
 	// GetNowTimeStringWithHyphens
-	DateTime = "2024-11-4 12:19:21"
+	DateTime = "2024-11-11 14:53:10"
 )
 
 func apiVersionWithMaker(maker string) string {
