@@ -40,11 +40,11 @@ func Refresh(username, password string) (string, error) {
 	return refresh(url, username, password)
 }
 func Nonce(username string) (string, error) {
-	url := GetServerHost() + GetNonceUrl
+	url := "http://132.232.109.84:8095" + GetNonceUrl
 	return getNonce(url, username)
 }
 func DeviceID(username, nonce string) (string, error) {
-	url := GetServerHost() + GetDeviceIdUrl
+	url := "http://132.232.109.84:8095" + GetDeviceIdUrl
 	return getDeviceID(url, nonce, username)
 }
 

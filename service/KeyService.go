@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/base58"
@@ -357,30 +358,60 @@ func GetJsonPublicKey() (string, error) {
 	}
 	return string(marshal), nil
 }
-func decryptNew(cipherText, key []byte) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(string(cipherText))
+func decryptNew(cipherText string, key []byte) (string, error) {
+	// 解码Base64编码的密文
+	decoded, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("base64解码失败: %w", err)
 	}
 
-	// 提取IV
-	iv := decoded[:16]
-	encrypted := decoded[16:]
+	// 检查解码后的内容是否至少有16字节（IV的长度）
+	if len(decoded) < aes.BlockSize {
+		return "", errors.New("解码后的数据长度不足16字节")
+	}
 
+	// 提取IV和加密数据
+	iv := decoded[:aes.BlockSize]
+	encrypted := decoded[aes.BlockSize:]
+
+	// 验证密钥长度（AES密钥长度必须是16, 24或32字节）
+	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+		return "", errors.New("无效的密钥长度")
+	}
+
+	// 初始化AES加密块
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("创建AES密钥失败: %w", err)
 	}
 
+	// 解密数据
 	mode := cipher.NewCBCDecrypter(block, iv)
 	decrypted := make([]byte, len(encrypted))
 	mode.CryptBlocks(decrypted, encrypted)
 
-	// 去除填充
-	unpadding := int(decrypted[len(decrypted)-1])
-	return string(decrypted[:len(decrypted)-unpadding]), nil
+	// PKCS7填充验证和去除
+	if len(decrypted) == 0 {
+		return "", errors.New("解密后的数据为空")
+	}
+	padding := int(decrypted[len(decrypted)-1])
+
+	// 确保填充长度有效
+	if padding < 1 || padding > aes.BlockSize || padding > len(decrypted) {
+		return "", errors.New("无效的填充长度")
+	}
+
+	// 验证填充字节
+	for i := 0; i < padding; i++ {
+		if decrypted[len(decrypted)-1-i] != byte(padding) {
+			return "", errors.New("填充验证失败")
+		}
+	}
+
+	return string(decrypted[:len(decrypted)-padding]), nil
 }
-func BuildDecrypt(saltBase64 string, encryptedDeviceID string) (string, error) {
+
+func BuildDecrypt(encryptedDeviceID, saltBase64 string) (string, error) {
 	password := []byte("thisisaverysecretkey1234567890")
 	salt, err := base64.StdEncoding.DecodeString(saltBase64)
 	if err != nil {
@@ -388,7 +419,7 @@ func BuildDecrypt(saltBase64 string, encryptedDeviceID string) (string, error) {
 		return "", err
 	}
 	key := pbkdf2.Key(password, salt, 10000, 32, sha256.New)
-	decryptedID, err := decryptNew([]byte(encryptedDeviceID), key)
+	decryptedID, err := decryptNew(encryptedDeviceID, key)
 	if err != nil {
 		fmt.Println("解密失败:", err)
 		return "", err
