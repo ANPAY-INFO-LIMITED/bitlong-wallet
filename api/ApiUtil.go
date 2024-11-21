@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -192,6 +193,8 @@ const (
 	PostToSetAssetListInfoErr
 	UploadBigFileAndGetResponseErr
 	DuplicateAddrErr
+	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr
+	CheckIfBackupIsRequiredErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -352,6 +355,8 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	PostToSetAssetListInfoErr:                                     "请求发送资产列表信息错误",
 	UploadBigFileAndGetResponseErr:                                "上传大文件并获取响应错误",
 	DuplicateAddrErr:                                              "重复地址错误",
+	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr:   "获取资产余额列表简单信息哈希并更新资产余额备份错误",
+	CheckIfBackupIsRequiredErr:                                    "检查是否需要备份错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
@@ -841,6 +846,16 @@ func GetNowTimeStringWithHyphens() string {
 	now := time.Now().Format("2006-01-02-15-04-05.000000")
 	now = strings.ReplaceAll(now, ".", "-")
 	return now
+}
+
+func Sha256(data any) (string, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(jsonData)
+	hashString := fmt.Sprintf("%x", hash)
+	return hashString, nil
 }
 
 // todo:To be optimized

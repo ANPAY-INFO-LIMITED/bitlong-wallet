@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -3420,6 +3421,11 @@ type ListBalanceInfo struct {
 	Balance      int    `json:"balance"`
 }
 
+type ListBalanceSimpleInfo struct {
+	AssetID string `json:"asset_id"`
+	Balance int    `json:"balance"`
+}
+
 func ListBalancesResponseToListBalanceInfos(listBalancesResponse *taprpc.ListBalancesResponse) *[]ListBalanceInfo {
 	var listBalanceInfos []ListBalanceInfo
 	for _, balance := range listBalancesResponse.AssetBalances {
@@ -3437,6 +3443,20 @@ func ListBalancesResponseToListBalanceInfos(listBalancesResponse *taprpc.ListBal
 	return &listBalanceInfos
 }
 
+func ListBalancesResponseToListBalanceSimpleInfos(listBalancesResponse *taprpc.ListBalancesResponse) *[]ListBalanceSimpleInfo {
+	if listBalancesResponse == nil {
+		return new([]ListBalanceSimpleInfo)
+	}
+	var listBalanceSimpleInfos []ListBalanceSimpleInfo
+	for _, balance := range listBalancesResponse.AssetBalances {
+		listBalanceSimpleInfos = append(listBalanceSimpleInfos, ListBalanceSimpleInfo{
+			AssetID: hex.EncodeToString(balance.AssetGenesis.AssetId),
+			Balance: int(balance.Balance),
+		})
+	}
+	return &listBalanceSimpleInfos
+}
+
 func ListBalancesAndProcess() (*[]ListBalanceInfo, error) {
 	response, err := ListBalancesAndGetResponse()
 	if err != nil {
@@ -3444,6 +3464,180 @@ func ListBalancesAndProcess() (*[]ListBalanceInfo, error) {
 	}
 	processed := ListBalancesResponseToListBalanceInfos(response)
 	return processed, nil
+}
+
+func GetListBalancesSimpleInfo() (*[]ListBalanceSimpleInfo, error) {
+	response, err := ListBalancesAndGetResponse()
+	if err != nil {
+		return new([]ListBalanceSimpleInfo), err
+	}
+	processed := ListBalancesResponseToListBalanceSimpleInfos(response)
+	sort.Slice(*processed, func(i, j int) bool {
+		return (*processed)[i].AssetID < (*processed)[j].AssetID
+	})
+	return processed, nil
+}
+
+func GetListBalancesSimpleInfoHash() (string, error) {
+	response, err := GetListBalancesSimpleInfo()
+	if err != nil {
+		return "", AppendErrorInfo(err, "GetListBalancesSimpleInfo")
+	}
+	hash, err := Sha256(response)
+	if err != nil {
+		return "", err
+	}
+	// hash(new([]ListBalanceSimpleInfo))
+	// 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
+	return hash, nil
+}
+
+type GetAssetBalanceBackupResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    string  `json:"data"`
+}
+
+func RequestToGetAssetBalanceBackupHash(token string) (string, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	//network := base.NetWork
+	url := "http://" + serverDomainOrSocket + "/asset_balance_backup/get"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response GetAssetBalanceBackupResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAssetBalanceBackupHash(token string) (string, error) {
+	hash, err := RequestToGetAssetBalanceBackupHash(token)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
+type UpdateAssetBalanceBackupResponse struct {
+	Success bool    `json:"success"`
+	Error   string  `json:"error"`
+	Code    ErrCode `json:"code"`
+	Data    string  `json:"data"`
+}
+
+func PostToUpdateAssetBalanceBackup(token string, hash string) (string, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance_backup/update" + "?hash=" + hash
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return "", err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", err
+	}
+	var response UpdateAssetBalanceBackupResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return "", err
+	}
+	if response.Error != "" {
+		return "", errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func UpdateAssetBalanceBackupHash(token string, hash string) (string, error) {
+	return PostToUpdateAssetBalanceBackup(token, hash)
+}
+
+func GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackup(token string) (string, error) {
+	hash, err := GetListBalancesSimpleInfoHash()
+	if err != nil {
+		return "", AppendErrorInfo(err, "GetListBalancesSimpleInfoHash")
+	}
+	response, err := UpdateAssetBalanceBackupHash(token, hash)
+	if err != nil {
+		return "", AppendErrorInfo(err, "UpdateAssetBalanceBackupHash")
+	}
+	return response, nil
+}
+
+// UploadAssetBalanceBackupHash
+func UploadAssetBalanceBackupHash(token string) string {
+	hash, err := GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackup(token)
+	if err != nil {
+		return MakeJsonErrorResult(GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, hash)
+}
+
+func CheckIfBackupIsRequired(token string) (bool, error) {
+	hash, err := GetAssetBalanceBackupHash(token)
+	if err != nil {
+		return true, AppendErrorInfo(err, "GetAssetBalanceBackupHash")
+	}
+	if hash == "" {
+		return true, nil
+	}
+	hashLocal, err := GetListBalancesSimpleInfoHash()
+	return hash != hashLocal, nil
+}
+
+func CheckBackup(token string) string {
+	isRequired, err := CheckIfBackupIsRequired(token)
+	if err != nil {
+		return MakeJsonErrorResult(CheckIfBackupIsRequiredErr, err.Error(), isRequired)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, isRequired)
 }
 
 type AssetBalanceInfo struct {
