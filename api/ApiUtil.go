@@ -195,6 +195,7 @@ const (
 	DuplicateAddrErr
 	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr
 	CheckIfBackupIsRequiredErr
+	GetAndUploadAssetBalanceHistoriesErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -357,6 +358,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	DuplicateAddrErr:                                              "重复地址错误",
 	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr:   "获取资产余额列表简单信息哈希并更新资产余额备份错误",
 	CheckIfBackupIsRequiredErr:                                    "检查是否需要备份错误",
+	GetAndUploadAssetBalanceHistoriesErr:                          "获取并上传资产余额历史记录错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {

@@ -8048,3 +8048,159 @@ func UploadAssetListProcessedInfo(token string, deviceId string) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result.Data)
 }
+
+type AssetBalanceHistorySetRequest struct {
+	AssetId string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Balance int    `json:"balance" gorm:"index"`
+}
+
+type AssetBalanceHistoryRecord struct {
+	ID       uint   `json:"id" gorm:"primarykey"`
+	AssetId  string `json:"asset_id" gorm:"type:varchar(255);index"`
+	Balance  int    `json:"balance" gorm:"index"`
+	Username string `json:"username" gorm:"type:varchar(255);index"`
+}
+
+func PostToCreateAssetBalanceHistories(token string, requests *[]AssetBalanceHistorySetRequest) (*JsonResult, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance_history/create"
+	requestJsonBytes, err := json.Marshal(requests)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response JsonResult
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return &response, nil
+}
+
+type GetLatestAssetBalanceHistoriesResponse struct {
+	Success bool                         `json:"success"`
+	Error   string                       `json:"error"`
+	Code    ErrCode                      `json:"code"`
+	Data    *[]AssetBalanceHistoryRecord `json:"data"`
+}
+
+func RequestToGetLatestAssetBalanceHistories(token string) (*[]AssetBalanceHistoryRecord, error) {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/asset_balance_history/get/latest"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetLatestAssetBalanceHistoriesResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func GetAndUploadAssetBalanceHistories(token string) error {
+	// GET
+	records, err := RequestToGetLatestAssetBalanceHistories(token)
+	if err != nil {
+		return AppendErrorInfo(err, "RequestToGetLatestAssetBalanceHistories")
+	}
+	recordsMapBalance := make(map[string]int)
+	if records != nil {
+		for _, record := range *records {
+			recordsMapBalance[record.AssetId] = record.Balance
+		}
+	}
+	// Compare
+	balances, err := GetListBalancesSimpleInfo()
+	if err != nil {
+		return AppendErrorInfo(err, "GetListBalancesSimpleInfo")
+	}
+	var changedBalances []ListBalanceSimpleInfo
+	for _, balance := range *balances {
+		mapBalance, ok := recordsMapBalance[balance.AssetID]
+		if !ok {
+			changedBalances = append(changedBalances, balance)
+		} else if balance.Balance != mapBalance {
+			changedBalances = append(changedBalances, balance)
+		}
+	}
+	if changedBalances == nil {
+		return nil
+	}
+	// POST
+	var requests []AssetBalanceHistorySetRequest
+	for _, changedBalance := range changedBalances {
+		requests = append(requests, AssetBalanceHistorySetRequest{
+			AssetId: changedBalance.AssetID,
+			Balance: changedBalance.Balance,
+		})
+	}
+	if requests == nil || len(requests) == 0 {
+		return nil
+	}
+	_, err = PostToCreateAssetBalanceHistories(token, &requests)
+	if err != nil {
+		return AppendErrorInfo(err, "PostToCreateAssetBalanceHistories")
+	}
+	return nil
+}
+
+// UploadAssetBalanceHistories
+// @Description: Upload asset balance histories
+func UploadAssetBalanceHistories(token string) string {
+	err := GetAndUploadAssetBalanceHistories(token)
+	if err != nil {
+		return MakeJsonErrorResult(GetAndUploadAssetBalanceHistoriesErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
