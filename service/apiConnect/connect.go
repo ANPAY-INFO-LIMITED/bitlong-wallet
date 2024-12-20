@@ -75,7 +75,10 @@ func GetConnection(grpcTarget string, isNoMacaroon bool) (*grpc.ClientConn, func
 	} else {
 		macaroon := GetMacaroon(cfg.macaroonPath)
 		conn, err = grpc.Dial(cfg.grpcHost, grpc.WithTransportCredentials(creds),
-			grpc.WithPerRPCCredentials(NewMacaroonCredential(macaroon)))
+			grpc.WithPerRPCCredentials(NewMacaroonCredential(macaroon)), grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(10*1024*1024), // 10 MB
+				grpc.MaxCallSendMsgSize(10*1024*1024), // 10 MB
+			))
 	}
 
 	if err != nil {
