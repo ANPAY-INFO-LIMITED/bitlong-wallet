@@ -1,11 +1,16 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
+	"io"
+	"net/http"
 	"strconv"
 )
 
@@ -143,6 +148,97 @@ func ListUnspentAndGetResponse() (*walletrpc.ListUnspentResponse, error) {
 	client := walletrpc.NewWalletKitClient(conn)
 	request := &walletrpc.ListUnspentRequest{}
 	return client.ListUnspent(context.Background(), request)
+}
+
+type UnspentUtxo struct {
+	AddressType   string `json:"address_type"`
+	Address       string `json:"address"`
+	AmountSat     int64  `json:"amount_sat"`
+	PkScript      string `json:"pk_script"`
+	Outpoint      string `json:"outpoint"`
+	Confirmations int64  `json:"confirmations"`
+}
+
+func ListUnspentResponseToUnspentUtxos(listUnspentResponse *walletrpc.ListUnspentResponse) []*UnspentUtxo {
+	if listUnspentResponse == nil {
+		return nil
+	}
+	var unspentUtxos []*UnspentUtxo
+	for _, utxo := range listUnspentResponse.Utxos {
+		unspentUtxos = append(unspentUtxos, &UnspentUtxo{
+			AddressType:   utxo.AddressType.String(),
+			Address:       utxo.Address,
+			AmountSat:     utxo.AmountSat,
+			PkScript:      utxo.PkScript,
+			Outpoint:      utxo.Outpoint.TxidStr + ":" + strconv.FormatUint(uint64(utxo.Outpoint.OutputIndex), 10),
+			Confirmations: utxo.Confirmations,
+		})
+	}
+	return unspentUtxos
+}
+
+func GetBtcListUnspentUtxos() (Utxos []*UnspentUtxo, err error) {
+	response, err := ListUnspentAndGetResponse()
+	if err != nil {
+		return nil, AppendErrorInfo(err, "ListUnspentAndGetResponse")
+	}
+	return ListUnspentResponseToUnspentUtxos(response), nil
+}
+
+func PostToSetBtcUtxo(token string, Utxos []*UnspentUtxo) error {
+	serverDomainOrSocket := Cfg.BtlServerHost
+	url := "http://" + serverDomainOrSocket + "/btc_utxo/set"
+	requestJsonBytes, err := json.Marshal(Utxos)
+	if err != nil {
+		return err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var response Result2
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+	if response.ErrMsg != "" {
+		return errors.New(response.ErrMsg)
+	}
+	return nil
+}
+
+func uploadBtcListUnspentUtxos(token string) error {
+	utxos, err := GetBtcListUnspentUtxos()
+	if err != nil {
+		return AppendErrorInfo(err, "GetBtcListUnspentUtxos")
+	}
+	return PostToSetBtcUtxo(token, utxos)
+}
+
+func UploadBtcListUnspentUtxos(token string) string {
+	err := uploadBtcListUnspentUtxos(token)
+	if err != nil {
+		return MakeJsonErrorResult(uploadBtcListUnspentUtxosErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), nil)
 }
 
 type ListUnspentUtxo struct {

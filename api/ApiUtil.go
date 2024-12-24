@@ -196,6 +196,7 @@ const (
 	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr
 	CheckIfBackupIsRequiredErr
 	GetAndUploadAssetBalanceHistoriesErr
+	uploadBtcListUnspentUtxosErr
 )
 
 var ErrCodeMapInfo = map[ErrCode]string{
@@ -359,6 +360,7 @@ var ErrCodeMapInfo = map[ErrCode]string{
 	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr:   "获取资产余额列表简单信息哈希并更新资产余额备份错误",
 	CheckIfBackupIsRequiredErr:                                    "检查是否需要备份错误",
 	GetAndUploadAssetBalanceHistoriesErr:                          "获取并上传资产余额历史记录错误",
+	uploadBtcListUnspentUtxosErr:                                  "上传BTC列出的未花费UTXO错误",
 }
 
 func GetIntErrCodeString(intErrCode int) string {
@@ -398,6 +400,12 @@ type JsonResult struct {
 	Error   string  `json:"error"`
 	Code    ErrCode `json:"code"`
 	Data    any     `json:"data"`
+}
+
+type Result2 struct {
+	Errno  int         `json:"errno"`
+	ErrMsg string      `json:"errmsg"`
+	Data   interface{} `json:"data"`
 }
 
 // Deprecated: Use MakeJsonErrorResult instead
