@@ -7,7 +7,6 @@ import (
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/universeCourier"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -37,6 +36,12 @@ type Config struct {
 
 var Cfg Config
 
+var perr string
+
+func GetPError() string {
+	return perr
+}
+
 func SetPath(path string, network string) error {
 	err := base.SetFilePath(path)
 	if err != nil {
@@ -56,18 +61,15 @@ func SetPath(path string, network string) error {
 			// 如果目录不存在，则创建它
 			err = os.MkdirAll(tempDir, os.ModePerm)
 			if err != nil {
-				log.Fatalf("创建临时目录失败: %v", err)
-			} else {
-				fmt.Printf("临时目录创建成功: %s\n", tempDir)
+				return fmt.Errorf("创建临时目录失败: %v", err)
 			}
-		} else {
-			fmt.Printf("临时目录已经存在: %s\n", tempDir)
 		}
-		fmt.Println("未设置 SQLITE_TEMP_DIRECTORY 环境变量，使用默认临时目录")
 	}
-
 	// 设置 SQLite 的临时目录
-	os.Setenv("SQLITE_TEMP_DIRECTORY", tempDir)
+	err = os.Setenv("SQLITE_TEMP_DIRECTORY", tempDir)
+	if err != nil {
+		return err
+	}
 
 	err = Cfg.loadConfig()
 	if err != nil {
