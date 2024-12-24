@@ -9,7 +9,7 @@ const (
 const (
 	BaseVersion = "v" + PrimaryVersion + "." + SubVersion + "." + DevVersion
 	// GetNowTimeStringWithHyphens
-	DateTime = "2024-12-20 16:04:28"
+	DateTime = "2024-12-24 09:25:50"
 )
 
 func apiVersionWithMaker(maker string) string {

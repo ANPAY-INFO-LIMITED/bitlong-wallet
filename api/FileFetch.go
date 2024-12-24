@@ -7,6 +7,7 @@ import (
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/universeCourier"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -45,6 +46,28 @@ func SetPath(path string, network string) error {
 		return errors.New("network not exist")
 	}
 	base.SetNetwork(network)
+
+	// 获取 SQLITE_TEMP_DIRECTORY 的值
+	tempDir := os.Getenv("SQLITE_TEMP_DIRECTORY")
+	if tempDir == "" {
+		tempDir := filepath.Join(path, "tempDir")
+		// 检查临时目录是否存在
+		if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+			// 如果目录不存在，则创建它
+			err = os.MkdirAll(tempDir, os.ModePerm)
+			if err != nil {
+				log.Fatalf("创建临时目录失败: %v", err)
+			} else {
+				fmt.Printf("临时目录创建成功: %s\n", tempDir)
+			}
+		} else {
+			fmt.Printf("临时目录已经存在: %s\n", tempDir)
+		}
+		fmt.Println("未设置 SQLITE_TEMP_DIRECTORY 环境变量，使用默认临时目录")
+	}
+
+	// 设置 SQLite 的临时目录
+	os.Setenv("SQLITE_TEMP_DIRECTORY", tempDir)
 
 	err = Cfg.loadConfig()
 	if err != nil {
