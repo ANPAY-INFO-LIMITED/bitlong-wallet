@@ -1,5 +1,5 @@
-//go:build !btlapi
-// +build !btlapi
+//go:build btlapi
+// +build btlapi
 
 package tapsend
 
@@ -1082,6 +1082,7 @@ func CreateAnchorTx(vPackets []*tappsbt.VPacket, feeRate chainfee.SatPerKWeight)
 			txTemplate.AddTxOut(out)
 		}
 	}
+
 	spendPkt, err := psbt.NewFromUnsignedTx(txTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make psbt packet: %w", err)

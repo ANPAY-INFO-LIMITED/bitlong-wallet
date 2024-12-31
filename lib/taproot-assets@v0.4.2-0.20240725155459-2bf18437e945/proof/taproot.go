@@ -1,12 +1,11 @@
+//go:build !btlapi
+// +build !btlapi
+
 package proof
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"github.com/lightninglabs/taproot-assets/tapdbtlutil"
-
-	//"github.com/lightninglabs/taproot-assets/tapsend"
 	"io"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -566,12 +565,6 @@ func AddExclusionProofs(baseProof *BaseProofParams, finalTx *wire.MsgTx,
 		// We only need to add exclusion proofs for P2TR outputs as only
 		// those could commit to a Taproot Asset tree.
 		if !txscript.IsPayToTaproot(txOut.PkScript) {
-			continue
-		}
-
-		//这里跳过验证
-		byteAddr, _ := tapdbtlutil.DecodeTaprootAddress(tapdbtlutil.AddrChargeTr, tapdbtlutil.GetNetWorkParams(tapdbtlutil.Network))
-		if bytes.Equal(txOut.PkScript, byteAddr) && txOut.Value >= tapdbtlutil.MinFeee {
 			continue
 		}
 

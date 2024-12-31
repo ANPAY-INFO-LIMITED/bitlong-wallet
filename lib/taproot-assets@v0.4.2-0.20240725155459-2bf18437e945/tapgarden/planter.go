@@ -1,3 +1,6 @@
+//go:build !btlapi
+// +build !btlapi
+
 package tapgarden
 
 import (
@@ -5,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/lightninglabs/taproot-assets/tapdbtlutil"
 	"slices"
 	"sync"
 	"time"
@@ -541,12 +543,6 @@ func (c *ChainPlanter) fundGenesisPsbt(ctx context.Context,
 	// backing wallet will fund.
 	txTemplate := wire.NewMsgTx(2)
 	txTemplate.AddTxOut(tapsend.CreateDummyOutput())
-
-	// 这里铸币手续费
-	byteAddr, _ := tapdbtlutil.DecodeTaprootAddress(tapdbtlutil.AddrCharge, tapdbtlutil.GetNetWorkParams(tapdbtlutil.Network))
-	out := wire.NewTxOut(tapdbtlutil.MIntFinalizeChargeAmount, byteAddr)
-	txTemplate.AddTxOut(out)
-
 	genesisPkt, err := psbt.NewFromUnsignedTx(txTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make psbt packet: %w", err)

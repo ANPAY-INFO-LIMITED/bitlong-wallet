@@ -1,3 +1,6 @@
+//go:build !btlapi
+// +build !btlapi
+
 package tapfreighter
 
 import (
@@ -1297,7 +1300,7 @@ func (f *AssetWallet) AnchorVirtualTransactions(ctx context.Context,
 
 	// Construct our template PSBT to commits to the set of dummy locators
 	// we use to make fee estimation work.
-	sendPacket, err := tapsend.CreateAnchorTx(allPackets, params.FeeRate)
+	sendPacket, err := tapsend.CreateAnchorTx(allPackets)
 	if err != nil {
 		return nil, fmt.Errorf("error creating anchor TX: %w", err)
 	}
