@@ -1,1 +1,0 @@
-DROP INDEX IF EXISTS assets_genesis_id_script_key_id_anchor_utxo_id_unique;
