@@ -110,3 +110,31 @@ func BumpFee(txId string, fee int) (*walletrpc.BumpFeeResponse, error) {
 	}
 	return response, nil
 }
+
+func ListSwaps() (*walletrpc.ListSweepsResponse, error) {
+	client, clearUp, err := getWalletKitClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+	response, err := client.ListSweeps(context.Background(), &walletrpc.ListSweepsRequest{})
+	if err != nil {
+		fmt.Printf("%s watchtowerrpc ListSwaps err: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}
+
+func ListPendingSwaps() (*walletrpc.PendingSweepsResponse, error) {
+	client, clearUp, err := getWalletKitClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+	response, err := client.PendingSweeps(context.Background(), &walletrpc.PendingSweepsRequest{})
+	if err != nil {
+		fmt.Printf("%s watchtowerrpc ListSwaps err: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}

@@ -352,3 +352,19 @@ func BumpFee(txId string, fee int) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }
+
+func ListSwaps() string {
+	swaps, err := rpcclient.ListSwaps()
+	if err != nil {
+		return MakeJsonErrorResult(BumpFeeErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", swaps)
+}
+
+func ListPendingSwaps() string {
+	swaps, err := rpcclient.ListPendingSwaps()
+	if err != nil {
+		return MakeJsonErrorResult(BumpFeeErr, err.Error(), nil)
+	}
+	return MakeJsonErrorResult(SUCCESS, "", swaps)
+}
