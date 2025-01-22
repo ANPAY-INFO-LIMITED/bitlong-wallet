@@ -87,6 +87,7 @@ func BumpFee(txId string, fee int) (*walletrpc.BumpFeeResponse, error) {
 	//创建请求体
 	request := &walletrpc.BumpFeeRequest{
 		SatPerVbyte: uint64(fee),
+		Immediate:   true,
 	}
 	//找出到可使用的未确认utxo
 	for _, u := range unspend.Utxos {
