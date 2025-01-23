@@ -52,6 +52,15 @@ func GetNBPublicKey() string {
 	}
 	return nPub
 }
+func GetExistPublicKey() string {
+	_, nPub, err := service.GetExistPublicKey()
+	if err != nil {
+		fmt.Printf("GetExistPublicKey->errl1:%x", err)
+		return ""
+	}
+	return nPub
+}
+
 func GetJsonPublicKey() string {
 	keyInfo, err := service.GetJsonPublicKey()
 	if err != nil {

@@ -133,6 +133,28 @@ func sign(privateKeyHex string, message string) (string, error) {
 
 }
 
+func readDb_Fixed() (*KeyInfo, error) {
+	db, err := InitDB1()
+	if err != nil {
+		log.Fatalf("Failed to initialize the database: %s\n", err)
+	}
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+
+		}
+	}(db)
+	keyStore := &KeyStore{DB: db}
+	// 调用 ReadKey 获取特定的密钥
+	keyInfo, err := keyStore.ReadKey(keyId)
+	if err != nil {
+		log.Printf("Failed to read key %s: %s", keyId, err)
+		return nil, err
+	} else {
+		//fmt.Printf("Key: %+v\n", keyInfo)
+		return keyInfo, nil
+	}
+}
 func readDb() (*KeyInfo, error) {
 	db, err := InitDB()
 	if err != nil {
@@ -213,28 +235,6 @@ func GetPublicKey() (string, string, error) {
 		return "", "", err
 	}
 	return publicKeyHex, address, nil
-}
-func readDb_Fixed() (*KeyInfo, error) {
-	db, err := InitDB1()
-	if err != nil {
-		log.Fatalf("Failed to initialize the database: %s\n", err)
-	}
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-
-		}
-	}(db)
-	keyStore := &KeyStore{DB: db}
-	// 调用 ReadKey 获取特定的密钥
-	keyInfo, err := keyStore.ReadKey(keyId)
-	if err != nil {
-		log.Printf("Failed to read key %s: %s", keyId, err)
-		return nil, err
-	} else {
-		//fmt.Printf("Key: %+v\n", keyInfo)
-		return keyInfo, nil
-	}
 }
 
 // GetPublicKey 增强版获取公钥函数
@@ -448,4 +448,30 @@ func BuildDecrypt(encryptedDeviceID, saltBase64 string) (string, error) {
 		return "", err
 	}
 	return decryptedID, nil
+}
+func GetExistPublicKey() (string, string, error) {
+	// 1. 从数据库读取密钥
+	retrievedKey, err := readDb()
+	if err != nil {
+		fmt.Printf("err is :%v\n", err)
+		return "", "", err
+	}
+
+	// 2. 转换为64位十六进制格式
+	publicKeyHex := fmt.Sprintf("%064X", retrievedKey.PublicKey)
+	fmt.Println("publicKeyHex", publicKeyHex)
+
+	// 3. 获取nostr地址
+	nostrAddress, err := getNoStrAddress(publicKeyHex)
+	if err != nil {
+		return "", "", err
+	}
+
+	// 4. 加密nostr地址
+	encryptedAddress, err := encryptNostrAddress(nostrAddress)
+	if err != nil {
+		return "", "", fmt.Errorf("encrypt address error: %v", err)
+	}
+
+	return publicKeyHex, encryptedAddress, nil
 }
