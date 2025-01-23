@@ -19,6 +19,7 @@ const (
 	RefreshUrl     = "/refresh"
 	GetNonceUrl    = "/getNonce"
 	GetDeviceIdUrl = "/getDeviceId"
+	reChangeUrl    = "/reChange"
 	HttpsUrl       = "http://"
 )
 
@@ -34,6 +35,11 @@ func GetServerHost() string {
 func Login(username, password string) (string, error) {
 	url := GetServerHost() + LoginUrl
 	return login(url, username, password)
+}
+
+func ReChange(username, password string) (string, error) {
+	url := GetServerHost() + reChangeUrl
+	return reChange(url, username, password)
 }
 func Refresh(username, password string) (string, error) {
 	url := GetServerHost() + RefreshUrl
@@ -201,4 +207,30 @@ func SendPostRequest(url string, token string, requestBody []byte) ([]byte, erro
 	}
 	return body, nil
 
+}
+func reChange(url string, username string, password string) (string, error) {
+	user := struct {
+		Username string `gorm:"unique;column:user_name" json:"userName"` // 正确地将unique和column选项放在同一个gorm标签内
+		Password string `gorm:"column:password" json:"password"`
+	}{
+		Username: username,
+		Password: password,
+	}
+	requestBody, _ := json.Marshal(user)
+	a, err := SendPostRequest(url, "", requestBody)
+	if err != nil {
+		return "", err
+	}
+	result := struct {
+		Error string `json:"error"`
+		Token string `json:"token"`
+	}{}
+	err = json.Unmarshal(a, &result)
+	if err != nil {
+		fmt.Println("An error occurred while unmarshalling the response body:", err)
+	}
+	if result.Error != "" {
+		return "", fmt.Errorf(result.Error)
+	}
+	return result.Token, err
 }

@@ -25,6 +25,15 @@ type KeyStore struct {
 	DB *sql.DB
 }
 
+func InitDB1() (*sql.DB, error) {
+	dbPath := filepath.Join(base.QueryConfigByKey("dirpath"), "keyInfo.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
 func InitDB() (*sql.DB, error) {
 	dbPath := filepath.Join(base.QueryConfigByKey("dirpath"), "keyInfo.db")
 	db, err := sql.Open("sqlite3", dbPath)

@@ -132,6 +132,7 @@ func sign(privateKeyHex string, message string) (string, error) {
 	return string(marshal), nil
 
 }
+
 func readDb() (*KeyInfo, error) {
 	db, err := InitDB()
 	if err != nil {
@@ -212,6 +213,28 @@ func GetPublicKey() (string, string, error) {
 		return "", "", err
 	}
 	return publicKeyHex, address, nil
+}
+func readDb_Fixed() (*KeyInfo, error) {
+	db, err := InitDB1()
+	if err != nil {
+		log.Fatalf("Failed to initialize the database: %s\n", err)
+	}
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+
+		}
+	}(db)
+	keyStore := &KeyStore{DB: db}
+	// 调用 ReadKey 获取特定的密钥
+	keyInfo, err := keyStore.ReadKey(keyId)
+	if err != nil {
+		log.Printf("Failed to read key %s: %s", keyId, err)
+		return nil, err
+	} else {
+		//fmt.Printf("Key: %+v\n", keyInfo)
+		return keyInfo, nil
+	}
 }
 
 // GetPublicKey 增强版获取公钥函数
