@@ -6,6 +6,7 @@ import (
 
 const PATH = "D:\\share\\project\\wallet\\config"
 const PATH2 = "/home/en/test3"
+const PATH5 = "/home/en/lit/test"
 
 func main() {
 	//api.StartLitd()
@@ -13,5 +14,5 @@ func main() {
 }
 
 func init() {
-	api.SetPath(PATH2, "regtest")
+	api.SetPath(PATH5, "regtest")
 }

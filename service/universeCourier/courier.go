@@ -271,7 +271,7 @@ func (c *courier) QueryAssetKey(assetId string) (*unirpc.AssetLeafKeyResponse, e
 			context.Background(), &unirpc.AssetLeafKeysRequest{
 				Id:        &i,
 				Offset:    int32(offset),
-				Limit:     universe.MaxPageSize,
+				Limit:     universe.RequestPageSize,
 				Direction: unirpc.SortDirection_SORT_DIRECTION_DESC,
 			},
 		)
@@ -284,7 +284,7 @@ func (c *courier) QueryAssetKey(assetId string) (*unirpc.AssetLeafKeyResponse, e
 		assetKeys.AssetKeys = append(
 			assetKeys.AssetKeys, tempKeys.AssetKeys...,
 		)
-		offset += universe.MaxPageSize
+		offset += universe.RequestPageSize
 	}
 	return assetKeys, nil
 }

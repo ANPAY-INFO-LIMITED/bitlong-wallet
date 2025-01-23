@@ -1269,7 +1269,15 @@ func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 	}
 	var result []ListAssetsResponse
 	for _, asset := range *listNftAssets {
-		if asset.AssetGroup.TweakedGroupKey == groupKey {
+		tweakedGroupKey := asset.AssetGroup.TweakedGroupKey
+
+		if len(tweakedGroupKey) == 66 && len(groupKey) == 64 {
+			tweakedGroupKey = tweakedGroupKey[2:]
+		} else if len(tweakedGroupKey) == 64 && len(groupKey) == 66 {
+			groupKey = groupKey[2:]
+		}
+
+		if tweakedGroupKey == groupKey {
 			result = append(result, asset)
 		}
 	}
