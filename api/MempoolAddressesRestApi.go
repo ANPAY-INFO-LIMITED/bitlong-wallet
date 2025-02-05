@@ -192,7 +192,7 @@ func GetAddressTransactions(address string) (*[]TransactionsSimplified, error) {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		return nil, err
+		return nil, AppendErrorInfo(err, "http.Get")
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var getAddressTransactionsResponse GetAddressTransactionsResponse
@@ -232,7 +232,7 @@ func GetAddressTransferOutResult(address string) string {
 func GetAddressTransactionsByMempool(address string) string {
 	transactions, err := GetAddressTransactions(address)
 	if err != nil {
-		return MakeJsonErrorResult(GetAddressTransactionsErr, "Get Address Transactions", "")
+		return MakeJsonErrorResult(GetAddressTransactionsErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", transactions)
 }
