@@ -55,10 +55,12 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 		targetUrl = "https://mempool.space/api/tx/" + transaction
 	case base.UseTestNet:
 		targetUrl = "https://mempool.space/testnet/api/tx/" + transaction
+	default:
+		targetUrl = "https://mempool.space/api/tx/" + transaction
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		return nil, err
+		return nil, AppendErrorInfo(err, "http.Get")
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var transactionsResponse TransactionsResponse
@@ -106,7 +108,7 @@ func TransactionsResponseToTransactionsSimplified(transactionsResponse *Transact
 func GetTransactionByMempool(txid string) string {
 	response, err := getTransactionByMempool(txid)
 	if err != nil {
-		return MakeJsonErrorResult(getTransactionByMempoolErr, "Unmarshal response body fail.", nil)
+		return MakeJsonErrorResult(getTransactionByMempoolErr, err.Error(), nil)
 	}
 	result := TransactionsResponseToTransactionsSimplified(response)
 	return MakeJsonErrorResult(SUCCESS, "", result)
