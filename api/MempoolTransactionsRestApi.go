@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/wallet/base"
 	"io"
@@ -58,13 +59,35 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	default:
 		targetUrl = "https://mempool.space/api/tx/" + transaction
 	}
-	response, err := http.Get(targetUrl)
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", targetUrl, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, AppendErrorInfo(err, "http.Get")
 	}
-	bodyBytes, _ := io.ReadAll(response.Body)
+
 	var transactionsResponse TransactionsResponse
-	if err := json.Unmarshal(bodyBytes, &transactionsResponse); err != nil {
+	if err := json.Unmarshal(body, &transactionsResponse); err != nil {
 		return nil, err
 	}
 	return &transactionsResponse, nil
