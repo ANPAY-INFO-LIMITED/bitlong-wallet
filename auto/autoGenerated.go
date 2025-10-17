@@ -16,7 +16,6 @@ import (
 const apiPackagePath = "github.com/wallet/api"
 
 var (
-	//排除的文件
 	excludedFiles = []string{"FrpcApi.go", "FrpcPeriphery.go", "FrpcRequest.go", "FileServerRouter.go", "LnurlApi.go",
 		"LnurlBoltPhoneStore.go",
 		"LnurlBoltServerStore.go",
@@ -27,7 +26,6 @@ var (
 		"LnurlUtil.go",
 		"LndAddrStoreInBolt.go", "" +
 			"ApiUtil.go"}
-	//排除的方法
 	excludedFunctions = []string{"MakeJsonResult", "MakeJsonErrorResult", "TapMarshalRespString", "B64DecodeToHex"}
 )
 
@@ -95,7 +93,6 @@ func parseAPIPackage(packagePath string) ([]APIFunction, error) {
 	var functions []APIFunction
 	processedFuncs := make(map[string]bool)
 
-	// 如果 packages.Load 没有提供足够的信息，尝试使用 go/parser
 	if len(pkgs[0].Syntax) == 0 {
 		log.Println("No syntax trees available, attempting to parse directly")
 		fset := token.NewFileSet()
@@ -138,7 +135,6 @@ func parseAPIPackage(packagePath string) ([]APIFunction, error) {
 			}
 		}
 	} else {
-		// 原来的处理逻辑
 		for _, pkg := range pkgs {
 			if pkg == nil {
 				log.Println("Skipping nil package")
@@ -429,7 +425,6 @@ func generateHandler(out *os.File, fn APIFunction) {
 	fmt.Fprintln(out, "}")
 }
 
-// 新添加的辅助函数
 func isVariadic(expr ast.Expr) bool {
 	_, ok := expr.(*ast.Ellipsis)
 	return ok
@@ -448,7 +443,6 @@ func getTypeString(expr ast.Expr) string {
 			"error", "any", "T":
 			return t.Name
 		default:
-			// 检查是否是 proto 类型
 			if strings.HasSuffix(t.Name, "pb") || strings.Contains(t.Name, "Proto") {
 				return t.Name
 			}

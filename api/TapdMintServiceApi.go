@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
+	"github.com/pkg/errors"
 	"github.com/vincent-petithory/dataurl"
 	"github.com/wallet/service/apiConnect"
 	"os"
@@ -15,14 +15,10 @@ import (
 	"strings"
 )
 
-// CancelBatch
-//
-//	@Description: CancelBatch will attempt to cancel the current pending batch.
-//	@return bool
 func CancelBatch() bool {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 	defer clearUp()
 	client := mintrpc.NewMintClient(conn)
@@ -36,12 +32,6 @@ func CancelBatch() bool {
 	return true
 }
 
-// FinalizeBatch
-//
-//	@Description: Wraps the finalizeBatch. FinalizeBatch will attempt to finalize the current pending batch.
-//	@param shortResponse
-//	@param feeRate
-//	@return bool
 func FinalizeBatch(feeRate int, token string, deviceId string) string {
 	if feeRate > FeeRateSatPerBToSatPerKw(500) {
 		err := errors.New("fee rate exceeds max(500)")
@@ -50,14 +40,10 @@ func FinalizeBatch(feeRate int, token string, deviceId string) string {
 	return finalizeBatch(false, feeRate, token, deviceId)
 }
 
-// ListBatches
-//
-//	@Description: ListBatches lists the set of batches submitted to the daemon, including pending and cancelled batches.
-//	@return string
 func ListBatches() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := mintrpc.NewMintClient(conn)
@@ -70,30 +56,30 @@ func ListBatches() string {
 	return response.String()
 }
 
-// MintAsset
-//
-//	@Description: Wraps the mintAsset, omitting most of the parameters and making them default values.
-//	MintAsset will attempt to mint the set of assets (async by default to ensure proper batching) specified in the request.
-//	The pending batch is returned that shows the other pending assets that are part of the next batch.
-//	This call will block until the operation succeeds (asset is staged in the batch) or fails.
-func MintAsset(name string, assetTypeIsCollectible bool, assetMetaData *Meta, amount int, newGroupedAsset bool) string {
+func MintAsset(name string, assetTypeIsCollectible bool, assetMetaData *Meta, amount int, decimalDisplay int, newGroupedAsset bool) string {
 	Metastr := assetMetaData.ToJsonStr()
-	return mintAsset(false, assetTypeIsCollectible, name, Metastr, false, amount, newGroupedAsset, false, "", "", false)
+	return mintAsset(false, assetTypeIsCollectible, name, Metastr, false, amount, newGroupedAsset, false, "", "", decimalDisplay, false)
 }
 
 func AddGroupAsset(name string, assetTypeIsCollectible bool, assetMetaData *Meta, amount int, groupKey string) string {
 	Metastr := assetMetaData.ToJsonStr()
-	return mintAsset(false, assetTypeIsCollectible, name, Metastr, false, amount, false, true, groupKey, "", false)
+	return mintAsset(false, assetTypeIsCollectible, name, Metastr, false, amount, false, true, groupKey, "", 0, false)
 
 }
 
+type Attribute struct {
+	TraitType string `json:"trait_type"`
+	Value     string `json:"value"`
+}
+
 type Meta struct {
-	Acronym     string `json:"acronym,omitempty"`
-	Description string `json:"description,omitempty"`
-	ImageData   string `json:"image_data,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Email       string `json:"email,omitempty"`
-	GroupName   string `json:"groupName,omitempty"`
+	Acronym     string      `json:"acronym,omitempty"`
+	Description string      `json:"description,omitempty"`
+	ImageData   string      `json:"image_data,omitempty"`
+	Name        string      `json:"name,omitempty"`
+	Email       string      `json:"email,omitempty"`
+	GroupName   string      `json:"groupName,omitempty"`
+	Attributes  []Attribute `json:"attributes"`
 }
 
 func NewMeta(description string) *Meta {
@@ -124,6 +110,18 @@ func (m *Meta) LoadImage(file string) (bool, error) {
 		m.ImageData = imageStr
 	}
 	return true, nil
+}
+
+func (m *Meta) LoadImageFile(file string) error {
+	if file != "" {
+		image, err := os.ReadFile(file)
+		if err != nil {
+			return errors.Wrap(err, "os.ReadFile")
+		}
+		imageStr := dataurl.EncodeBytes(image)
+		m.ImageData = imageStr
+	}
+	return nil
 }
 
 func (m *Meta) ToJsonStr() string {
@@ -212,16 +210,10 @@ func (m *Meta) FetchAssetMeta(isHash bool, data string) string {
 	return MakeJsonErrorResult(SUCCESS, "", nil)
 }
 
-// finalizeBatch
-//
-//	@Description: FinalizeBatch will attempt to finalize the current pending batch.
-//	@param shortResponse
-//	@param feeRate
-//	@return string
 func finalizeBatch(shortResponse bool, feeRate int, token string, deviceId string) string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := mintrpc.NewMintClient(conn)
@@ -234,41 +226,21 @@ func finalizeBatch(shortResponse bool, feeRate int, token string, deviceId strin
 		fmt.Printf("%s mintrpc FinalizeBatch Error: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(FinalizeBatchErr, err.Error(), nil)
 	}
-	// @dev: Upload asset local mint
 	err = UploadAssetLocalMints(token, deviceId, response)
 	if err != nil {
 		LogError("", err)
-		// @dev: Do not return
 	}
-	// @Description: Set group first asset meta
 	err = SetGroupFirstAssetMeta(token, deviceId, response)
 	if err != nil {
 		LogError("", err)
-		// @dev: Do not return
 	}
 	return MakeJsonErrorResult(SUCCESS, "", FinalizeBatchResponseToPendingBatch(response))
 }
 
-// mintAsset
-//
-//	@Description:MintAsset will attempt to mint the set of assets (async by default to ensure proper batching) specified in the request.
-//	The pending batch is returned that shows the other pending assets that are part of the next batch. This call will block until the operation succeeds (asset is staged in the batch) or fails.
-//	@param assetVersionIsV1
-//	@param assetTypeIsCollectible
-//	@param name
-//	@param assetMetaData
-//	@param AssetMetaTypeIsJsonNotOpaque
-//	@param amount
-//	@param newGroupedAsset
-//	@param groupedAsset
-//	@param groupKey
-//	@param groupAnchor
-//	@param shortResponse
-//	@return bool
-func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, assetMetaData string, AssetMetaTypeIsJsonNotOpaque bool, amount int, newGroupedAsset bool, groupedAsset bool, groupKey string, groupAnchor string, shortResponse bool) string {
+func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, assetMetaData string, AssetMetaTypeIsJsonNotOpaque bool, amount int, newGroupedAsset bool, groupedAsset bool, groupKey string, groupAnchor string, decimalDisplay int, shortResponse bool) string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := mintrpc.NewMintClient(conn)
@@ -287,13 +259,16 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 	_assetMetaDataByteSlice := []byte(assetMetaData)
 	var _assetMetaType taprpc.AssetMetaType
 	if AssetMetaTypeIsJsonNotOpaque {
-		//_assetMetaType = taprpc.AssetMetaType_META_TYPE_JSON
 	} else {
 		_assetMetaType = taprpc.AssetMetaType_META_TYPE_OPAQUE
 	}
 	_groupKeyByteSlices, err := hex.DecodeString(groupKey)
 	if err != nil {
 		return MakeJsonErrorResult(DecodeStringErr, err.Error(), nil)
+	}
+	if decimalDisplay < 0 || decimalDisplay > 100 {
+		err = errors.New("invalid decimal display")
+		return MakeJsonErrorResult(InvalidDecimalDisplay, err.Error(), nil)
 	}
 	request := &mintrpc.MintAssetRequest{
 		Asset: &mintrpc.MintAsset{
@@ -309,6 +284,7 @@ func mintAsset(assetVersionIsV1 bool, assetTypeIsCollectible bool, name string, 
 			GroupedAsset:    groupedAsset,
 			GroupKey:        _groupKeyByteSlices,
 			GroupAnchor:     groupAnchor,
+			DecimalDisplay:  uint32(decimalDisplay),
 		},
 		ShortResponse: shortResponse,
 	}

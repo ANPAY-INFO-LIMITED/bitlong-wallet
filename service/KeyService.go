@@ -39,9 +39,6 @@ func GetPrivateKey() (string, error) {
 		fmt.Println("err:", err)
 	}
 	if retrievedKey != nil {
-		//PrivateKeyHex := fmt.Sprintf("%064x", retrievedKey.PrivateKey)
-		//fmt.Println("PrivateKey:", PrivateKeyHex)
-		//return PrivateKeyHex, nil
 		privateKey := retrievedKey.PrivateKey
 		return privateKey, nil
 	}
@@ -145,13 +142,11 @@ func readDb_Fixed() (*KeyInfo, error) {
 		}
 	}(db)
 	keyStore := &KeyStore{DB: db}
-	// 调用 ReadKey 获取特定的密钥
 	keyInfo, err := keyStore.ReadKey(keyId)
 	if err != nil {
 		log.Printf("Failed to read key %s: %s", keyId, err)
 		return nil, err
 	} else {
-		//fmt.Printf("Key: %+v\n", keyInfo)
 		return keyInfo, nil
 	}
 }
@@ -167,13 +162,11 @@ func readDb() (*KeyInfo, error) {
 		}
 	}(db)
 	keyStore := &KeyStore{DB: db}
-	// 调用 ReadKey 获取特定的密钥
 	keyInfo, err := keyStore.ReadKey(keyId)
 	if err != nil {
 		log.Printf("Failed to read key %s: %s", keyId, err)
 		return nil, err
 	} else {
-		//fmt.Printf("Key: %+v\n", keyInfo)
 		return keyInfo, nil
 	}
 }
@@ -214,9 +207,7 @@ func getNoStrAddress(pk string) (string, error) {
 		fmt.Println("Error decoding hex string:", err)
 		return "", err
 	}
-	// 将公钥编码为 Base58
 	base58EncodedPubKey := base58.Encode(compressedPubKeyBytes)
-	// 添加 nostr 协议所需的前缀
 	nostrPubKey := "npub" + base58EncodedPubKey
 	fmt.Println("Nostr address:", nostrPubKey)
 	return nostrPubKey, nil
@@ -237,26 +228,21 @@ func GetPublicKey() (string, string, error) {
 	return publicKeyHex, address, nil
 }
 
-// GetPublicKey 增强版获取公钥函数
 func GetNewPublicKey() (string, string, error) {
-	// 1. 从数据库读取密钥
 	retrievedKey, err := readDb()
 	if err != nil {
 		fmt.Printf("err is :%v\n", err)
 		return "", "", err
 	}
 
-	// 2. 转换为64位十六进制格式
 	publicKeyHex := fmt.Sprintf("%064X", retrievedKey.PublicKey)
 	fmt.Println("publicKeyHex", publicKeyHex)
 
-	// 3. 获取nostr地址
 	nostrAddress, err := getNoStrAddress(publicKeyHex)
 	if err != nil {
 		return "", "", err
 	}
 
-	// 4. 加密nostr地址
 	encryptedAddress, err := encryptNostrAddress(nostrAddress)
 	if err != nil {
 		return "", "", fmt.Errorf("encrypt address error: %v", err)
@@ -265,16 +251,13 @@ func GetNewPublicKey() (string, string, error) {
 	return publicKeyHex, encryptedAddress, nil
 }
 
-// insertRandomValues 在固定位置插入随机值
 func insertRandomValues(publicKeyHex string) (string, error) {
-	// 生成8位随机值
 	randomBytes := make([]byte, 4)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", err
 	}
 	randomValue := hex.EncodeToString(randomBytes) // 8位十六进制
 
-	// 每16个字符插入随机值
 	var result strings.Builder
 	for i := 0; i < len(publicKeyHex); i += 16 {
 		end := i + 16
@@ -291,73 +274,56 @@ func insertRandomValues(publicKeyHex string) (string, error) {
 	return result.String(), nil
 }
 
-// encryptPublicKey AES加密公钥
 func encryptNostrAddress(address string) (string, error) {
-	// 1. 插入随机值
 	addressWithRandom, err := insertRandomValues(address)
 	if err != nil {
 		return "", err
 	}
-	// 2. AES加密
 	return aesEncrypt(addressWithRandom)
 }
 func aesEncrypt(data string) (string, error) {
-	// 1. 验证输入
 	if len(data) == 0 {
 		return "", fmt.Errorf("empty data")
 	}
 
-	// 2. AES密钥 (32字节 for AES-256)
 	key := []byte("YourAESKey32BytesLongForSecurity")
 	if len(key) != 32 {
 		return "", fmt.Errorf("invalid key size: must be 32 bytes")
 	}
 
-	// 3. 创建cipher
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("create cipher error: %v", err)
 	}
 
-	// 4. 生成随机IV
 	iv := make([]byte, aes.BlockSize)
 	if _, err := rand.Read(iv); err != nil {
 		return "", fmt.Errorf("generate IV error: %v", err)
 	}
 
-	// 5. PKCS7填充（使用正确的块大小）
 	paddedData := pkcs7Pad([]byte(data), aes.BlockSize)
 
-	// 6. 创建加密文本缓冲区
 	ciphertext := make([]byte, len(paddedData))
 
-	// 7. 加密
 	mode := cipher.NewCBCEncrypter(block, iv)
 	mode.CryptBlocks(ciphertext, paddedData)
 
-	// 8. 组合IV和密文
 	combined := make([]byte, len(iv)+len(ciphertext))
 	copy(combined, iv)
 	copy(combined[len(iv):], ciphertext)
 
-	// 9. 返回十六进制编码的结果
 	return hex.EncodeToString(combined), nil
 }
 
-// PKCS7填充函数
 func pkcs7Pad(data []byte, blockSize int) []byte {
-	// 1. 验证块大小
 	if blockSize <= 0 || blockSize > 256 {
 		panic("invalid block size")
 	}
 
-	// 2. 计算需要填充的长度
 	padding := blockSize - len(data)%blockSize
 
-	// 3. 创建填充数据
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
 
-	// 4. 添加填充
 	return append(data, padText...)
 }
 func GetJsonPublicKey() (string, error) {
@@ -382,49 +348,40 @@ func GetJsonPublicKey() (string, error) {
 	return string(marshal), nil
 }
 func decryptNew(cipherText string, key []byte) (string, error) {
-	// 解码Base64编码的密文
 	decoded, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
 		return "", fmt.Errorf("base64解码失败: %w", err)
 	}
 
-	// 检查解码后的内容是否至少有16字节（IV的长度）
 	if len(decoded) < aes.BlockSize {
 		return "", errors.New("解码后的数据长度不足16字节")
 	}
 
-	// 提取IV和加密数据
 	iv := decoded[:aes.BlockSize]
 	encrypted := decoded[aes.BlockSize:]
 
-	// 验证密钥长度（AES密钥长度必须是16, 24或32字节）
 	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
 		return "", errors.New("无效的密钥长度")
 	}
 
-	// 初始化AES加密块
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("创建AES密钥失败: %w", err)
 	}
 
-	// 解密数据
 	mode := cipher.NewCBCDecrypter(block, iv)
 	decrypted := make([]byte, len(encrypted))
 	mode.CryptBlocks(decrypted, encrypted)
 
-	// PKCS7填充验证和去除
 	if len(decrypted) == 0 {
 		return "", errors.New("解密后的数据为空")
 	}
 	padding := int(decrypted[len(decrypted)-1])
 
-	// 确保填充长度有效
 	if padding < 1 || padding > aes.BlockSize || padding > len(decrypted) {
 		return "", errors.New("无效的填充长度")
 	}
 
-	// 验证填充字节
 	for i := 0; i < padding; i++ {
 		if decrypted[len(decrypted)-1-i] != byte(padding) {
 			return "", errors.New("填充验证失败")
@@ -450,24 +407,20 @@ func BuildDecrypt(encryptedDeviceID, saltBase64 string) (string, error) {
 	return decryptedID, nil
 }
 func GetExistPublicKey() (string, string, error) {
-	// 1. 从数据库读取密钥
 	retrievedKey, err := readDb()
 	if err != nil {
 		fmt.Printf("err is :%v\n", err)
 		return "", "", err
 	}
 
-	// 2. 转换为64位十六进制格式
 	publicKeyHex := fmt.Sprintf("%064X", retrievedKey.PublicKey)
 	fmt.Println("publicKeyHex", publicKeyHex)
 
-	// 3. 获取nostr地址
 	nostrAddress, err := getNoStrAddress(publicKeyHex)
 	if err != nil {
 		return "", "", err
 	}
 
-	// 4. 加密nostr地址
 	encryptedAddress, err := encryptNostrAddress(nostrAddress)
 	if err != nil {
 		return "", "", fmt.Errorf("encrypt address error: %v", err)

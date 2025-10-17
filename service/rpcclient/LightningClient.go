@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
+	"github.com/lightningnetwork/lnd/routing/route"
 	"github.com/wallet/service/apiConnect"
 )
 
@@ -45,6 +46,7 @@ func getWalletKitClient() (walletrpc.WalletKitClient, func(), error) {
 	client := walletrpc.NewWalletKitClient(conn)
 	return client, clearUp, nil
 }
+
 func ListAddresses() (*walletrpc.ListAddressesResponse, error) {
 	client, clearUp, err := getWalletKitClient()
 	if err != nil {
@@ -64,14 +66,12 @@ func BumpFee(txId string, fee int) (*walletrpc.BumpFeeResponse, error) {
 	}
 	defer clearUp()
 
-	//获取用户的未确认的utxo
 	unspend, err := client.ListUnspent(context.Background(), &walletrpc.ListUnspentRequest{
 		UnconfirmedOnly: true,
 	})
 	if err != nil || unspend == nil {
 		return nil, fmt.Errorf("could not get unspent: %v", err)
 	}
-	//获取用户默认账户的地址
 	addResponce, err := client.ListAddresses(context.Background(), &walletrpc.ListAddressesRequest{
 		AccountName: "default",
 	})
@@ -84,12 +84,10 @@ func BumpFee(txId string, fee int) (*walletrpc.BumpFeeResponse, error) {
 			addrs = append(addrs, addr.Address)
 		}
 	}
-	//创建请求体
 	request := &walletrpc.BumpFeeRequest{
 		SatPerVbyte: uint64(fee),
 		Immediate:   true,
 	}
-	//找出到可使用的未确认utxo
 	for _, u := range unspend.Utxos {
 		if u.Outpoint.TxidStr == txId {
 			for _, addr := range addrs {
@@ -103,7 +101,6 @@ func BumpFee(txId string, fee int) (*walletrpc.BumpFeeResponse, error) {
 	if request.Outpoint == nil {
 		return nil, fmt.Errorf("could not find usable outpoint for this txid %v", txId)
 	}
-	//发送请求
 	response, err := client.BumpFee(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s watchtowerrpc BumpFee err: %v\n", GetTimeNow(), err)
@@ -135,6 +132,110 @@ func ListPendingSwaps() (*walletrpc.PendingSweepsResponse, error) {
 	response, err := client.PendingSweeps(context.Background(), &walletrpc.PendingSweepsRequest{})
 	if err != nil {
 		fmt.Printf("%s watchtowerrpc ListSwaps err: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}
+
+func ListInvoices(maxNum int, reversed bool) (*lnrpc.ListInvoiceResponse, error) {
+	client, clearUp, err := getLightningClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+
+	request := &lnrpc.ListInvoiceRequest{
+		Reversed: reversed,
+	}
+	if maxNum > 0 {
+		request.NumMaxInvoices = uint64(maxNum)
+	}
+	response, err := client.ListInvoices(context.Background(), request)
+	if err != nil {
+		return nil, err
+	}
+	return response, err
+}
+
+func ListChannels(activeOnly bool, private bool, peer string) (*lnrpc.ListChannelsResponse, error) {
+	client, clearUp, err := getLightningClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+
+	request := &lnrpc.ListChannelsRequest{
+		ActiveOnly:  activeOnly,
+		PrivateOnly: private,
+	}
+	var peerKey []byte
+	if len(peer) > 0 {
+		pk, err := route.NewVertexFromStr(peer)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --peer pubkey: %w", err)
+		}
+		peerKey = pk[:]
+	}
+	if len(peer) > 10 {
+		request.Peer = peerKey
+	}
+	response, err := client.ListChannels(context.Background(), request)
+	if err != nil {
+		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
+		return nil, err
+	}
+	return response, nil
+}
+
+func AddInvoice(amount int64, memo string, chainId uint64) (*lnrpc.AddInvoiceResponse, error) {
+	client, clearUp, err := getLightningClient()
+	if err != nil {
+		return nil, err
+	}
+	defer clearUp()
+
+	request := &lnrpc.Invoice{
+		Value: amount,
+		Memo:  memo,
+	}
+	if chainId > 0 {
+		chanInfo, err := client.GetChanInfo(context.Background(), &lnrpc.ChanInfoRequest{
+			ChanId: chainId,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("could not get channel info: %v", err)
+		}
+		lndInfo, err := client.GetInfo(context.Background(), &lnrpc.GetInfoRequest{})
+		if err != nil {
+			return nil, fmt.Errorf("could not get lnd info: %v", err)
+		}
+		var hop *lnrpc.HopHint
+		if chanInfo.Node1Pub == lndInfo.IdentityPubkey {
+			hop = &lnrpc.HopHint{
+				NodeId:                    chanInfo.Node2Pub,
+				ChanId:                    chanInfo.ChannelId,
+				FeeBaseMsat:               uint32(chanInfo.Node2Policy.FeeBaseMsat),
+				FeeProportionalMillionths: uint32(chanInfo.Node2Policy.FeeRateMilliMsat),
+				CltvExpiryDelta:           chanInfo.Node2Policy.TimeLockDelta,
+			}
+		} else {
+			hop = &lnrpc.HopHint{
+				NodeId:                    chanInfo.Node1Pub,
+				ChanId:                    chanInfo.ChannelId,
+				FeeBaseMsat:               uint32(chanInfo.Node1Policy.FeeBaseMsat),
+				FeeProportionalMillionths: uint32(chanInfo.Node1Policy.FeeRateMilliMsat),
+				CltvExpiryDelta:           chanInfo.Node1Policy.TimeLockDelta,
+			}
+		}
+		request.RouteHints = []*lnrpc.RouteHint{
+			{
+				HopHints: []*lnrpc.HopHint{hop},
+			},
+		}
+	}
+
+	response, err := client.AddInvoice(context.Background(), request)
+	if err != nil {
 		return nil, err
 	}
 	return response, nil

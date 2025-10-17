@@ -2,12 +2,13 @@ package api
 
 import (
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/gin-gonic/gin"
-	"github.com/wallet/base"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/boltdb/bolt"
+	"github.com/gin-gonic/gin"
+	"github.com/wallet/base"
 )
 
 func RouterRunOnServer() {
@@ -65,7 +66,7 @@ func setupRouterOnServer() *gin.Engine {
 		var lnurlStr string
 		serverDomainOrSocket := base.QueryConfigByKey("LnurlServerHost")
 		if result {
-			lnurlStr = Encode("http://" + serverDomainOrSocket + "/pay?id=" + id)
+			lnurlStr = Encode(serverDomainOrSocket + "/pay?id=" + id)
 		} else {
 			id = ""
 		}

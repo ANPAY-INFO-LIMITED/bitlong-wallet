@@ -22,7 +22,7 @@ func custodyRankList(AssetId, token string, page, pageSize int) string {
 		Page:     page,
 		PageSize: pageSize,
 	}
-	url := "http://" + serverDomainOrSocket + "/account_asset/balance/rankList"
+	url := serverDomainOrSocket + "/account_asset/balance/rankList"
 	requestJsonBytes, err := json.Marshal(quest)
 	if err != nil {
 		return MakeJsonErrorResult(DefaultErr, err.Error(), "")

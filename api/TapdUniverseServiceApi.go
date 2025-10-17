@@ -4,19 +4,20 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/pkg/errors"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 )
 
-func AddFederationServer() {}
-
 func assetLeafKeys(id string, proofType universerpc.ProofType) (*universerpc.AssetLeafKeyResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := universerpc.NewUniverseClient(conn)
@@ -27,9 +28,6 @@ func assetLeafKeys(id string, proofType universerpc.ProofType) (*universerpc.Ass
 			},
 			ProofType: proofType,
 		},
-		//Offset:    0,
-		//Limit:     0,
-		//Direction: 0,
 	}
 	response, err := client.AssetLeafKeys(context.Background(), request)
 	if err != nil {
@@ -108,10 +106,12 @@ func GetAssetInfo(id string) string {
 	if response.Leaves == nil {
 		return MakeJsonErrorResult(responseLeavesNullErr, "NOT_FOUND", nil)
 	}
+	var assetinfo *taprpc.Asset
 	var blob proof.Blob
 	for index, leaf := range response.Leaves {
 		if hex.EncodeToString(leaf.Asset.AssetGenesis.GetAssetId()) == id {
 			blob = response.Leaves[index].Proof
+			assetinfo = leaf.Asset
 			break
 		}
 	}
@@ -135,17 +135,18 @@ func GetAssetInfo(id string) string {
 	}
 	newMeta.GetMetaFromStr(m)
 	var assetInfo = struct {
-		AssetId      string  `json:"asset_Id"`
-		Name         string  `json:"name"`
-		Point        string  `json:"point"`
-		AssetType    string  `json:"assetType"`
-		GroupName    *string `json:"group_name"`
-		GroupKey     *string `json:"group_key"`
-		Amount       uint64  `json:"amount"`
-		Meta         *string `json:"meta"`
-		CreateHeight int64   `json:"create_height"`
-		CreateTime   int64   `json:"create_time"`
-		Universe     string  `json:"universe"`
+		AssetId        string  `json:"asset_Id"`
+		Name           string  `json:"name"`
+		Point          string  `json:"point"`
+		AssetType      string  `json:"assetType"`
+		GroupName      *string `json:"group_name"`
+		GroupKey       *string `json:"group_key"`
+		Amount         uint64  `json:"amount"`
+		Meta           *string `json:"meta"`
+		CreateHeight   int64   `json:"create_height"`
+		CreateTime     int64   `json:"create_time"`
+		Universe       string  `json:"universe"`
+		DecimalDisplay uint32  `json:"decimal_display"`
 	}{
 		AssetId:      assetId,
 		Name:         assetName,
@@ -161,6 +162,11 @@ func GetAssetInfo(id string) string {
 	if isGroup {
 		assetInfo.GroupKey = &queryId
 	}
+	if assetinfo != nil && assetinfo.DecimalDisplay != nil {
+		assetInfo.DecimalDisplay = assetinfo.DecimalDisplay.DecimalDisplay
+	} else {
+		assetInfo.DecimalDisplay = 0
+	}
 	return MakeJsonErrorResult(SUCCESS, "", assetInfo)
 }
 
@@ -170,14 +176,10 @@ func DeleteAssetRoot() {}
 
 func DeleteFederationServer() {}
 
-// UniverseInfo
-//
-//	@Description: Info returns a set of information about the current state of the Universe.
-//	@return string
 func UniverseInfo() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 
@@ -192,15 +194,10 @@ func UniverseInfo() string {
 
 func InsertProof() {}
 
-// ListFederationServers
-//
-//	@Description: ListFederationServers lists the set of servers that make up the federation of the local Universe server.
-//	This servers are used to push out new proofs, and also periodically call sync new proofs from the remote server.
-//	@return string
 func ListFederationServers() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := universerpc.NewUniverseClient(conn)
@@ -235,9 +232,13 @@ func QueryEvents() {}
 
 func QueryFederationSyncConfig() {}
 
-func QueryProof() {}
-
-func SetFederationSyncConfig() {}
+func SetFederationSyncConfig(allowSyncInsert bool, allowSyncExport bool) string {
+	_, err := setFederationSyncConfig(allowSyncInsert, allowSyncExport)
+	if err != nil {
+		return MakeJsonErrorResult2(SUCCESS_2, err.Error(), "")
+	}
+	return MakeJsonErrorResult2(SUCCESS_2, SUCCESS_2.Error(), "")
+}
 
 func SyncUniverse(universeHost string, assetId string) string {
 	var targets []*universerpc.SyncTarget
@@ -267,6 +268,124 @@ func SyncUniverse(universeHost string, assetId string) string {
 		return MakeJsonErrorResult(syncUniverseErr, err.Error(), "")
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func SyncUniverse2(universeHost string, assetId string) string {
+	if universeHost == "" {
+		var configHost = base.QueryConfigByKey("universeHost")
+		switch {
+		case configHost != "":
+			universeHost = configHost
+		case base.NetWork == base.UseMainNet:
+			universeHost = "universe.lightning.finance:10029"
+		case base.NetWork == base.UseTestNet:
+			universeHost = "testnet.universe.lightning.finance:10029"
+		}
+	}
+
+	var targets = func() []*universerpc.SyncTarget {
+		universeID := &universerpc.ID{
+			Id: &universerpc.ID_AssetIdStr{
+				AssetIdStr: assetId,
+			},
+			ProofType: universerpc.ProofType_PROOF_TYPE_ISSUANCE,
+		}
+		var _targets []*universerpc.SyncTarget
+		_targets = append(_targets, &universerpc.SyncTarget{
+			Id: universeID,
+		})
+		return _targets
+	}()
+	var err1, err2 error
+	_, err1 = syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	if err1 != nil {
+		LogError("syncUniverse ISSUANCE FULL", err1)
+	}
+
+	targets[0].Id.ProofType = universerpc.ProofType_PROOF_TYPE_TRANSFER
+	_, err2 = syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	if err2 != nil {
+		LogError("syncUniverse TRANSFER FULL", err2)
+	}
+	var errCode ErrCode
+	var errStr string
+	if err1 == nil && err2 == nil {
+		errCode = SUCCESS
+	} else {
+		errCode = syncUniverseErr
+		errStr = fmt.Sprintf("%v;%v", err1, err2)
+	}
+
+	return MakeJsonErrorResult(errCode, errStr, nil)
+}
+
+func syncUniverseAsset(universeHost string, assetId string) error {
+
+	if universeHost == "" {
+		var configHost = base.QueryConfigByKey("universeHost")
+		switch {
+		case configHost != "":
+			universeHost = configHost
+		case base.NetWork == base.UseMainNet:
+			universeHost = "universe.lightning.finance:10029"
+		case base.NetWork == base.UseTestNet:
+			universeHost = "testnet.universe.lightning.finance:10029"
+		}
+	}
+
+	var targets = func() []*universerpc.SyncTarget {
+		universeID := &universerpc.ID{
+			Id: &universerpc.ID_AssetIdStr{
+				AssetIdStr: assetId,
+			},
+			ProofType: universerpc.ProofType_PROOF_TYPE_ISSUANCE,
+		}
+		var _targets []*universerpc.SyncTarget
+		_targets = append(_targets, &universerpc.SyncTarget{
+			Id: universeID,
+		})
+		return _targets
+	}()
+
+	_, err := syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	if err != nil {
+		return errors.Wrap(err, "syncUniverse ISSUANCE FULL")
+	}
+
+	targets[0].Id.ProofType = universerpc.ProofType_PROOF_TYPE_TRANSFER
+	_, err = syncUniverse(universeHost, targets, universerpc.UniverseSyncMode_SYNC_FULL)
+	if err != nil {
+		return errors.Wrap(err, "syncUniverse TRANSFER FULL")
+	}
+
+	return nil
+}
+
+func SyncUniverseAsset(universeHost string, assetId string) string {
+	err := syncUniverseAsset(universeHost, assetId)
+	if err != nil {
+		return MakeJsonErrorResult2(syncUniverseAssetErr, err.Error(), "")
+	}
+
+	return MakeJsonErrorResult2(SUCCESS, SUCCESS.Error(), "")
+}
+
+func PushProof(universeHost string, assetIdStr string, outpoint string, scriptKey string) string {
+	resp, err := pushProof(universeHost, assetIdStr, outpoint, scriptKey)
+	if err != nil {
+		return MakeJsonErrorResult2(pushProofErr, err.Error(), "")
+	}
+
+	return MakeJsonErrorResult2(SUCCESS, SUCCESS.Error(), resp.Key.LeafKey.Outpoint)
+}
+
+func QueryProof(universeHost string, assetIdStr string, outpoint string, scriptKey string) string {
+	resp, err := queryProof(universeHost, assetIdStr, outpoint, scriptKey)
+	if err != nil {
+		return MakeJsonErrorResult2(pushProofErr, err.Error(), "")
+	}
+
+	return MakeJsonErrorResult2(SUCCESS, SUCCESS.Error(), resp)
 }
 
 func SyncUniverseByGroup(universeHost string, groupKey string) string {
@@ -304,7 +423,7 @@ func UniverseStats() {}
 func queryAssetRoot(id string) (*universerpc.QueryRootResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 
@@ -323,7 +442,7 @@ func queryAssetRoot(id string) (*universerpc.QueryRootResponse, error) {
 func assetLeaves(isGroup bool, id string, proofType universerpc.ProofType) (*universerpc.AssetLeafResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	request := &universerpc.ID{
@@ -354,7 +473,7 @@ func AssetLeavesAndGetResponse(isGroup bool, id string, proofType universerpc.Pr
 func queryAssetStats(assetId string) (*universerpc.UniverseAssetStats, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	id, err := hex.DecodeString(assetId)
@@ -369,7 +488,7 @@ func queryAssetStats(assetId string) (*universerpc.UniverseAssetStats, error) {
 func syncUniverse(universeHost string, syncTargets []*universerpc.SyncTarget, syncMode universerpc.UniverseSyncMode) (*universerpc.SyncResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	request := &universerpc.SyncRequest{
@@ -377,7 +496,124 @@ func syncUniverse(universeHost string, syncTargets []*universerpc.SyncTarget, sy
 		SyncMode:     syncMode,
 		SyncTargets:  syncTargets,
 	}
-	client := universerpc.NewUniverseClient(conn)
-	response, err := client.SyncUniverse(context.Background(), request)
-	return response, err
+	uc := universerpc.NewUniverseClient(conn)
+	response, err := uc.SyncUniverse(context.Background(), request)
+	if err != nil {
+		return nil, errors.Wrap(err, "uc.SyncUniverse")
+	}
+	return response, nil
+}
+
+func pushProof(universeHost string, assetIdStr string, outpoint string, scriptKey string) (*universerpc.PushProofResponse, error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+
+	request := &universerpc.PushProofRequest{
+		Key: &universerpc.UniverseKey{
+			Id: &universerpc.ID{
+				Id: &universerpc.ID_AssetIdStr{
+					AssetIdStr: assetIdStr,
+				},
+				ProofType: universerpc.ProofType_PROOF_TYPE_TRANSFER,
+			},
+			LeafKey: &universerpc.AssetKey{
+				Outpoint: &universerpc.AssetKey_OpStr{
+					OpStr: outpoint,
+				},
+				ScriptKey: &universerpc.AssetKey_ScriptKeyStr{
+					ScriptKeyStr: scriptKey,
+				},
+			},
+		},
+
+		Server: &universerpc.UniverseFederationServer{
+			Host: universeHost,
+			Id:   0,
+		},
+	}
+	uc := universerpc.NewUniverseClient(conn)
+	response, err := uc.PushProof(context.Background(), request)
+	if err != nil {
+		return nil, errors.Wrap(err, "uc.PushProof")
+	}
+	return response, nil
+}
+
+func queryProof(universeHost string, assetIdStr string, outpoint string, scriptKey string) (*universerpc.AssetProofResponse, error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+
+	request := &universerpc.UniverseKey{
+		Id: &universerpc.ID{
+			Id: &universerpc.ID_AssetIdStr{
+				AssetIdStr: assetIdStr,
+			},
+			ProofType: universerpc.ProofType_PROOF_TYPE_TRANSFER,
+		},
+		LeafKey: &universerpc.AssetKey{
+			Outpoint: &universerpc.AssetKey_OpStr{
+				OpStr: outpoint,
+			},
+			ScriptKey: &universerpc.AssetKey_ScriptKeyStr{
+				ScriptKeyStr: scriptKey,
+			},
+		},
+	}
+
+	uc := universerpc.NewUniverseClient(conn)
+	response, err := uc.QueryProof(context.Background(), request)
+	if err != nil {
+		return nil, errors.Wrap(err, "uc.QueryProof")
+	}
+	return response, nil
+}
+
+func setFederationSyncConfig(allowSyncInsert bool, allowSyncExport bool) (resp *universerpc.SetFederationSyncConfigResponse, err error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+	request := &universerpc.SetFederationSyncConfigRequest{
+		GlobalSyncConfigs: []*universerpc.GlobalFederationSyncConfig{
+			{
+				ProofType:       universerpc.ProofType_PROOF_TYPE_ISSUANCE,
+				AllowSyncInsert: allowSyncInsert,
+				AllowSyncExport: allowSyncExport,
+			},
+			{
+				ProofType:       universerpc.ProofType_PROOF_TYPE_TRANSFER,
+				AllowSyncInsert: allowSyncInsert,
+				AllowSyncExport: allowSyncExport,
+			},
+		},
+	}
+	uc := universerpc.NewUniverseClient(conn)
+	response, err := uc.SetFederationSyncConfig(context.Background(), request)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "uc.SetFederationSyncConfig")
+	}
+	return response, nil
+}
+
+func AddFederationServer(server string) string {
+	err := rpcclient.AddFederationServer(server)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", "")
+}
+
+func ListFederationServer() string {
+	resp := rpcclient.ListFederationServers()
+	if resp == nil || len(resp.Servers) == 0 {
+		return MakeJsonErrorResult(DefaultErr, "error or empty server list", "")
+	}
+	return MakeJsonErrorResult(SUCCESS, "", resp)
 }

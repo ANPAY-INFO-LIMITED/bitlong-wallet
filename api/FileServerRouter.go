@@ -2,12 +2,13 @@ package api
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"os"
 	"path"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func RunFileServerRouter() {
@@ -25,11 +26,7 @@ func setupFileServerRouter() *gin.Engine {
 	return router
 }
 
-// UploadFile
-// @Description: Upload a single file
-// @param c
 func UploadFile(c *gin.Context) {
-	//fileName := c.Query("filename")
 	saveName := uuid.New().String()
 	saveDir := "files"
 	file, header, err := c.Request.FormFile("file")
@@ -45,8 +42,6 @@ func UploadFile(c *gin.Context) {
 		return
 	}
 	uploadFileNameWithSuffix := path.Base(header.Filename)
-	//uploadFileType := path.Ext(uploadFileNameWithSuffix)
-	//saveName = fileName + uploadFileType
 	saveName = uploadFileNameWithSuffix
 	savePath := saveDir + "/" + saveName
 	var localFileInfo os.FileInfo

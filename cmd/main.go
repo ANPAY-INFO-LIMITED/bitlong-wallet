@@ -9,7 +9,6 @@ const PATH2 = "/home/en/test3"
 const PATH5 = "/home/en/lit/test"
 
 func main() {
-	//api.StartLitd()
 	api.StartLitd()
 }
 

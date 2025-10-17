@@ -12,9 +12,18 @@ tls.key
 *.exe
 *.exe~
 *.db
+*.log
 # environment
 .env
 .env.local
 frpc.ini
 frpc.yaml
 config.yaml
+./cmd/main.go
+etc/*
+logs/*
+!etc/config.txt.example
+!etc/config.yaml.example
+
+build_*
+

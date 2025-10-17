@@ -3,8 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/boltdb/bolt"
 	"time"
+
+	"github.com/boltdb/bolt"
 )
 
 type ServerStore struct {
@@ -68,8 +69,6 @@ func (s *ServerStore) AllUsers(bucket string) ([]User, error) {
 	}
 	return users, nil
 }
-
-// CURD
 
 func (s *ServerStore) CreateOrUpdateUser(bucket string, u *User) error {
 	return s.DB.Update(func(tx *bolt.Tx) error {

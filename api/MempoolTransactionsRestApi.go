@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/pkg/errors"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -61,19 +62,18 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	}
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "json.Marshal")
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
 	req, err := http.NewRequest("GET", targetUrl, payload)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "http.NewRequest")
 	}
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	res, err := http.DefaultClient.Do(req)
-
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "http.DefaultClient.Do")
 	}
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
@@ -83,12 +83,12 @@ func getTransactionByMempool(transaction string) (*TransactionsResponse, error) 
 	}(res.Body)
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, AppendErrorInfo(err, "http.Get")
+		return nil, errors.Wrap(err, "io.ReadAll")
 	}
 
 	var transactionsResponse TransactionsResponse
 	if err := json.Unmarshal(body, &transactionsResponse); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "json.Unmarshal")
 	}
 	return &transactionsResponse, nil
 }
@@ -126,8 +126,6 @@ func TransactionsResponseToTransactionsSimplified(transactionsResponse *Transact
 	return &transactionsSimplified
 }
 
-// GetTransactionByMempool
-// @Description: Get transactions simplified info by txid
 func GetTransactionByMempool(txid string) string {
 	response, err := getTransactionByMempool(txid)
 	if err != nil {

@@ -4,31 +4,27 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
+
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
-	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightninglabs/taproot-assets/rpcutils"
 	unirpc "github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightninglabs/taproot-assets/universe"
 	"google.golang.org/grpc"
-	"net/url"
 )
 
 type courier struct {
 	proof.Courier
 
-	// client is the RPC client that the courier will use to interact with
-	// the universe RPC server.
 	client unirpc.UniverseClient
 
-	// rawConn is the raw connection that the courier will use to interact
-	// with the remote gRPC service.
 	rawConn *grpc.ClientConn
 }
 
 func (c *courier) DeliverProof(ctx context.Context,
 	annotatedProof *proof.AnnotatedProof) error {
-	// Decode annotated proof into proof file.
 	proofFile := &proof.File{}
 	err := proofFile.Decode(bytes.NewReader(annotatedProof.Blob))
 	if err != nil {
@@ -45,8 +41,7 @@ func (c *courier) DeliverProof(ctx context.Context,
 		}
 		proofAsset := transitionProof.Asset
 
-		// Construct asset leaf.
-		rpcAsset, err := taprpc.MarshalAsset(
+		rpcAsset, err := rpcutils.MarshalAsset(
 			ctx, &proofAsset, true, true, nil, fn.None[uint32](),
 		)
 		if err != nil {
@@ -63,9 +58,8 @@ func (c *courier) DeliverProof(ctx context.Context,
 			Proof: proofBuf.Bytes(),
 		}
 
-		// Construct universe key.
 		outPoint := transitionProof.OutPoint()
-		assetKey := unirpc.MarshalAssetKey(
+		assetKey := rpcutils.MarshalAssetKey(
 			outPoint, proofAsset.ScriptKey.PubKey,
 		)
 		assetID := proofAsset.ID()
@@ -79,7 +73,7 @@ func (c *courier) DeliverProof(ctx context.Context,
 			groupPubKeyBytes = groupPubKey.SerializeCompressed()
 		}
 
-		universeID := unirpc.MarshalUniverseID(
+		universeID := rpcutils.MarshalUniverseID(
 			assetID[:], groupPubKeyBytes,
 		)
 		universeKey := unirpc.UniverseKey{
@@ -94,7 +88,6 @@ func (c *courier) DeliverProof(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		// Submit proof to courier.
 		_, err = c.client.InsertProof(ctx, &unirpc.AssetProof{
 			Key:       &universeKey,
 			AssetLeaf: &assetLeaf,
@@ -113,72 +106,6 @@ func (c *courier) DeliverProof(ctx context.Context,
 		return err
 	}
 
-	//// Iterate over each proof in the proof file and submit to the courier
-	//// service.
-	//for i := 0; i < proofFile.NumProofs(); i++ {
-	//	transitionProof, err := proofFile.ProofAt(uint32(i))
-	//	if err != nil {
-	//		return err
-	//	}
-	//	proofAsset := transitionProof.Asset
-	//
-	//	// Construct asset leaf.
-	//	rpcAsset, err := taprpc.MarshalAsset(
-	//		ctx, &proofAsset, true, true, nil,
-	//	)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	var proofBuf bytes.Buffer
-	//	if err := transitionProof.Encode(&proofBuf); err != nil {
-	//		return fmt.Errorf("error encoding proof file: %w", err)
-	//	}
-	//
-	//	assetLeaf := unirpc.AssetLeaf{
-	//		Asset: rpcAsset,
-	//		Proof: proofBuf.Bytes(),
-	//	}
-	//
-	//	// Construct universe key.
-	//	outPoint := transitionProof.OutPoint()
-	//	assetKey := unirpc.MarshalAssetKey(
-	//		outPoint, proofAsset.ScriptKey.PubKey,
-	//	)
-	//	assetID := proofAsset.ID()
-	//
-	//	var (
-	//		groupPubKey      *btcec.PublicKey
-	//		groupPubKeyBytes []byte
-	//	)
-	//	if proofAsset.GroupKey != nil {
-	//		groupPubKey = &proofAsset.GroupKey.GroupPubKey
-	//		groupPubKeyBytes = groupPubKey.SerializeCompressed()
-	//	}
-	//
-	//	universeID := unirpc.MarshalUniverseID(
-	//		assetID[:], groupPubKeyBytes,
-	//	)
-	//	universeKey := unirpc.UniverseKey{
-	//		Id:      universeID,
-	//		LeafKey: assetKey,
-	//	}
-	//	resp, _ := c.client.QueryProof(ctx, &universeKey)
-	//	if resp != nil {
-	//		continue
-	//	}
-	//	// Submit proof to courier.
-	//	_, err = c.client.InsertProof(ctx, &unirpc.AssetProof{
-	//		Key:       &universeKey,
-	//		AssetLeaf: &assetLeaf,
-	//	})
-	//	if err != nil {
-	//		return fmt.Errorf("error inserting proof "+
-	//			"into universe courier service: %w",
-	//			err)
-	//	}
-	//
-	//}
 	return err
 }
 func (c *courier) ReceiveProof(ctx context.Context,
@@ -196,19 +123,16 @@ func (c *courier) ReceiveProof(ctx context.Context,
 		}
 
 		universeKey := unirpc.UniverseKey{
-			Id: unirpc.MarshalUniverseID(
+			Id: rpcutils.MarshalUniverseID(
 				loc.AssetID[:], groupKeyBytes,
 			),
-			LeafKey: unirpc.MarshalAssetKey(
+			LeafKey: rpcutils.MarshalAssetKey(
 				*loc.OutPoint, &loc.ScriptKey,
 			),
 		}
 
-		// Setup proof receive/query routine and start backoff
-		// procedure.
 		var proofBlob []byte
 		receiveFunc := func() error {
-			// Retrieve proof from courier.
 			resp, err := c.client.QueryProof(ctx, &universeKey)
 			if err != nil {
 				return fmt.Errorf("error retreving proof "+
@@ -235,7 +159,6 @@ func (c *courier) ReceiveProof(ctx context.Context,
 			err)
 	}
 
-	// Encode the full proof file.
 	var buf bytes.Buffer
 	if err := proofFile.Encode(&buf); err != nil {
 		return nil, fmt.Errorf("error encoding proof file: %w", err)
@@ -294,7 +217,6 @@ func newCourier(addr *url.URL) (*courier, error) {
 	case proof.HashmailCourierType:
 	case proof.UniverseRpcCourierType:
 
-		// Connect to the universe RPC server.
 		dialOpts, err := serverDialOpts()
 		if err != nil {
 			return nil, err

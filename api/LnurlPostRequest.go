@@ -1,89 +1,244 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/wallet/base"
 	"io"
 	"net/http"
-	"net/url"
+
+	"github.com/pkg/errors"
+	"github.com/wallet/base"
 )
 
 type InvoiceResponse struct {
-	Time    string `json:"time"`
-	ID      string `json:"id"`
-	Amount  string `json:"amount"`
-	Invoice string `json:"invoice"`
-	Result  bool   `json:"result"`
+	Code Code   `json:"code"`
+	Msg  string `json:"msg"`
+	Data string `json:"data"`
 }
 
-type UserResponse struct {
-	Time       string `json:"time"`
-	Id         string `json:"id"`
+type UploadUserResp struct {
+	Code Code   `json:"code"`
+	Msg  string `json:"msg"`
+	Data string `json:"data"`
+}
+
+type UploadUserReq struct {
+	LID        string `json:"lid"`
 	Name       string `json:"name"`
 	Socket     string `json:"socket"`
 	RemotePort string `json:"remote_port"`
-	Result     bool   `json:"result"`
-	Lnurl      string `json:"lnurl"`
 }
 
 func PostServerToUploadUserInfo(id, name, localPort, remotePort string) string {
 
-	serverDomainOrSocket := base.QueryConfigByKey("LnurlServerHost")
-	targetUrl := "http://" + serverDomainOrSocket + "/upload/user"
-
-	payload := url.Values{"id": {id}, "name": {name}, "local_port": {localPort}, "remote_port": {remotePort}}
-
-	response, err := http.PostForm(targetUrl, payload)
+	host := base.QueryConfigByKey("LnurlServerHost")
+	targetUrl := fmt.Sprintf("http://%s/api/v1/lnurl/upload/user", host)
+	requestJsonBytes, err := json.Marshal(UploadUserReq{
+		LID:        id,
+		Name:       name,
+		Socket:     localPort,
+		RemotePort: remotePort,
+	})
 	if err != nil {
-		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
-	}
-	bodyBytes, _ := io.ReadAll(response.Body)
-
-	var userResponse UserResponse
-	if err := json.Unmarshal(bodyBytes, &userResponse); err != nil {
-		fmt.Printf("%s PSTUUI json.Unmarshal :%v\n", GetTimeNow(), err)
 		return ""
 	}
-	return userResponse.Lnurl
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", targetUrl, payload)
+	if err != nil {
+		return ""
+	}
+
+	username := base.QueryConfigByKey("BasicAuthUser")
+	password := base.QueryConfigByKey("BasicAuthPass")
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return ""
+	}
+	var resp UploadUserResp
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return ""
+	}
+	if resp.Msg != "" {
+		return errors.New(resp.Msg).Error()
+	}
+	return resp.Data
 }
 
-// PostPhoneToAddInvoice called by server
 func PostPhoneToAddInvoice(remotePort, amount string) string {
 
-	frpsForwardSocket := fmt.Sprintf("%s:%s", base.QueryConfigByKey("serverAddr"), remotePort)
-
-	targetUrl := "http://" + frpsForwardSocket + "/addInvoice"
-
-	payload := url.Values{"amount": {amount}}
-
-	response, err := http.PostForm(targetUrl, payload)
-	if err != nil {
-		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
-	}
-	bodyBytes, _ := io.ReadAll(response.Body)
-
-	var invoiceResponse InvoiceResponse
-	if err := json.Unmarshal(bodyBytes, &invoiceResponse); err != nil {
-		fmt.Printf("%s PPTAI json.Unmarshal :%v\n", GetTimeNow(), err)
-		return ""
-	}
-	return invoiceResponse.Invoice
+	return ""
 }
 
-// PostServerToPayByPhoneAddInvoice called by Bob
-func PostServerToPayByPhoneAddInvoice(lnu, amount string) string {
+type PayInvoiceReq struct {
+	InvoiceType InvoiceType `json:"invoice_type"`
+	AssetID     string      `json:"asset_id"`
+	Amount      uint64      `json:"amount"`
+	PubKey      string      `json:"pub_key"`
+	Memo        string      `json:"memo"`
+}
+
+func PostServerToPayByPhoneAddInvoice(lnu string, invoiceType int, assetID string, amount int, pubkey string, memo string) string {
 	targetUrl := Decode(lnu)
-	payload := url.Values{"amount": {amount}}
-	response, err := http.PostForm(targetUrl, payload)
+
+	requestJsonBytes, err := json.Marshal(PayInvoiceReq{
+		InvoiceType: InvoiceType(invoiceType),
+		AssetID:     assetID,
+		Amount:      uint64(amount),
+		PubKey:      pubkey,
+		Memo:        memo,
+	})
 	if err != nil {
-		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
-	}
-	bodyBytes, _ := io.ReadAll(response.Body)
-	var invoiceResponse InvoiceResponse
-	if err := json.Unmarshal(bodyBytes, &invoiceResponse); err != nil {
-		fmt.Printf("%s PSTPBPAI json.Unmarshal :%v\n", GetTimeNow(), err)
 		return ""
 	}
-	return invoiceResponse.Invoice
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", targetUrl, payload)
+	if err != nil {
+		return ""
+	}
+
+	username := base.QueryConfigByKey("BasicAuthUser")
+	password := base.QueryConfigByKey("BasicAuthPass")
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return ""
+	}
+	var resp InvoiceResponse
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return ""
+	}
+	if resp.Msg != "" {
+		return errors.New(resp.Msg).Error()
+	}
+	return resp.Data
+}
+
+func PostServerToRequestInvoice(lnu string, invoiceType int, assetID string, amount int, pubkey string, memo string) (string, error) {
+	targetUrl := Decode(lnu)
+
+	requestJsonBytes, err := json.Marshal(PayInvoiceReq{
+		InvoiceType: InvoiceType(invoiceType),
+		AssetID:     assetID,
+		Amount:      uint64(amount),
+		PubKey:      pubkey,
+		Memo:        memo,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "json.Marshal")
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", targetUrl, payload)
+	if err != nil {
+		return "", errors.Wrap(err, "http.NewRequest")
+	}
+
+	username := base.QueryConfigByKey("BasicAuthUser")
+	password := base.QueryConfigByKey("BasicAuthPass")
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "http.DefaultClient.Do")
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "io.ReadAll")
+	}
+	var resp InvoiceResponse
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return "", errors.Wrap(err, "json.Unmarshal")
+	}
+	if resp.Msg != "" {
+		return "", errors.New(resp.Msg)
+	}
+	return resp.Data, nil
+}
+
+func PostServerToRequestLnurl(id, name, localPort, remotePort string) (string, error) {
+
+	host := base.QueryConfigByKey("LnurlServerHost")
+	targetUrl := fmt.Sprintf("http://%s/api/v1/lnurl/upload/user", host)
+	requestJsonBytes, err := json.Marshal(UploadUserReq{
+		LID:        id,
+		Name:       name,
+		Socket:     localPort,
+		RemotePort: remotePort,
+	})
+	if err != nil {
+		return "", errors.Wrap(err, "json.Marshal")
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("POST", targetUrl, payload)
+	if err != nil {
+		return "", errors.Wrap(err, "http.NewRequest")
+	}
+
+	username := base.QueryConfigByKey("BasicAuthUser")
+	password := base.QueryConfigByKey("BasicAuthPass")
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", errors.Wrap(err, "http.DefaultClient.Do")
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return "", errors.Wrap(err, "io.ReadAll")
+	}
+	var resp UploadUserResp
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return "", errors.Wrap(err, "json.Unmarshal")
+	}
+	if resp.Msg != "" {
+		return "", errors.New(resp.Msg)
+	}
+	return resp.Data, nil
 }

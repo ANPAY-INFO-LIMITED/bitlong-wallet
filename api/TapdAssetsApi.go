@@ -6,17 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/lightninglabs/taproot-assets/taprpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
-	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
-	"github.com/lightningnetwork/lnd/lnrpc"
-	"github.com/wallet/base"
-	"github.com/wallet/models"
-	"github.com/wallet/service/apiConnect"
-	"github.com/wallet/service/rpcclient"
-	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -26,6 +16,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightninglabs/taproot-assets/taprpc/mintrpc"
+	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/wallet/base"
+	"github.com/wallet/models"
+	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/rpcclient"
+	"gorm.io/gorm"
+)
+
+const (
+	UniverseSocketMainnet = "132.232.109.84:8444"
+	UniverseSocketRegtest = "132.232.109.84:8443"
 )
 
 type SimplifiedAssetsTransfer struct {
@@ -41,28 +48,21 @@ type AssetsTransfersInput struct {
 	AnchorPoint string `json:"anchor_point"`
 	AssetID     string `json:"asset_id"`
 	Amount      int    `json:"amount"`
-	//ScriptKey   string `json:"script_key"`
 }
 
 type AssetsTransfersOutputAnchor struct {
 	Outpoint string `json:"outpoint"`
 	Value    int    `json:"value"`
-	//TaprootAssetRoot string `json:"taproot_asset_root"`
-	//MerkleRoot       string `json:"merkle_root"`
-	//TapscriptSibling string `json:"tapscript_sibling"`
-	//NumPassiveAssets int    `json:"num_passive_assets"`
 }
 
 type AssetsTransfersOutput struct {
 	Anchor           AssetsTransfersOutputAnchor
-	ScriptKeyIsLocal bool `json:"script_key_is_local"`
-	Amount           int  `json:"amount"`
-	//SplitCommitRootHash string `json:"split_commit_root_hash"`
-	OutputType   string `json:"output_type"`
-	AssetVersion string `json:"asset_version"`
+	ScriptKeyIsLocal bool   `json:"script_key_is_local"`
+	Amount           int    `json:"amount"`
+	OutputType       string `json:"output_type"`
+	AssetVersion     string `json:"asset_version"`
 }
 
-// @dev: May be deprecated
 func SimplifyAssetsTransfer() *[]SimplifiedAssetsTransfer {
 	var simpleTransfers []SimplifiedAssetsTransfer
 	response, _ := rpcclient.ListTransfers()
@@ -73,7 +73,6 @@ func SimplifyAssetsTransfer() *[]SimplifiedAssetsTransfer {
 				AnchorPoint: _input.AnchorPoint,
 				AssetID:     hex.EncodeToString(_input.AssetId),
 				Amount:      int(_input.Amount),
-				//ScriptKey:   hex.EncodeToString(_input.ScriptKey),
 			})
 		}
 		var outputs []AssetsTransfersOutput
@@ -82,16 +81,11 @@ func SimplifyAssetsTransfer() *[]SimplifiedAssetsTransfer {
 				Anchor: AssetsTransfersOutputAnchor{
 					Outpoint: _output.Anchor.Outpoint,
 					Value:    int(_output.Anchor.Value),
-					//TaprootAssetRoot: hex.EncodeToString(_output.anchor.TaprootAssetRoot),
-					//MerkleRoot:       hex.EncodeToString(_output.anchor.MerkleRoot),
-					//TapscriptSibling: hex.EncodeToString(_output.anchor.TapscriptSibling),
-					//NumPassiveAssets: int(_output.anchor.NumPassiveAssets),
 				},
 				ScriptKeyIsLocal: _output.ScriptKeyIsLocal,
 				Amount:           int(_output.Amount),
-				//SplitCommitRootHash: hex.EncodeToString(_output.SplitCommitRootHash),
-				OutputType:   _output.OutputType.String(),
-				AssetVersion: _output.AssetVersion.String(),
+				OutputType:       _output.OutputType.String(),
+				AssetVersion:     _output.AssetVersion.String(),
 			})
 		}
 		simpleTransfers = append(simpleTransfers, SimplifiedAssetsTransfer{
@@ -107,26 +101,16 @@ func SimplifyAssetsTransfer() *[]SimplifiedAssetsTransfer {
 }
 
 type SimplifiedAssetsList struct {
-	Version      string                 `json:"version"`
-	AssetGenesis AssetsListAssetGenesis `json:"asset_genesis"`
-	Amount       int                    `json:"amount"`
-	LockTime     int                    `json:"lock_time"`
-	//RelativeLockTime int    `json:"relative_lock_time"`
-	//ScriptVersion    int    `json:"script_version"`
-	//ScriptKey        string `json:"script_key"`
-	ScriptKeyIsLocal bool `json:"script_key_is_local"`
-	//RawGroupKey      string `json:"raw_group_key"`
-	//AssetGroup       struct {
-	//	RawGroupKey     string `json:"raw_group_key"`
-	//	TweakedGroupKey string `json:"tweaked_group_key"`
-	//	AssetWitness    string `json:"asset_witness"`
-	//} `json:"asset_group"`
-	ChainAnchor AssetsListChainAnchor `json:"chain_anchor"`
-	//PrevWitnesses []interface{} `json:"prev_witnesses"`
-	IsSpent     bool   `json:"is_spent"`
-	LeaseOwner  string `json:"lease_owner"`
-	LeaseExpiry int    `json:"lease_expiry"`
-	IsBurn      bool   `json:"is_burn"`
+	Version          string                 `json:"version"`
+	AssetGenesis     AssetsListAssetGenesis `json:"asset_genesis"`
+	Amount           int                    `json:"amount"`
+	LockTime         int                    `json:"lock_time"`
+	ScriptKeyIsLocal bool                   `json:"script_key_is_local"`
+	ChainAnchor      AssetsListChainAnchor  `json:"chain_anchor"`
+	IsSpent          bool                   `json:"is_spent"`
+	LeaseOwner       string                 `json:"lease_owner"`
+	LeaseExpiry      int                    `json:"lease_expiry"`
+	IsBurn           bool                   `json:"is_burn"`
 }
 
 type AssetsListAssetGenesis struct {
@@ -149,7 +133,6 @@ type AssetsListChainAnchor struct {
 	BlockHeight      int    `json:"block_height"`
 }
 
-// @dev: May be deprecated
 func SimplifyAssetsList(assets []*taprpc.Asset) *[]SimplifiedAssetsList {
 	var simpleAssetsList []SimplifiedAssetsList
 	for _, _asset := range assets {
@@ -167,7 +150,6 @@ func SimplifyAssetsList(assets []*taprpc.Asset) *[]SimplifiedAssetsList {
 			Amount:           int(_asset.Amount),
 			LockTime:         int(_asset.LockTime),
 			ScriptKeyIsLocal: _asset.ScriptKeyIsLocal,
-			//RawGroupKey:      hex.EncodeToString(_asset.AssetGroup.RawGroupKey),
 			ChainAnchor: AssetsListChainAnchor{
 				AnchorTx:         hex.EncodeToString(_asset.ChainAnchor.AnchorTx),
 				AnchorBlockHash:  _asset.ChainAnchor.AnchorBlockHash,
@@ -201,14 +183,15 @@ type AssetsBalanceGroupBalance struct {
 	Balance  int    `json:"balance"`
 }
 
-// SyncUniverseFullSpecified @dev
 func SyncUniverseFullSpecified(universeHost string, id string, proofType string) string {
 	if universeHost == "" {
 		switch base.NetWork {
 		case base.UseTestNet:
 			universeHost = "testnet.universe.lightning.finance:10029"
 		case base.UseMainNet:
-			universeHost = "mainnet.universe.lightning.finance:10029"
+			universeHost = UniverseSocketMainnet
+		case base.UseRegTest:
+			universeHost = UniverseSocketRegtest
 		}
 	}
 	var _proofType universerpc.ProofType
@@ -236,24 +219,19 @@ func SyncUniverseFullSpecified(universeHost string, id string, proofType string)
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// SyncAssetIssuance @dev
 func SyncAssetIssuance(id string) string {
 	return SyncUniverseFullSpecified("", id, universerpc.ProofType_PROOF_TYPE_ISSUANCE.String())
 }
 
-// SyncAssetTransfer @dev
 func SyncAssetTransfer(id string) string {
 	return SyncUniverseFullSpecified("", id, universerpc.ProofType_PROOF_TYPE_TRANSFER.String())
 }
 
-// SyncAssetAll @dev
 func SyncAssetAll(id string) {
 	fmt.Println(SyncAssetIssuance(id))
 	fmt.Println(SyncAssetTransfer(id))
 }
 
-// SyncAssetAllSlice
-// @dev
 func SyncAssetAllSlice(ids []string) {
 	if len(ids) == 0 {
 		return
@@ -264,7 +242,6 @@ func SyncAssetAllSlice(ids []string) {
 	}
 }
 
-// SyncAssetAllWithAssets @dev
 func SyncAssetAllWithAssets(ids ...string) {
 	if len(ids) == 0 {
 		return
@@ -307,8 +284,6 @@ func allAssetBalances() *[]AssetBalance {
 	return &assetBalances
 }
 
-// GetAllAssetBalances
-// @note: Get all balance of assets info
 func GetAllAssetBalances() string {
 	result := allAssetBalances()
 	if result == nil {
@@ -336,12 +311,11 @@ func allAssetGroupBalances() *[]AssetGroupBalance {
 func GetAllAssetGroupBalances() string {
 	result := allAssetGroupBalances()
 	if result == nil {
-		return MakeJsonErrorResult(allAssetGroupBalancesErr, "Null Group Balances", nil)
+		return MakeJsonErrorResult(allAssetGroupBalancesErr, "Null Asset Group Balances", nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
-// @dev: May be deprecated
 func GetAllAssetIdByAssetBalance(assetBalance *[]AssetBalance) *[]string {
 	if assetBalance == nil {
 		return nil
@@ -353,9 +327,6 @@ func GetAllAssetIdByAssetBalance(assetBalance *[]AssetBalance) *[]string {
 	return &ids
 }
 
-// SyncAllAssetsByAssetBalance
-// @note: Sync all assets of non-zero-balance to public universe
-// @dev: May be deprecated
 func SyncAllAssetsByAssetBalance() string {
 	ids := GetAllAssetIdByAssetBalance(allAssetBalances())
 	if ids != nil {
@@ -364,17 +335,11 @@ func SyncAllAssetsByAssetBalance() string {
 	return MakeJsonErrorResult(SUCCESS, "", ids)
 }
 
-// GetAllAssetsIdSlice
-// @dev: 3
-// @note: Get an array including all assets ids
-// @dev: May be deprecated
 func GetAllAssetsIdSlice() string {
 	ids := GetAllAssetIdByAssetBalance(allAssetBalances())
 	return MakeJsonErrorResult(SUCCESS, "", ids)
 }
 
-// assetKeysTransfer
-// @dev
 func assetKeysTransfer(id string) *[]AssetKey {
 	var _proofType universerpc.ProofType
 	_proofType = universerpc.ProofType_PROOF_TYPE_TRANSFER
@@ -397,8 +362,6 @@ func AssetKeysTransfer(id string) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
-// AssetLeavesSpecified
-// @dev: Need To Complete
 func AssetLeavesSpecified(id string, proofType string) *universerpc.AssetLeafResponse {
 	var _proofType universerpc.ProofType
 	if proofType == "issuance" || proofType == "ISSUANCE" || proofType == "PROOF_TYPE_ISSUANCE" {
@@ -417,39 +380,11 @@ func AssetLeavesSpecified(id string, proofType string) *universerpc.AssetLeafRes
 }
 
 type AssetTransferLeave struct {
-	Name string `json:"name"`
-	//MetaHash     string `json:"meta_hash"`
+	Name      string `json:"name"`
 	AssetID   string `json:"asset_id"`
 	Amount    int    `json:"amount"`
 	ScriptKey string `json:"script_key"`
-	//PrevWitnesses []struct {
-	//	PrevID struct {
-	//		AnchorPoint string `json:"anchor_point"`
-	//		AssetID     string `json:"asset_id"`
-	//		ScriptKey   string `json:"script_key"`
-	//	} `json:"prev_id"`
-	//	SplitCommitment struct {
-	//		RootAsset struct {
-	//			AssetGenesis struct {
-	//				GenesisPoint string `json:"genesis_point"`
-	//				Name         string `json:"name"`
-	//				MetaHash     string `json:"meta_hash"`
-	//				AssetID      string `json:"asset_id"`
-	//			} `json:"asset_genesis"`
-	//			Amount        int    `json:"amount"`
-	//			ScriptKey     string `json:"script_key"`
-	//			PrevWitnesses []struct {
-	//				PrevID struct {
-	//					AnchorPoint string `json:"anchor_point"`
-	//					AssetID     string `json:"asset_id"`
-	//					ScriptKey   string `json:"script_key"`
-	//				} `json:"prev_id"`
-	//				TxWitness []string `json:"tx_witness"`
-	//			} `json:"prev_witnesses"`
-	//		} `json:"root_asset"`
-	//	} `json:"split_commitment"`
-	//} `json:"prev_witnesses"`
-	Proof string `json:"proof"`
+	Proof     string `json:"proof"`
 }
 
 func ProcessAssetTransferLeave(response *universerpc.AssetLeafResponse) *[]AssetTransferLeave {
@@ -484,7 +419,6 @@ func AssetLeavesTransfer_ONLY_FOR_TEST(id string) *[]AssetTransferLeave {
 	return ProcessAssetTransferLeave(response)
 }
 
-// @dev: Not-exported same copy of AssetLeavesTransfer_ONLY_FOR_TEST
 func assetLeavesTransfer(id string) *[]AssetTransferLeave {
 	response := AssetLeavesSpecified(id, universerpc.ProofType_PROOF_TYPE_TRANSFER.String())
 	if response == nil {
@@ -550,7 +484,6 @@ func assetLeavesIssuance(id string) *AssetIssuanceLeave {
 	return ProcessAssetIssuanceLeave(response)
 }
 
-// GetAssetInfoByIssuanceLeaf @dev
 func GetAssetInfoByIssuanceLeaf(id string) string {
 	response := assetLeavesIssuance(id)
 	if response == nil {
@@ -562,16 +495,16 @@ func GetAssetInfoByIssuanceLeaf(id string) string {
 func DecodeRawProofByte(rawProof []byte) *taprpc.DecodeProofResponse {
 	result, err := rpcclient.DecodeProof(rawProof, 0, false, false)
 	if err != nil {
+		logrus.Errorln(errors.Wrap(err, "rpcclient.DecodeProof"))
 		return nil
 	}
 	return result
 }
 
-// DecodeRawProofString
-// @dev
 func DecodeRawProofString(proof string) *taprpc.DecodeProofResponse {
 	decodeString, err := hex.DecodeString(proof)
 	if err != nil {
+		logrus.Errorln(errors.Wrap(err, "hex.DecodeString"))
 		return nil
 	}
 	return DecodeRawProofByte(decodeString)
@@ -593,7 +526,7 @@ type DecodedProof struct {
 
 func ProcessProof(response *taprpc.DecodeProofResponse) *DecodedProof {
 	if response == nil {
-		return nil
+		return &DecodedProof{}
 	}
 	return &DecodedProof{
 		NumberOfProofs:  int(response.DecodedProof.NumberOfProofs),
@@ -727,8 +660,6 @@ func ProcessListAllAssetsSimplified(result *[]ListAllAsset) *[]ListAllAssetSimpl
 	return &listAllAssetsSimplified
 }
 
-// GetAllAssetListSimplified
-// @dev
 func GetAllAssetListSimplified() string {
 	result := ProcessListAllAssetsSimplified(ProcessListAllAssets(allAssetList()))
 	if result == nil {
@@ -741,13 +672,10 @@ func GetAllAssetIdByListAll() []string {
 	id := make(map[string]bool)
 	var ids []string
 	result := ProcessListAllAssetsSimplified(ProcessListAllAssets(allAssetList()))
-	//var index int
 	if result == nil || len(*result) == 0 {
 		return nil
 	}
 	for _, asset := range *result {
-		//index++
-		//fmt.Println(index, asset.GenesisAssetID)
 		id[asset.GenesisAssetID] = true
 	}
 	for k, _ := range id {
@@ -756,21 +684,18 @@ func GetAllAssetIdByListAll() []string {
 	if len(ids) == 0 {
 		return nil
 	}
-	//fmt.Println(len(ids))
 	return ids
 }
 
-// SyncUniverseFullIssuanceByIdSlice
-// @dev
-// @note: Deprecated
-// @dev: May be deprecated
 func SyncUniverseFullIssuanceByIdSlice(ids []string) string {
 	var universeHost string
 	switch base.NetWork {
 	case base.UseTestNet:
 		universeHost = "testnet.universe.lightning.finance:10029"
 	case base.UseMainNet:
-		universeHost = "mainnet.universe.lightning.finance:10029"
+		universeHost = UniverseSocketMainnet
+	case base.UseRegTest:
+		universeHost = UniverseSocketRegtest
 	}
 	var targets []*universerpc.SyncTarget
 	for _, id := range ids {
@@ -790,17 +715,15 @@ func SyncUniverseFullIssuanceByIdSlice(ids []string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// SyncUniverseFullTransferByIdSlice
-// @dev
-// @note: Deprecated
-// @dev: May be deprecated
 func SyncUniverseFullTransferByIdSlice(ids []string) string {
 	var universeHost string
 	switch base.NetWork {
 	case base.UseTestNet:
 		universeHost = "testnet.universe.lightning.finance:10029"
 	case base.UseMainNet:
-		universeHost = "mainnet.universe.lightning.finance:10029"
+		universeHost = UniverseSocketMainnet
+	case base.UseRegTest:
+		universeHost = UniverseSocketRegtest
 	}
 	var targets []*universerpc.SyncTarget
 	for _, id := range ids {
@@ -820,9 +743,6 @@ func SyncUniverseFullTransferByIdSlice(ids []string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// SyncUniverseFullNoSlice
-// @dev
-// @note: Sync all assets
 func SyncUniverseFullNoSlice() string {
 	var universeHost string
 	switch base.NetWork {
@@ -846,12 +766,9 @@ type AssetHoldInfo struct {
 	Outpoint  string `json:"outpoint"`
 	Address   string `json:"address"`
 	ScriptKey string `json:"scriptKey"`
-	//Proof     string `json:"proof"`
-	IsSpent bool `json:"isSpent"`
+	IsSpent   bool   `json:"isSpent"`
 }
 
-// OutpointToAddress
-// @dev
 func OutpointToAddress(outpoint string) string {
 	transaction, indexStr := getTransactionAndIndexByOutpoint(outpoint)
 	index, _ := strconv.Atoi(indexStr)
@@ -880,15 +797,11 @@ func TransactionAndIndexToValue(transaction string, indexStr string) int {
 	return response.Vout[index].Value
 }
 
-// getTransactionAndIndexByOutpoint
-// @dev: Split outpoint
 func getTransactionAndIndexByOutpoint(outpoint string) (transaction string, index string) {
 	result := strings.Split(outpoint, ":")
 	return result[0], result[1]
 }
 
-// CompareScriptKey
-// @dev
 func CompareScriptKey(scriptKey1 string, scriptKey2 string) string {
 	if scriptKey1 == scriptKey2 {
 		return scriptKey1
@@ -914,8 +827,6 @@ func CompareScriptKey(scriptKey1 string, scriptKey2 string) string {
 	return ""
 }
 
-// GetAssetHoldInfosIncludeSpent
-// @dev
 func GetAssetHoldInfosIncludeSpent(id string) *[]AssetHoldInfo {
 	assetLeavesTransfers := assetLeavesTransfer(id)
 	var idToAssetHoldInfo []AssetHoldInfo
@@ -929,17 +840,12 @@ func GetAssetHoldInfosIncludeSpent(id string) *[]AssetHoldInfo {
 			Outpoint:  outpoint,
 			Address:   address,
 			ScriptKey: leaf.ScriptKey,
-			//Proof:     leaf.Proof,
-			IsSpent: AddressIsSpentAll(address),
+			IsSpent:   AddressIsSpentAll(address),
 		})
 	}
 	return &idToAssetHoldInfo
 }
 
-// GetAssetHoldInfosExcludeSpent
-// @Description: This function uses multiple http requests to call mempool's api during processing,
-// and it is recommended to store the data in a database and update it manually
-// @dev: Get hold info of asset
 func GetAssetHoldInfosExcludeSpent(id string) *[]AssetHoldInfo {
 	assetLeavesTransfers := assetLeavesTransfer(id)
 	var idToAssetHoldInfo []AssetHoldInfo
@@ -995,7 +901,8 @@ func OutpointToTransactionInfo(outpoint string) *AssetTransactionInfo {
 	index, _ := strconv.Atoi(indexStr)
 	response, err := getTransactionByMempool(transaction)
 	if err != nil {
-		return nil
+		logrus.Errorln(errors.Wrap(err, "getTransactionByMempool"))
+		return &AssetTransactionInfo{}
 	}
 	var inputs []string
 	for _, input := range response.Vin {
@@ -1007,13 +914,9 @@ func OutpointToTransactionInfo(outpoint string) *AssetTransactionInfo {
 		AnchorTransaction: response.Txid,
 		From:              inputs,
 		To:                response.Vout[index].ScriptpubkeyAddress,
-		//Name:              "",
-		//AssetId:           "",
-		//Amount:            0,
-		BlockTime:       response.Status.BlockTime,
-		FeeRate:         RoundToDecimalPlace(float64(response.Fee)/(float64(response.Weight)/4), 2),
-		ConfirmedBlocks: BlockTipHeight() - response.Status.BlockHeight,
-		//IsSpent:           false,
+		BlockTime:         response.Status.BlockTime,
+		FeeRate:           RoundToDecimalPlace(float64(response.Fee)/(float64(response.Weight)/4), 2),
+		ConfirmedBlocks:   BlockTipHeight() - response.Status.BlockHeight,
 	}
 	return &result
 }
@@ -1046,23 +949,15 @@ func GetAssetTransactionInfos(id string) *[]AssetTransactionInfo {
 	return &idToAssetTransactionInfos
 }
 
-// SyncAllAssetByList
-// @note: Call this api to sync all
 func SyncAllAssetByList() string {
 	SyncAssetAllSlice(GetAllAssetIdByListAll())
 	return MakeJsonErrorResult(SUCCESS, "", "Sync Completed.")
 }
 
-// GetAssetInfoById
-// @note: Call this api to get asset info
 func GetAssetInfoById(id string) string {
 	return GetAssetInfoByIssuanceLeaf(id)
 }
 
-// GetAssetHoldInfosExcludeSpentSlow
-// @note: Call this api to get asset hold info which is not be spent
-// @dev: Wrap to call GetAssetHoldInfosExcludeSpent
-// @notice: THIS COST A LOT OF TIME
 func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 	response := GetAssetHoldInfosExcludeSpent(id)
 	if response == nil {
@@ -1071,9 +966,6 @@ func GetAssetHoldInfosExcludeSpentSlow(id string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// GetAssetTransactionInfoSlow
-// @note: Call this api to get asset transaction info
-// @notice: THIS COST A LOT OF TIME
 func GetAssetTransactionInfoSlow(id string) string {
 	response := GetAssetTransactionInfos(id)
 	if response == nil {
@@ -1093,10 +985,6 @@ func AssetIDAndTransferScriptKeyToOutpoint(id string, scriptKey string) string {
 	return ""
 }
 
-// GetAllAssetListWithoutProcession
-// ONLY_FOR_TEST
-// @dev: Need to look for the change transaction anchored outpoint, amount, and is_spent in previous witness.
-// @dev: Returns exclude spent
 func GetAllAssetListWithoutProcession() string {
 	response := allAssetList()
 	if response == nil {
@@ -1108,7 +996,7 @@ func GetAllAssetListWithoutProcession() string {
 func ListBatchesAndGetResponse() (*mintrpc.ListBatchResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := mintrpc.NewMintClient(conn)
@@ -1160,7 +1048,7 @@ func GetTransactionsAndGetResponse() (*lnrpc.TransactionDetails, error) {
 func GetTransactionsExcludeLabelTapdAssetMinting() (*[]*lnrpc.Transaction, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -1256,8 +1144,6 @@ func ListAssetAndGetResponseByFlags(withWitness, includeSpent, includeLeased boo
 	return listAssets(withWitness, includeSpent, includeLeased)
 }
 
-// @dev
-
 func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 	response, err := ListBatchesAndGetResponse()
 	if err != nil {
@@ -1284,10 +1170,6 @@ func ListBatchesAndGetCustomResponse() (*[]ListBatchesResponse, error) {
 			BatchTxid: batch.Batch.BatchTxid,
 			State:     batch.Batch.State.String(),
 			Assets:    assets,
-			//Amount:    0,
-			//NewGroupedAsset: false,
-			//GroupKey:        "",
-			//GroupAnchor:     "",
 		})
 	}
 	return &listBatchesResponse, nil
@@ -1531,8 +1413,6 @@ type RawTransactionResultVoutSat struct {
 	ScriptPubKey RawTransactionResultVoutScriptPubKey `json:"scriptPubKey"`
 }
 
-// DecodeTransactionsWhoseLabelIsNotTapdAssetMinting
-// @dev: Call to decode transactions
 func DecodeTransactionsWhoseLabelIsNotTapdAssetMinting(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	decodedRawTransactions, err := PostCallBitcoindToDecodeRawTransaction(token, rawTransactions)
 	if err != nil {
@@ -1585,7 +1465,7 @@ type DecodeRawTransactionsResponse struct {
 func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []string) (*DecodeRawTransactionsResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/transactions"
+	url := serverDomainOrSocket + "/bitcoind/" + network + "/decode/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1620,7 +1500,7 @@ func PostCallBitcoindToDecodeRawTransaction(token string, rawTransactions []stri
 func PostCallBitcoindToDecodeAndQueryTransaction(token string, rawTransactions []string) (*DecodeAndQueryTransactionsResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/decode/query/transactions"
+	url := serverDomainOrSocket + "/bitcoind/" + network + "/decode/query/transactions"
 	requestStr := RawTransactionHexSliceToRequestBodyRawString(rawTransactions)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -1709,11 +1589,9 @@ func ProcessDecodedTransactionsData(decodedRawTransactions *[]PostDecodeRawTrans
 
 func ProcessDecodedAndQueryTransactionsData(decodedRawTransactions *[]PostGetRawTransactionResponse) *[]PostGetRawTransactionResult {
 	var result []PostGetRawTransactionResult
-	// @dev: add return if nil
 	if decodedRawTransactions == nil {
 		return &result
 	}
-	// @note: maybe cause nil pointer
 	for _, rawTransaction := range *decodedRawTransactions {
 		if rawTransaction.Error == nil && rawTransaction.Result != nil {
 			result = append(result, *(rawTransaction.Result))
@@ -1816,7 +1694,9 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingOut(token s
 	if err != nil {
 		return nil, err
 	}
-	// @note: maybe cause nil pointer
+	if decodedAndQueryTransactions.Error != "" {
+		return nil, errors.New(decodedAndQueryTransactions.Error)
+	}
 	btcResult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
 	result := ProcessPostGetRawTransactionResultToUseSat(btcResult)
 	return result, nil
@@ -1837,7 +1717,9 @@ func GetThenDecodeAndQueryTransactionsWhoseLabelIsNotTapdAssetMintingIn(token st
 	if err != nil {
 		return nil, err
 	}
-	// @note: maybe cause nil pointer
+	if decodedAndQueryTransactions.Error != "" {
+		return nil, errors.New(decodedAndQueryTransactions.Error)
+	}
 	btcResult := ProcessDecodedAndQueryTransactionsData(decodedAndQueryTransactions.Data)
 	result := ProcessPostGetRawTransactionResultToUseSat(btcResult)
 	return result, nil
@@ -2058,10 +1940,7 @@ func BtcTransferOutInfoToBtcTransferInInfoSimplified(btcTransferInInfos *[]BtcTr
 	return &btcTransferOutInfoSimplified
 }
 
-// GetBtcTransferOutInfosJsonResult
-// @Description: Out
 func GetBtcTransferOutInfosJsonResult(token string) string {
-	// TODO: When token is invalid or request error, return result which not been processed
 	response, err := GetBtcTransferOutInfos(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
@@ -2069,10 +1948,7 @@ func GetBtcTransferOutInfosJsonResult(token string) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// GetBtcTransferInInfosJsonResult
-// @Description: In
 func GetBtcTransferInInfosJsonResult(token string) string {
-	// TODO: When token is invalid or request error, return result which not been processed
 	response, err := GetBtcTransferInInfos(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetBtcTransferOutInfosErr, err.Error(), nil)
@@ -2145,7 +2021,7 @@ type AssetTransferProcessedOutput struct {
 
 func PostToSetAssetTransfer(token string, assetTransferSetRequest *[]AssetTransferProcessed) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_transfer/set"
+	url := serverDomainOrSocket + "/asset_transfer/set"
 	requestJsonBytes, err := json.Marshal(assetTransferSetRequest)
 	if err != nil {
 		return nil, err
@@ -2192,7 +2068,7 @@ type PostToGetAssetTransferTxidsResponse struct {
 
 func RequestToGetAssetTransferTxids(token string) (txids []string, err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/txids"
+	url := serverDomainOrSocket + "/asset_transfer/get/txids"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -2270,7 +2146,7 @@ func GetAllOutPointsOfAssetTransfersResponse(assetTransfersResponse *[]Transfer)
 func PostCallBitcoindToQueryAddressByOutpoints(token string, outpoints []string) (*GetAddressesByOutpointSliceResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/address/outpoints"
+	url := serverDomainOrSocket + "/bitcoind/" + network + "/address/outpoints"
 	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -2391,7 +2267,6 @@ func ListAndPostToSetAssetTransfers(token string, deviceId string) string {
 }
 
 type GetAssetTransferResponse struct {
-	// Deprecated: Use Code instead
 	Success bool                      `json:"success"`
 	Error   string                    `json:"error"`
 	Code    ErrCode                   `json:"code"`
@@ -2400,7 +2275,7 @@ type GetAssetTransferResponse struct {
 
 func RequestToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_transfer/get"
+	url := serverDomainOrSocket + "/asset_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -2440,7 +2315,7 @@ func RequestToGetAssetTransferAndGetResponse(token string) (*GetAssetTransferRes
 
 func RequestToGetAssetTransferByAssetIdAndGetResponse(token string, assetId string) (*GetAssetTransferResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_transfer/get/" + assetId
+	url := serverDomainOrSocket + "/asset_transfer/get/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -2623,14 +2498,9 @@ func PostToGetAssetTransferByAssetId(token string, assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
-// UploadAssetTransfer
-// @Description: Upload assets transfer info
 func UploadAssetTransfer(token string, deviceId string) string {
 	return ListAndPostToSetAssetTransfers(token, deviceId)
 }
-
-// GetAssetTransfer
-// @Description: Get assets transfer info
 
 func GetAssetTransfer(token string) string {
 	return PostToGetAssetTransfer(token)
@@ -2640,7 +2510,6 @@ func GetAssetTransferByAssetIdFromServer(token string, assetId string) string {
 	return PostToGetAssetTransferByAssetId(token, assetId)
 }
 
-// @dev: Do not use upper letter prefix function name to avoid pack api error
 func outpointToTransactionAndIndex(outpoint string) (transaction string, index string) {
 	result := strings.Split(outpoint, ":")
 	return result[0], result[1]
@@ -2725,23 +2594,26 @@ func AddrReceivesAndGetEvents(deviceId string) (*[]AddrReceiveEvent, error) {
 }
 
 func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveEvent) error {
+	if addrReceiveEvents == nil || len(*addrReceiveEvents) == 0 {
+		return nil
+	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/addr_receive/set"
+	url := serverDomainOrSocket + "/addr_receive/set"
 	requestJsonBytes, err := json.Marshal(addrReceiveEvents)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "json.Marshal")
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
 	req, err := http.NewRequest("POST", url, payload)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "http.NewRequest")
 	}
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return errors.Wrap(err, " http.DefaultClient.Do")
 	}
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
@@ -2751,12 +2623,12 @@ func PostToSetAddrReceivesEvents(token string, addrReceiveEvents *[]AddrReceiveE
 	}(res.Body)
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return err
+		return errors.Wrap(err, " io.ReadAll")
 	}
 	var response JsonResult
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return err
+		return errors.Wrap(err, " json.Unmarshal")
 	}
 	if response.Error != "" {
 		return errors.New(response.Error)
@@ -2773,7 +2645,7 @@ type GetAddrReceivesEventsResponse struct {
 
 func RequestToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/addr_receive/get/origin"
+	url := serverDomainOrSocket + "/addr_receive/get/origin"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -2811,8 +2683,6 @@ func RequestToGetAddrReceivesEvents(token string) (*[]AddrReceiveEvent, error) {
 	return response.Data, nil
 }
 
-// UploadAddrReceives
-// @Description: Upload addr receives
 func UploadAddrReceives(token string, deviceId string) string {
 	events, err := AddrReceivesAndGetEvents(deviceId)
 	if err != nil {
@@ -2825,8 +2695,6 @@ func UploadAddrReceives(token string, deviceId string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
 }
 
-// GetAddrReceives
-// @Description: Actually not been used. Use AddrReceives instead.
 func GetAddrReceives(token string) string {
 	response, err := RequestToGetAddrReceivesEvents(token)
 	if err != nil {
@@ -2855,7 +2723,7 @@ type BatchTransferRequest struct {
 
 func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferRequest) (err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/batch_transfer/set_slice"
+	url := serverDomainOrSocket + "/batch_transfer/set_slice"
 	requestJsonBytes, err := json.Marshal(batchTransfers)
 	if err != nil {
 		return err
@@ -2895,7 +2763,7 @@ func PostToSetBatchTransfers(token string, batchTransfers *[]BatchTransferReques
 
 func RequestToGetBatchTransfers(token string) (*[]BatchTransfer, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/batch_transfer/get"
+	url := serverDomainOrSocket + "/batch_transfer/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3082,7 +2950,7 @@ type GetAssetAddrResponse struct {
 
 func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) (err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_addr/set"
+	url := serverDomainOrSocket + "/asset_addr/set"
 	requestJsonBytes, err := json.Marshal(assetAddrSetRequest)
 	if err != nil {
 		return err
@@ -3122,7 +2990,7 @@ func PostToSetAssetAddr(token string, assetAddrSetRequest *AssetAddrSetRequest) 
 
 func RequestToGetAssetAddr(token string) (*[]AssetAddr, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_addr/get"
+	url := serverDomainOrSocket + "/asset_addr/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3162,7 +3030,7 @@ func RequestToGetAssetAddr(token string) (*[]AssetAddr, error) {
 
 func RequestToGetAssetAddrByScriptKey(token string, scriptKey string) (*[]AssetAddr, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_addr/get/script_key/" + scriptKey
+	url := serverDomainOrSocket + "/asset_addr/get/script_key/" + scriptKey
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3260,7 +3128,7 @@ type GetAssetLockResponse struct {
 
 func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) (err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_lock/set"
+	url := serverDomainOrSocket + "/asset_lock/set"
 	requestJsonBytes, err := json.Marshal(assetLockSetRequest)
 	if err != nil {
 		return err
@@ -3300,7 +3168,7 @@ func PostToSetAssetLock(token string, assetLockSetRequest *AssetLockSetRequest) 
 
 func RequestToGetAssetLock(token string) (*[]AssetLock, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_lock/get"
+	url := serverDomainOrSocket + "/asset_lock/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3360,7 +3228,7 @@ type ValidateTokenResponse struct {
 
 func GetValidateTokenResult(token string) (*ValidateTokenResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/validate_token/ping"
+	url := serverDomainOrSocket + "/validate_token/ping"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3487,8 +3355,6 @@ func GetListBalancesSimpleInfoHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// hash(new([]ListBalanceSimpleInfo))
-	// 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
 	return hash, nil
 }
 
@@ -3501,8 +3367,7 @@ type GetAssetBalanceBackupResponse struct {
 
 func RequestToGetAssetBalanceBackupHash(token string) (string, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	//network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/asset_balance_backup/get"
+	url := serverDomainOrSocket + "/asset_balance_backup/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return "", err
@@ -3557,7 +3422,7 @@ type UpdateAssetBalanceBackupResponse struct {
 
 func PostToUpdateAssetBalanceBackup(token string, hash string) (string, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance_backup/update" + "?hash=" + hash
+	url := serverDomainOrSocket + "/asset_balance_backup/update" + "?hash=" + hash
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return "", err
@@ -3611,7 +3476,6 @@ func GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackup(token string) (str
 	return response, nil
 }
 
-// UploadAssetBalanceBackupHash
 func UploadAssetBalanceBackupHash(token string) string {
 	hash, err := GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackup(token)
 	if err != nil {
@@ -3671,23 +3535,26 @@ type AssetBalanceSetRequest struct {
 }
 
 func PostToSetAssetBalanceInfo(assetBalanceSetRequest *[]AssetBalanceSetRequest, token string) (*JsonResult, error) {
+	if assetBalanceSetRequest == nil || len(*assetBalanceSetRequest) == 0 {
+		return &JsonResult{}, nil
+	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/set_slice"
+	url := serverDomainOrSocket + "/asset_balance/set_slice"
 	requestJsonBytes, err := json.Marshal(assetBalanceSetRequest)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, " json.Marshal")
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
 	req, err := http.NewRequest("POST", url, payload)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, " http.NewRequest")
 	}
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, " http.DefaultClient.Do")
 	}
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
@@ -3697,12 +3564,12 @@ func PostToSetAssetBalanceInfo(assetBalanceSetRequest *[]AssetBalanceSetRequest,
 	}(res.Body)
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, " io.ReadAll")
 	}
 	var response JsonResult
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, " json.Unmarshal")
 	}
 	if response.Error != "" {
 		return nil, errors.New(response.Error)
@@ -3740,7 +3607,6 @@ func UploadListBalancesProcessedInfo(token string, deviceId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(ListBalancesAndProcessErr, err.Error(), nil)
 	}
-	// @dev: Update the asset balance info with the asset ID and zero balance
 	zeroBalances, err := GetZeroBalanceAssetBalanceSlice(token, balances)
 	if err != nil {
 		return MakeJsonErrorResult(GetZeroBalanceAssetBalanceSliceErr, err.Error(), nil)
@@ -3787,7 +3653,6 @@ func UploadListBalancesProcessedInfoFromListAsset(token string, deviceId string)
 		return MakeJsonErrorResult(ListAssetsProcessedErr, err.Error(), nil)
 	}
 	balances := ListAssetsResponseSliceToListBalanceInfoSlice(response)
-	// @dev: Update the asset balance info with the asset ID and zero balance
 	zeroBalances, err := GetZeroBalanceAssetBalanceSlice(token, balances)
 	if err != nil {
 		return MakeJsonErrorResult(GetZeroBalanceAssetBalanceSliceErr, err.Error(), nil)
@@ -3806,10 +3671,6 @@ func UploadAssetBalanceInfo(token string, deviceId string) string {
 	return UploadListBalancesProcessedInfo(token, deviceId)
 }
 
-//func UploadListAssetBalanceInfo(token string, deviceId string) string {
-//	return UploadListBalancesProcessedInfoFromListAsset(token, deviceId)
-//}
-
 type GetAssetBalanceInfoResponse struct {
 	Success bool                `json:"success"`
 	Error   string              `json:"error"`
@@ -3819,7 +3680,7 @@ type GetAssetBalanceInfoResponse struct {
 
 func RequestToGetNonZeroAssetBalance(token string) (*[]AssetBalanceInfo, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get"
+	url := serverDomainOrSocket + "/asset_balance/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -3943,23 +3804,26 @@ func ListAssetsResponseSliceToAssetListSetRequests(listAssetsResponseSlice *[]Li
 }
 
 func PostToSetAssetListInfo(assetListSetRequests *[]AssetListSetRequest, token string) (*JsonResult, error) {
+	if assetListSetRequests == nil || len(*assetListSetRequests) == 0 {
+		return &JsonResult{}, nil
+	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_list/set_slice"
+	url := serverDomainOrSocket + "/asset_list/set_slice"
 	requestJsonBytes, err := json.Marshal(assetListSetRequests)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "json.Marshal")
 	}
 	payload := bytes.NewBuffer(requestJsonBytes)
 	req, err := http.NewRequest("POST", url, payload)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "http.NewRequest")
 	}
 	req.Header.Add("Authorization", "Bearer "+token)
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "http.DefaultClient.Do")
 	}
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
@@ -3969,12 +3833,12 @@ func PostToSetAssetListInfo(assetListSetRequests *[]AssetListSetRequest, token s
 	}(res.Body)
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "io.ReadAll")
 	}
 	var response JsonResult
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "json.Unmarshal")
 	}
 	if response.Error != "" {
 		return nil, errors.New(response.Error)
@@ -4046,7 +3910,7 @@ type GetNonZeroAmountAssetListResponse struct {
 
 func RequestToGetNonZeroAmountAssetList(token string) (*[]AssetListInfo, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_list/get"
+	url := serverDomainOrSocket + "/asset_list/get"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -4227,10 +4091,6 @@ func QueryAssetTransferSimplified(token string, assetId string) (*[]AssetTransfe
 	if assetTransfers == nil {
 		return nil, nil
 	}
-	// reserved
-	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
-	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
-	// @dev: Request spent a lot of time, do not use token now
 	_ = token
 	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
 	return assetTransferSimplified, nil
@@ -4249,10 +4109,6 @@ func QueryAssetTransferSimplifiedOfAllNft(token string) (*[]AssetTransferSimplif
 	if assetTransfers == nil {
 		return nil, nil
 	}
-	// reserved
-	// allOutpoints := GetAllOutPointsOfAssetTransfersResponse(assetTransfers)
-	// assetTransferSimplified,err = ProcessAssetTransferByBitcoind(token,allOutpoints,assetTransfers)
-	// @dev: Request spent a lot of time, do not use token now
 	_ = token
 	assetTransferSimplified, err = ProcessAssetTransfer(assetTransfers)
 	return assetTransferSimplified, nil
@@ -4267,7 +4123,7 @@ type GetAssetHolderNumberByAssetBalancesInfoResponse struct {
 
 func RequestToGetAssetHolderNumberByAssetBalancesInfo(token string, assetId string) (int, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/number/" + assetId
+	url := serverDomainOrSocket + "/asset_balance/get/holder/number/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -4313,8 +4169,6 @@ func GetAssetHolderNumberByAssetBalancesInfo(token string, assetId string) (int,
 	return holderNumber, nil
 }
 
-// GetAssetHolderNumber
-// @Description: Use asset balances to statistics
 func GetAssetHolderNumber(token string, assetId string) string {
 	holderNumber, err := GetAssetHolderNumberByAssetBalancesInfo(token, assetId)
 	if err != nil {
@@ -4335,10 +4189,9 @@ type GetAssetHolderBalanceByAssetBalancesInfoResponse struct {
 	Data    *AssetIdAndBalance `json:"data"`
 }
 
-// @dev: Should use PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo
 func RequestToGetAssetHolderBalanceByAssetBalancesInfo(token string, assetId string) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/all/" + assetId
+	url := serverDomainOrSocket + "/asset_balance/get/holder/balance/all/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -4385,7 +4238,7 @@ type GetAssetHolderBalanceRecordsLengthResponse struct {
 
 func RequestToGetAssetHolderBalanceRecordsLengthByAssetBalancesInfo(token string, assetId string) (int, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/records/" + assetId
+	url := serverDomainOrSocket + "/asset_balance/get/holder/balance/records/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -4488,12 +4341,44 @@ type GetTimesByOutpointSliceResponse struct {
 	Data    map[string]int `json:"data"`
 }
 
-// PostCallBitcoindToQueryTimeByOutpoints
-// @Description: post call bitcoind to query time by outpoints
 func PostCallBitcoindToQueryTimeByOutpoints(token string, outpoints []string) (*GetTimesByOutpointSliceResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/time/outpoints"
+	url := serverDomainOrSocket + "/bitcoind/" + network + "/time/outpoints"
+	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
+	payload := strings.NewReader(requestStr)
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetTimesByOutpointSliceResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func PostCallBitcoindToQueryTimeByOutpoints2(host, token string, outpoints []string) (*GetTimesByOutpointSliceResponse, error) {
+	network := base.NetWork
+	url := host + "/bitcoind/" + network + "/time/outpoints"
 	requestStr := OutpointSliceToRequestBodyRawString(outpoints)
 	payload := strings.NewReader(requestStr)
 	req, err := http.NewRequest("POST", url, payload)
@@ -4551,7 +4436,6 @@ type AssetHolderBalanceLimitAndOffsetRequest struct {
 	Offset  int    `json:"offset"`
 }
 
-// @dev
 func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	assetIdLimitAndOffset := AssetHolderBalanceLimitAndOffsetRequest{
@@ -4559,7 +4443,7 @@ func PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token string, 
 		Limit:   limit,
 		Offset:  offset,
 	}
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/limit_offset"
+	url := serverDomainOrSocket + "/asset_balance/get/holder/balance/limit_offset"
 	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
 	if err != nil {
 		return nil, err
@@ -4606,7 +4490,7 @@ type GetAssetAddrByEncodedResponse struct {
 
 func RequestToGetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_addr/get/encoded/" + encoded
+	url := serverDomainOrSocket + "/asset_addr/get/encoded/" + encoded
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -4648,8 +4532,6 @@ func GetAssetAddrByEncoded(token string, encoded string) (*AssetAddr, error) {
 	return RequestToGetAssetAddrByEncoded(token, encoded)
 }
 
-// GetUsernameByEncoded
-// @Description: Get username by encoded addr
 func GetUsernameByEncoded(token string, encoded string) (string, error) {
 	assetAddr, err := GetAssetAddrByEncoded(token, encoded)
 	if err != nil {
@@ -4676,7 +4558,7 @@ type AssetBurnSetRequest struct {
 
 func PostToSetAssetBurn(token string, assetBurnSetRequest *AssetBurnSetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_burn/set"
+	url := serverDomainOrSocket + "/asset_burn/set"
 	requestJsonBytes, err := json.Marshal(assetBurnSetRequest)
 	if err != nil {
 		return nil, err
@@ -4733,7 +4615,7 @@ type GetAssetBurnTotalAmountByAssetIdResponse struct {
 
 func RequestToGetAssetBurnTotalAmountByAssetId(token string, assetId string) (int, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_burn/get/asset_id/" + assetId
+	url := serverDomainOrSocket + "/asset_burn/get/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -4783,8 +4665,6 @@ func GetAssetBurnTotalAmount(token string, assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, totalAmount)
 }
 
-//TODO: Query all username's assets' simplified balances and query username by encoded addr
-
 type FairLaunchInfoSimplified struct {
 	ID                    int                    `json:"id"`
 	Name                  string                 `json:"name"`
@@ -4803,7 +4683,7 @@ type GetOwnFairLaunchInfoIssuedSimplifiedResponse struct {
 
 func RequestToGetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchInfoSimplified, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/own_set/issued/simplified"
+	url := serverDomainOrSocket + "/v1/fair_launch/query/own_set/issued/simplified"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -4841,8 +4721,6 @@ func RequestToGetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchI
 	return response.Data, nil
 }
 
-// GetOwnFairLaunchInfoIssuedSimplified
-// @Description: Get own fair launch info issued simplified
 func GetOwnFairLaunchInfoIssuedSimplified(token string) (*[]FairLaunchInfoSimplified, error) {
 	return RequestToGetOwnFairLaunchInfoIssuedSimplified(token)
 }
@@ -4866,7 +4744,7 @@ func PostToFairLaunchMintReserved(token string, mintReservedRequest *MintReserve
 		return "", errors.New("invalid request")
 	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/mint_reserved"
+	url := serverDomainOrSocket + "/v1/fair_launch/mint_reserved"
 	requestJsonBytes, err := json.Marshal(mintReservedRequest)
 	if err != nil {
 		return "", err
@@ -4904,8 +4782,6 @@ func PostToFairLaunchMintReserved(token string, mintReservedRequest *MintReserve
 	return response.Data.AnchorOutpoint, nil
 }
 
-// FairLaunchMintReserved
-// @Description: Fair launch mint reserved
 func FairLaunchMintReserved(token string, assetId string, encodedAddr string) (string, error) {
 	mintReservedRequest := MintReservedRequest{
 		AssetID:     assetId,
@@ -4941,9 +4817,6 @@ func GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReserved(token string, de
 	return outpoints, nil
 }
 
-// AutoMintReserved
-// @Description: Get own fair launch info issued simplified and execute mint reserved
-// @dev: This should be executed in a loop
 func AutoMintReserved(token string, deviceId string) string {
 	result, err := GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReserved(token, deviceId)
 	if err != nil {
@@ -5036,8 +4909,6 @@ func BatchAssetToAssetLocalMintSetRequest(batchKey string, batchTxid string, dev
 	groupedAsset := asset.NewGroupedAsset || groupKey != ""
 	assetId, err := BatchTxidAndAssetMintInfoToAssetId(batchTxid, asset)
 	if err != nil {
-		// @dev: Do not return
-		//LogError("", err)
 	}
 	return &AssetLocalMintSetRequest{
 		AssetVersion:    asset.AssetVersion.String(),
@@ -5074,7 +4945,7 @@ func FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId string, finalizeB
 
 func PostToSetAssetLocalMints(token string, assetLocalMintSetRequests *[]AssetLocalMintSetRequest) error {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_local_mint/set/slice"
+	url := serverDomainOrSocket + "/asset_local_mint/set/slice"
 	requestJsonBytes, err := json.Marshal(assetLocalMintSetRequests)
 	if err != nil {
 		return err
@@ -5112,8 +4983,6 @@ func PostToSetAssetLocalMints(token string, assetLocalMintSetRequests *[]AssetLo
 	return nil
 }
 
-// UploadAssetLocalMints
-// @Description: Upload asset local mints
 func UploadAssetLocalMints(token string, deviceId string, finalizeBatchResponse *mintrpc.FinalizeBatchResponse) error {
 	assetLocalMintSetRequests := FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId, finalizeBatchResponse)
 	return PostToSetAssetLocalMints(token, assetLocalMintSetRequests)
@@ -5144,12 +5013,10 @@ func BatchPendingAssetToPendingBatchAsset(pendingAsset *mintrpc.PendingAsset) *P
 		return nil
 	}
 	return &PendingBatchAsset{
-		AssetVersion: pendingAsset.AssetVersion.String(),
-		AssetType:    pendingAsset.AssetType.String(),
-		Name:         pendingAsset.Name,
-		// @dev: 2024-9-24 17:42:15 Too many data, use null string.
-		AssetMetaData: "",
-		//AssetMetaData:     hex.EncodeToString(pendingAsset.AssetMeta.Data),
+		AssetVersion:      pendingAsset.AssetVersion.String(),
+		AssetType:         pendingAsset.AssetType.String(),
+		Name:              pendingAsset.Name,
+		AssetMetaData:     "",
 		AssetMetaType:     pendingAsset.AssetMeta.Type.String(),
 		AssetMetaMetaHash: hex.EncodeToString(pendingAsset.AssetMeta.MetaHash),
 		Amount:            int(pendingAsset.Amount),
@@ -5229,7 +5096,7 @@ type GetAssetRecommendsByUserIdAndAssetId struct {
 
 func RequestToGetUserAssetRecommendByAssetId(token string, assetId string) (*AssetRecommend, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_recommend/get/user/asset_id/" + assetId
+	url := serverDomainOrSocket + "/asset_recommend/get/user/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -5278,7 +5145,7 @@ type UserIdAndAssetId struct {
 
 func PostToGetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAndAssetId) (*AssetRecommend, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_recommend/get/user_id_and_asset_id"
+	url := serverDomainOrSocket + "/asset_recommend/get/user_id_and_asset_id"
 	requestJsonBytes, err := json.Marshal(userIdAndAssetId)
 	if err != nil {
 		return nil, err
@@ -5327,7 +5194,7 @@ func GetAssetRecommendByUserIdAndAssetId(token string, userIdAndAssetId UserIdAn
 
 func PostToSetAssetRecommendByAssetId(token string, assetRecommendSetRequest *AssetRecommendSetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_recommend/set"
+	url := serverDomainOrSocket + "/asset_recommend/set"
 	requestJsonBytes, err := json.Marshal(assetRecommendSetRequest)
 	if err != nil {
 		return nil, err
@@ -5378,8 +5245,6 @@ func SetAssetRecommendByAssetId(token string, assetId string, assetFromAddr stri
 	return err
 }
 
-// CheckIfAssetIsIssuedLocally
-// @Description: Refer to CheckAssetIssuanceIsLocal
 func CheckIfAssetIsIssuedLocally(assetId string) (bool, error) {
 	keys, err := assetLeafKeys(assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil || len(keys.AssetKeys) == 0 {
@@ -5441,8 +5306,6 @@ func CheckIfAssetIsIssuedLocally(assetId string) (bool, error) {
 	return false, errorAppendInfo("failed to get mint info")
 }
 
-// IsAssetLocalIssuance
-// @Description: Only return boolean result
 func IsAssetLocalIssuance(assetId string) bool {
 	isLocal, err := CheckIfAssetIsIssuedLocally(assetId)
 	if err != nil {
@@ -5500,8 +5363,6 @@ func BatchAssetToAssetLocalMintHistorySetRequest(batchKey string, batchTxid stri
 	groupedAsset := asset.NewGroupedAsset || groupKey != ""
 	assetId, err := BatchTxidAndAssetMintInfoToAssetId(batchTxid, asset)
 	if err != nil {
-		// @dev: Do not return
-		//LogError("", err)
 	}
 	var assetMetaData string
 	var assetMetaHash string
@@ -5571,7 +5432,7 @@ func PostToSetAssetLocalMintHistories(token string, assetLocalMintHistorySetRequ
 		}, nil
 	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_local_mint_history/set"
+	url := serverDomainOrSocket + "/asset_local_mint_history/set"
 	requestJsonBytes, err := json.Marshal(assetLocalMintHistorySetRequests)
 	if err != nil {
 		return nil, err
@@ -5619,9 +5480,6 @@ func ListBatchesAndPostToSetAssetLocalMintHistories(token string, deviceId strin
 	return err
 }
 
-// UploadAssetLocalMintHistory
-// @Description: Upload asset local mint history
-// @dev: This should be executed when enter app
 func UploadAssetLocalMintHistory(token string, deviceId string) string {
 	err := ListBatchesAndPostToSetAssetLocalMintHistories(token, deviceId)
 	if err != nil {
@@ -5639,7 +5497,46 @@ type GetAssetManagedUtxoIdsResponse struct {
 
 func RequestToGetAssetManagedUtxos(token string) (*[]AssetManagedUtxo, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/user"
+	url := serverDomainOrSocket + "/asset_managed_utxo/get/user"
+	requestJsonBytes, err := json.Marshal(nil)
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.NewBuffer(requestJsonBytes)
+	req, err := http.NewRequest("GET", url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("accept", "application/json")
+	req.Header.Add("content-type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			return
+		}
+	}(res.Body)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var response GetAssetManagedUtxoIdsResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+	if response.Error != "" {
+		return nil, errors.New(response.Error)
+	}
+	return response.Data, nil
+}
+
+func RequestToGetAssetManagedUtxos2(host, token string) (*[]AssetManagedUtxo, error) {
+	url := host + "/asset_managed_utxo/get/user"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -5703,7 +5600,7 @@ func AssetIdsToAssetIdMapIsExist(assetIds *[]string) *map[string]bool {
 
 func PostToRemoveAssetManagedUtxos(token string, managedUtxos *[]int) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/remove"
+	url := serverDomainOrSocket + "/asset_managed_utxo/remove"
 	requestJsonBytes, err := json.Marshal(managedUtxos)
 	if err != nil {
 		return nil, err
@@ -5742,23 +5639,43 @@ func PostToRemoveAssetManagedUtxos(token string, managedUtxos *[]int) (*JsonResu
 }
 
 func RemoveNotLocalAssetManagedUtxos(token string, managedUtxos *[]ManagedUtxo) error {
-	// @dev: 1. Request to get
 	assetManagedUtxos, err := RequestToGetAssetManagedUtxos(token)
 	if err != nil {
 		errorAppendInfo := ErrorAppendInfo(err)
 		return errorAppendInfo("Request To Get Asset Managed Utxos")
 	}
-	// @dev: 2. Get local ids
 	localAssetIds := ManagedUtxosToAssetIds(managedUtxos)
 	localAssetIdMapIsExist := AssetIdsToAssetIdMapIsExist(localAssetIds)
 	var idsRemove []int
-	// @dev: 3. Get ids who are not exist
 	for _, assetManagedUtxo := range *assetManagedUtxos {
 		if !(*localAssetIdMapIsExist)[assetManagedUtxo.AssetGenesisAssetID] {
 			idsRemove = append(idsRemove, int(assetManagedUtxo.ID))
 		}
 	}
-	// @dev: 4. Post to remove
+	if len(idsRemove) != 0 {
+		_, err = PostToRemoveAssetManagedUtxos(token, &idsRemove)
+		if err != nil {
+			errorAppendInfo := ErrorAppendInfo(err)
+			return errorAppendInfo("Post To Remove Asset Managed Utxos")
+		}
+	}
+	return nil
+}
+
+func RemoveNotLocalAssetManagedUtxos2(host, token string, managedUtxos *[]ManagedUtxo) error {
+	assetManagedUtxos, err := RequestToGetAssetManagedUtxos2(host, token)
+	if err != nil {
+		errorAppendInfo := ErrorAppendInfo(err)
+		return errorAppendInfo("Request To Get Asset Managed Utxos")
+	}
+	localAssetIds := ManagedUtxosToAssetIds(managedUtxos)
+	localAssetIdMapIsExist := AssetIdsToAssetIdMapIsExist(localAssetIds)
+	var idsRemove []int
+	for _, assetManagedUtxo := range *assetManagedUtxos {
+		if !(*localAssetIdMapIsExist)[assetManagedUtxo.AssetGenesisAssetID] {
+			idsRemove = append(idsRemove, int(assetManagedUtxo.ID))
+		}
+	}
 	if len(idsRemove) != 0 {
 		_, err = PostToRemoveAssetManagedUtxos(token, &idsRemove)
 		if err != nil {
@@ -5775,7 +5692,6 @@ func ListUtxosAndGetProcessedManagedUtxos(token string) (*[]ManagedUtxo, error) 
 		return nil, err
 	}
 	managedUtxos := ListUtxosResponseToManagedUtxos(response)
-	// @dev: Query db's records, if local not exist, delete it
 	err = RemoveNotLocalAssetManagedUtxos(token, managedUtxos)
 	if err != nil {
 		errorAppendInfo := ErrorAppendInfo(err)
@@ -5941,7 +5857,7 @@ func PostToSetAssetManagedUtxos(token string, assetManagedUtxoSetRequests *[]Ass
 		}, nil
 	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/set"
+	url := serverDomainOrSocket + "/asset_managed_utxo/set"
 	requestJsonBytes, err := json.Marshal(assetManagedUtxoSetRequests)
 	if err != nil {
 		return nil, err
@@ -5990,9 +5906,6 @@ func ListUtxosAndPostToSetAssetManagedUtxos(token string, deviceId string) error
 	return err
 }
 
-// UploadAssetManagedUtxos
-// @Description: Upload asset managed utxos
-// @dev: This should be executed when enter app
 func UploadAssetManagedUtxos(token string, deviceId string) string {
 	err := ListUtxosAndPostToSetAssetManagedUtxos(token, deviceId)
 	if err != nil {
@@ -6001,8 +5914,6 @@ func UploadAssetManagedUtxos(token string, deviceId string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
 }
 
-// AssetIssuanceIsLocal
-// @dev: Refer to CheckAssetIssuanceIsLocal
 func AssetIssuanceIsLocal(assetId string) (bool, error) {
 	keys, err := assetLeafKeys(assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
@@ -6059,8 +5970,6 @@ func AssetIssuanceIsLocal(assetId string) (bool, error) {
 	return false, errors.New("fail to get asset info")
 }
 
-// IsLocalMintAsset
-// @Description: Check if asset is local mint(issuance)
 func IsLocalMintAsset(assetId string) bool {
 	isLocal, err := AssetIssuanceIsLocal(assetId)
 	if err != nil {
@@ -6078,7 +5987,7 @@ type GetAssetLocalMintHistoryAssetIdResponse struct {
 
 func RequestToGetAssetLocalMintHistoryAssetId(token string, assetId string) (*AssetLocalMintHistory, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_local_mint_history/get/asset_id/" + assetId
+	url := serverDomainOrSocket + "/asset_local_mint_history/get/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -6126,7 +6035,7 @@ type GetCustodyAccountBalanceResponse struct {
 
 func PostToGetCustodyAccountBalance(token string) (int, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/custodyAccount/invoice/querybalance"
+	url := serverDomainOrSocket + "/custodyAccount/invoice/querybalance"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -6266,12 +6175,10 @@ func GetWalletBalanceTotalValueAndGetResponse(token string) ([]BtcOrAssetsValue,
 		return nil, err
 	}
 	btc := int(walletBalance.TotalBalance) + custodyAccountBalance
-	// @dev: Value of btc
 	btcOrAssetsValueRequest = append(btcOrAssetsValueRequest, BtcOrAssetsValueRequest{
 		Ids:     "btc",
 		Numbers: btc,
 	})
-	// @dev: Value of normal asset
 	normalBalances, err := ListNormalBalancesAndGetResponse()
 	if err != nil {
 		return nil, err
@@ -6280,7 +6187,6 @@ func GetWalletBalanceTotalValueAndGetResponse(token string) ([]BtcOrAssetsValue,
 		var balance int
 		balance, err = strconv.Atoi(normalBalance.Balance)
 		if err != nil {
-			//TODO
 			continue
 		}
 		btcOrAssetsValueRequest = append(btcOrAssetsValueRequest, BtcOrAssetsValueRequest{
@@ -6288,7 +6194,6 @@ func GetWalletBalanceTotalValueAndGetResponse(token string) ([]BtcOrAssetsValue,
 			Numbers: balance,
 		})
 	}
-	// @dev: Value of normal asset
 	nftAssets, err := ListNftAssetsAndGetResponse()
 	if err != nil {
 		return nil, err
@@ -6318,8 +6223,6 @@ func GetWalletBalanceCalculatedTotalValue(token string) (float64, error) {
 	return totalValue, nil
 }
 
-// GetWalletBalanceTotalValue
-// @Description: Get wallet balance total value
 func GetWalletBalanceTotalValue(token string) string {
 	totalValue, err := GetWalletBalanceCalculatedTotalValue(token)
 	if err != nil {
@@ -6342,7 +6245,7 @@ type GetAssetBalanceByUserIdAndAssetIdResponse struct {
 
 func PostToGetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndAssetIdRequest GetAssetBalanceByUserIdAndAssetIdRequest) (*AssetBalance, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/balance/asset_id_and_user_id"
+	url := serverDomainOrSocket + "/asset_balance/get/balance/asset_id_and_user_id"
 	requestJsonBytes, err := json.Marshal(getAssetBalanceByUserIdAndAssetIdRequest)
 	if err != nil {
 		return nil, err
@@ -6381,23 +6284,13 @@ func GetAssetBalanceByUserIdAndAssetId(token string, getAssetBalanceByUserIdAndA
 	return PostToGetAssetBalanceByUserIdAndAssetId(token, getAssetBalanceByUserIdAndAssetIdRequest)
 }
 
-// GetAssetRecommendUser
-// @note: B query who is A's referer when he sends asset to A
-// @dev: 1. Alice generates the asset address (invoice) and uploads it to the server
-// @dev: 2. Alice sends the asset address (invoice) to Bob.
 func GetAssetRecommendUser(token string, assetId string, encoded string, deviceId string) (string, error) {
-	//if IsLocalMintAsset(assetId) {
-	//	return "", errors.New("asset is local issuance")
-	//}
-	// @dev: 3. Bob queries the user ID and username of the creator of the asset address (invoice) (i.e. Alice)
-	//		   when he makes a payment to Alice's asset address.
 	assetRecipientIsAssetIssuer := errors.New("asset recipient is asset issuer")
 	addr, err := GetAssetAddrByEncoded(token, encoded)
 	if err != nil {
 		return "", err
 	}
 	addrUserId := addr.UserId
-	// @dev: 4. Bob queries Alice to see if the asset has been issued locally.
 	assetLocalMintHistory, err := GetAssetLocalMintHistoryAssetId(token, assetId)
 	if err != nil {
 		return "", err
@@ -6409,7 +6302,6 @@ func GetAssetRecommendUser(token string, assetId string, encoded string, deviceI
 		UserId:  addrUserId,
 		AssetId: addr.AssetId,
 	}
-	// @dev: Check if Alice had the asset
 	assetBalance, err := GetAssetBalanceByUserIdAndAssetId(token, request)
 	var userHadAsset bool
 	if err == nil && assetBalance != nil {
@@ -6417,21 +6309,16 @@ func GetAssetRecommendUser(token string, assetId string, encoded string, deviceI
 	}
 	userHadAssetErr := errors.New("user had asset")
 	var assetRecommend *AssetRecommend
-	// @dev: 5. Bob queries whether Alice already has a referrer for the asset.
 	assetRecommend, err = GetAssetRecommendByUserIdAndAssetId(token, UserIdAndAssetId{
 		UserId:  addrUserId,
 		AssetId: assetId,
 	})
 	if err != nil {
 		if userHadAsset {
-			// @dev: Alice had the asset, but there is no referrer for the asset. Bob can't be Alice's referrer.
 			return "", userHadAssetErr
 		}
-		// @dev: Alice does not have a referer for the asset
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// QueryBalance
 
-			// @dev: 6. Bob uploads the information that Bob is Alice's referrer for the asset.
 			err = SetAssetRecommendByAssetId(token, assetId, encoded, 0, "", 0, deviceId)
 			if err != nil {
 				return "", err
@@ -6463,7 +6350,7 @@ func GetAssetRecommendUserByJsonAddrs(token string, assetId string, jsonAddrs st
 
 func UploadLogFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload"
+	url := serverDomainOrSocket + "/log_file_upload/upload"
 	stat, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
@@ -6546,7 +6433,7 @@ type UploadLogFileResponse struct {
 
 func UploadBigFileAndGetResponse(filePath string, deviceId string, info string, auth string) (*uint, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/log_file_upload/upload_big"
+	url := serverDomainOrSocket + "/log_file_upload/upload_big"
 	_, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
@@ -6626,11 +6513,6 @@ func UploadBigFile(filePath string, deviceId string, info string, auth string) s
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), id)
 }
 
-// @dev: Custody Asset
-//		1. Custody Assets (add custodial holdings to the list of balances, integrate it with on-chain data)
-//		2. Query all transfer records including the custody of asset (on-chain and custodial data)
-//		3. May need to use a separate table to record transfer records for custodial assets
-
 type AccountAssetBalanceExtend struct {
 	AccountID uint   ` json:"account_id"`
 	AssetId   string ` json:"asset_id"`
@@ -6648,7 +6530,7 @@ type GetAccountAssetBalanceByAssetIdResponse struct {
 
 func RequestToGetAccountAssetBalanceByAssetId(token string, assetId string) (*[]AccountAssetBalanceExtend, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/asset_id/" + assetId
+	url := serverDomainOrSocket + "/account_asset/balance/get/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -6699,7 +6581,7 @@ type GetAccountAssetBalanceUserHoldByAssetIdResponse struct {
 
 func RequestToGetAccountAssetBalanceUserHoldTotalAmountByAssetId(token string, assetId string) (int, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/account_asset/balance/query/total_amount?asset_id=" + assetId
+	url := serverDomainOrSocket + "/account_asset/balance/query/total_amount?asset_id=" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -6741,8 +6623,6 @@ func GetAccountAssetBalanceUserHoldTotalAmountByAssetId(token string, assetId st
 	return RequestToGetAccountAssetBalanceUserHoldTotalAmountByAssetId(token, assetId)
 }
 
-// GetAccountAssetBalanceUserHoldTotalAmount
-// @Description: Get account asset balance user hold total amount
 func GetAccountAssetBalanceUserHoldTotalAmount(token string, assetId string) string {
 	totalAmount, err := GetAccountAssetBalanceUserHoldTotalAmountByAssetId(token, assetId)
 	if err != nil {
@@ -6766,8 +6646,6 @@ func AccountAssetBalanceExtendsToAssetIdAndAccountAssetBalanceExtends(assetId st
 	}
 }
 
-// GetAccountAssetBalances
-// @Description: Get account asset balances
 func GetAccountAssetBalances(token string, assetId string) string {
 	accountAssetBalanceExtends, err := GetAccountAssetBalanceByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
@@ -6800,7 +6678,7 @@ type GetAccountAssetTransferByAssetId struct {
 
 func RequestToGetAccountAssetTransferByAssetId(token string, assetId string) (*[]AccountAssetTransfer, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/asset_id/" + assetId
+	url := serverDomainOrSocket + "/account_asset/transfer/get/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -6842,8 +6720,6 @@ func GetAccountAssetTransferByAssetIdAndGetResponse(token string, assetId string
 	return RequestToGetAccountAssetTransferByAssetId(token, assetId)
 }
 
-// GetAccountAssetTransfers
-// @Description: Get account asset transfers
 func GetAccountAssetTransfers(token string, assetId string) string {
 	accountAssetTransfers, err := GetAccountAssetTransferByAssetIdAndGetResponse(token, assetId)
 	if err != nil {
@@ -6872,7 +6748,7 @@ func PostToGetAccountAssetBalanceLimitAndOffset(token string, assetId string, li
 		Limit:   limit,
 		Offset:  offset,
 	}
-	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/limit_offset"
+	url := serverDomainOrSocket + "/account_asset/balance/get/limit_offset"
 	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
 	if err != nil {
 		return nil, err
@@ -6932,7 +6808,7 @@ func PostToGetAccountAssetBalancePageNumberByPageSize(token string, assetId stri
 		AssetId:  assetId,
 		PageSize: pageSize,
 	}
-	url := "http://" + serverDomainOrSocket + "/account_asset/balance/get/page_number"
+	url := serverDomainOrSocket + "/account_asset/balance/get/page_number"
 	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
 	if err != nil {
 		return 0, err
@@ -6978,8 +6854,6 @@ func GetAccountAssetBalancePageNumberByPageSize(token string, assetId string, pa
 	return pageNumber, nil
 }
 
-// GetAccountAssetBalancePageNumber
-// @Description: Get account asset balance page number
 func GetAccountAssetBalancePageNumber(token string, assetId string, pageSize int) string {
 	pageNumber, err := GetAccountAssetBalancePageNumberByPageSize(token, assetId, pageSize)
 	if err != nil {
@@ -7001,8 +6875,6 @@ func GetAccountAssetBalanceWithPageSizeAndPageNumber(token string, assetId strin
 	return GetAccountAssetBalanceLimitAndOffset(token, assetId, limit, offset)
 }
 
-// GetAccountAssetBalancePage
-// @Description: Get account asset balance page
 func GetAccountAssetBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
 	accountAssetTransfers, err := GetAccountAssetBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
 	if err != nil {
@@ -7031,7 +6903,7 @@ func PostToGetAccountAssetTransferLimitAndOffset(token string, assetId string, l
 		Limit:   limit,
 		Offset:  offset,
 	}
-	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/limit_offset"
+	url := serverDomainOrSocket + "/account_asset/transfer/get/limit_offset"
 	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
 	if err != nil {
 		return nil, err
@@ -7091,7 +6963,7 @@ func PostToGetAccountAssetTransferPageNumberByPageSize(token string, assetId str
 		AssetId:  assetId,
 		PageSize: pageSize,
 	}
-	url := "http://" + serverDomainOrSocket + "/account_asset/transfer/get/page_number"
+	url := serverDomainOrSocket + "/account_asset/transfer/get/page_number"
 	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
 	if err != nil {
 		return 0, err
@@ -7137,8 +7009,6 @@ func GetAccountAssetTransferPageNumberByPageSize(token string, assetId string, p
 	return pageNumber, nil
 }
 
-// GetAccountAssetTransferPageNumber
-// @Description: Get account asset transfer page number
 func GetAccountAssetTransferPageNumber(token string, assetId string, pageSize int) string {
 	pageNumber, err := GetAccountAssetTransferPageNumberByPageSize(token, assetId, pageSize)
 	if err != nil {
@@ -7160,8 +7030,6 @@ func GetAccountAssetTransferWithPageSizeAndPageNumber(token string, assetId stri
 	return GetAccountAssetTransferLimitAndOffset(token, assetId, limit, offset)
 }
 
-// GetAccountAssetTransfersPage
-// @Description: Get account asset transfer page
 func GetAccountAssetTransfersPage(token string, assetId string, pageSize int, pageNumber int) string {
 	accountAssetTransfers, err := GetAccountAssetTransferWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
 	if err != nil {
@@ -7170,8 +7038,6 @@ func GetAccountAssetTransfersPage(token string, assetId string, pageSize int, pa
 	return MakeJsonErrorResult(SUCCESS, SuccessError, accountAssetTransfers)
 }
 
-// GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset
-// @Description: Get asset holder balance by asset balances info limit and offset
 func GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token string, assetId string, limit int, offset int) (*AssetIdAndBalance, error) {
 	holderBalance, err := PostToGetAssetHolderBalanceLimitAndOffsetByAssetBalancesInfo(token, assetId, limit, offset)
 	if err != nil {
@@ -7198,7 +7064,7 @@ func PostToGetAssetHolderBalancePageNumberByPageSize(token string, assetId strin
 		AssetId:  assetId,
 		PageSize: pageSize,
 	}
-	url := "http://" + serverDomainOrSocket + "/asset_balance/get/holder/balance/page_number"
+	url := serverDomainOrSocket + "/asset_balance/get/holder/balance/page_number"
 	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
 	if err != nil {
 		return 0, err
@@ -7244,8 +7110,6 @@ func GetAssetHolderBalancePageNumberByPageSize(token string, assetId string, pag
 	return pageNumber, nil
 }
 
-// GetAssetHolderBalancePageNumber
-// @Description: Get asset holder balance page number
 func GetAssetHolderBalancePageNumber(token string, assetId string, pageSize int) string {
 	pageNumber, err := GetAssetHolderBalancePageNumberByPageSize(token, assetId, pageSize)
 	if err != nil {
@@ -7267,8 +7131,6 @@ func GetAssetHolderBalanceWithPageSizeAndPageNumber(token string, assetId string
 	return GetAssetHolderBalanceByAssetBalancesInfoLimitAndOffset(token, assetId, limit, offset)
 }
 
-// GetAssetHolderBalancePage
-// @Description: Get asset holder balance page
 func GetAssetHolderBalancePage(token string, assetId string, pageSize int, pageNumber int) string {
 	holderBalance, err := GetAssetHolderBalanceWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
 	if err != nil {
@@ -7296,7 +7158,7 @@ func PostToGetAssetManagedUtxoPageNumberByPageSize(token string, assetId string,
 		AssetId:  assetId,
 		PageSize: pageSize,
 	}
-	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/page_number"
+	url := serverDomainOrSocket + "/asset_managed_utxo/get/page_number"
 	requestJsonBytes, err := json.Marshal(getAssetHolderBalancePageNumberRequest)
 	if err != nil {
 		return 0, err
@@ -7362,7 +7224,7 @@ func PostToGetAssetManagedUtxoLimitAndOffset(token string, assetId string, limit
 		Limit:   limit,
 		Offset:  offset,
 	}
-	url := "http://" + serverDomainOrSocket + "/asset_managed_utxo/get/limit_offset"
+	url := serverDomainOrSocket + "/asset_managed_utxo/get/limit_offset"
 	requestJsonBytes, err := json.Marshal(assetIdLimitAndOffset)
 	if err != nil {
 		return nil, err
@@ -7421,8 +7283,6 @@ func GetAssetManagedUtxoWithPageSizeAndPageNumber(token string, assetId string, 
 	return GetAssetManagedUtxoLimitAndOffset(token, assetId, limit, offset)
 }
 
-// GetAssetManagedUtxoPage
-// @Description: Get asset managed utxo page
 func GetAssetManagedUtxoPage(token string, assetId string, pageSize int, pageNumber int) string {
 	assetManagedUtxo, err := GetAssetManagedUtxoWithPageSizeAndPageNumber(token, assetId, pageSize, pageNumber)
 	if err != nil {
@@ -7432,8 +7292,6 @@ func GetAssetManagedUtxoPage(token string, assetId string, pageSize int, pageNum
 	return MakeJsonErrorResult(SUCCESS, SuccessError, result)
 }
 
-// GetAssetManagedUtxoPageNumber
-// @Description: Get asset managed utxo page number
 func GetAssetManagedUtxoPageNumber(token string, assetId string, pageSize int) string {
 	pageNumber, err := GetAssetManagedUtxoPageNumberByPageSize(token, assetId, pageSize)
 	if err != nil {
@@ -7515,7 +7373,7 @@ type GetGroupFirstAssetMetaResponse struct {
 
 func RequestToGetGroupFirstAssetMeta(token string, groupKey string) (string, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_group/get/first_meta/group_key/" + groupKey
+	url := serverDomainOrSocket + "/asset_group/get/first_meta/group_key/" + groupKey
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return "", err
@@ -7568,7 +7426,7 @@ func PostToSetGroupFirstAssetMeta(token string, assetGroupSetRequest *AssetGroup
 		}, nil
 	}
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_group/set/first_meta/"
+	url := serverDomainOrSocket + "/asset_group/set/first_meta/"
 	requestJsonBytes, err := json.Marshal(assetGroupSetRequest)
 	if err != nil {
 		return nil, err
@@ -7625,7 +7483,7 @@ type GetGroupFirstAssetIdResponse struct {
 
 func RequestToGetGroupFirstAssetId(token string, groupKey string) (string, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_group/get/first_asset_id/group_key/" + groupKey
+	url := serverDomainOrSocket + "/asset_group/get/first_asset_id/group_key/" + groupKey
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return "", err
@@ -7671,8 +7529,6 @@ func GetGroupFirstAssetIdAndGetResponse(token string, groupKey string) (string, 
 	return assetMeta, nil
 }
 
-// GetGroupFirstAssetMeta
-// @Description: Get group first asset meta
 func GetGroupFirstAssetMeta(token string, groupKey string) string {
 	assetMeta, err := GetGroupFirstAssetMetaAndGetResponse(token, groupKey)
 	if err != nil {
@@ -7681,8 +7537,6 @@ func GetGroupFirstAssetMeta(token string, groupKey string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
 }
 
-// GetGroupFirstAssetId
-// @Description: Get group first asset id
 func GetGroupFirstAssetId(token string, groupKey string) string {
 	assetMeta, err := GetGroupFirstAssetIdAndGetResponse(token, groupKey)
 	if err != nil {
@@ -7691,16 +7545,12 @@ func GetGroupFirstAssetId(token string, groupKey string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetMeta)
 }
 
-// SetGroupFirstAssetMeta
-// @Description: Set group first asset meta
 func SetGroupFirstAssetMeta(token string, deviceId string, finalizeBatchResponse *mintrpc.FinalizeBatchResponse) error {
 	assetLocalMintSetRequests := FinalizeBatchResponseToAssetLocalMintSetRequests(deviceId, finalizeBatchResponse)
 	var firstErr error
 	for _, request := range *assetLocalMintSetRequests {
 		tweakedGroupKey := request.GroupKey
 		if tweakedGroupKey == "" {
-			// @dev: after mint, before finalize, new_grouped_asset is true
-			// @dev: after finalize, new_grouped_asset is false and grouped_asset is true
 			continue
 		}
 		firstAssetMeta := request.AssetMetaData
@@ -7794,7 +7644,7 @@ type NftTransferSimplified struct {
 
 func PostToSetNftTransfer(token string, nftTransferSetRequest *NftTransferSetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/nft_transfer/set"
+	url := serverDomainOrSocket + "/nft_transfer/set"
 	requestJsonBytes, err := json.Marshal(nftTransferSetRequest)
 	if err != nil {
 		return nil, err
@@ -7855,7 +7705,7 @@ type GetNftTransferByAssetIdResponse struct {
 
 func RequestToGetNftTransferByAssetId(token string, assetId string) (*[]NftTransfer, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/nft_transfer/get/asset_id/" + assetId
+	url := serverDomainOrSocket + "/nft_transfer/get/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -7948,8 +7798,6 @@ func UploadNftTransfer(token string, deviceId string, txid string, assetId strin
 	return SetNftTransferWithoutInfo(token, txid, assetId, _time, fromAddr, toAddr, deviceId)
 }
 
-// GetNftTransferByAssetId
-// @Description: Get nft transfer by assetId
 func GetNftTransferByAssetId(token string, assetId string) string {
 	nftTransfers, err := GetNftTransferByAssetIdAndGetResponse(token, assetId)
 	result := NftTransferSliceToNftTransferSimplifiedSlice(nftTransfers)
@@ -7960,41 +7808,22 @@ func GetNftTransferByAssetId(token string, assetId string) string {
 }
 
 type AssetListInfo struct {
-	Version string `json:"version"`
-	//@dev: AssetGenesis
+	Version      string `json:"version"`
 	GenesisPoint string `json:"genesis_point"`
 	Name         string `json:"name"`
 	MetaHash     string `json:"meta_hash"`
 	AssetID      string `json:"asset_id"`
 	AssetType    string `json:"asset_type"`
 	OutputIndex  int    `json:"output_index"`
-	//GenesisVersion int    `json:"genesis_version"`
 
-	Amount           int   `json:"amount"`
-	LockTime         int32 `json:"lock_time"`
-	RelativeLockTime int32 `json:"relative_lock_time"`
-	//ScriptVersion    int32  `json:"script_version"`
-	ScriptKey string `json:"script_key"`
-	//ScriptKeyIsLocal bool   `json:"script_key_is_local"`
+	Amount           int    `json:"amount"`
+	LockTime         int32  `json:"lock_time"`
+	RelativeLockTime int32  `json:"relative_lock_time"`
+	ScriptKey        string `json:"script_key"`
 
-	//@dev: ChainAnchor
-	//AnchorTx         string `json:"anchor_tx"`
-	//AnchorBlockHash string `json:"anchor_block_hash"`
 	AnchorOutpoint string `json:"anchor_outpoint"`
-	//InternalKey     string `json:"internal_key"`
-	//MerkleRoot      string `json:"merkle_root"`
-	//TapscriptSibling string `json:"tapscript_sibling"`
-	//BlockHeight int `json:"block_height"`
 
-	//@dev: _AssetGroup
-	//RawGroupKey     string `json:"raw_group_key"`
 	TweakedGroupKey string `json:"tweaked_group_key"`
-	//AssetWitness    string `json:"asset_witness"`
-
-	//IsSpent     bool   `json:"is_spent"`
-	//LeaseOwner  string `json:"lease_owner"`
-	//LeaseExpiry int    `json:"lease_expiry"`
-	//IsBurn      bool   `json:"is_burn"`
 
 	DeviceId string `json:"device_id" gorm:"type:varchar(255)"`
 	UserId   int    `json:"user_id"`
@@ -8018,8 +7847,6 @@ type AssetListSetRequest struct {
 	DeviceId         string `json:"device_id" gorm:"type:varchar(255);index"`
 }
 
-// UploadAssetListInfo
-// @Description: Upload AssetListInfo
 func UploadAssetListInfo(token string, deviceId string) string {
 	return UploadAssetListProcessedInfo(token, deviceId)
 }
@@ -8063,7 +7890,7 @@ type AssetBalanceHistoryRecord struct {
 
 func PostToCreateAssetBalanceHistories(token string, requests *[]AssetBalanceHistorySetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance_history/create"
+	url := serverDomainOrSocket + "/asset_balance_history/create"
 	requestJsonBytes, err := json.Marshal(requests)
 	if err != nil {
 		return nil, err
@@ -8110,7 +7937,7 @@ type GetLatestAssetBalanceHistoriesResponse struct {
 
 func RequestToGetLatestAssetBalanceHistories(token string) (*[]AssetBalanceHistoryRecord, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/asset_balance_history/get/latest"
+	url := serverDomainOrSocket + "/asset_balance_history/get/latest"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -8149,7 +7976,6 @@ func RequestToGetLatestAssetBalanceHistories(token string) (*[]AssetBalanceHisto
 }
 
 func GetAndUploadAssetBalanceHistories(token string) error {
-	// GET
 	records, err := RequestToGetLatestAssetBalanceHistories(token)
 	if err != nil {
 		return AppendErrorInfo(err, "RequestToGetLatestAssetBalanceHistories")
@@ -8160,7 +7986,6 @@ func GetAndUploadAssetBalanceHistories(token string) error {
 			recordsMapBalance[record.AssetId] = record.Balance
 		}
 	}
-	// Compare
 	balances, err := GetListBalancesSimpleInfo()
 	if err != nil {
 		return AppendErrorInfo(err, "GetListBalancesSimpleInfo")
@@ -8177,7 +8002,6 @@ func GetAndUploadAssetBalanceHistories(token string) error {
 	if changedBalances == nil {
 		return nil
 	}
-	// POST
 	var requests []AssetBalanceHistorySetRequest
 	for _, changedBalance := range changedBalances {
 		requests = append(requests, AssetBalanceHistorySetRequest{
@@ -8195,12 +8019,248 @@ func GetAndUploadAssetBalanceHistories(token string) error {
 	return nil
 }
 
-// UploadAssetBalanceHistories
-// @Description: Upload asset balance histories
 func UploadAssetBalanceHistories(token string) string {
 	err := GetAndUploadAssetBalanceHistories(token)
 	if err != nil {
 		return MakeJsonErrorResult(GetAndUploadAssetBalanceHistoriesErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, SuccessError, nil)
+}
+
+type AssetKeys struct {
+	OpStr          string `json:"op_str"`
+	ScriptKeyBytes string `json:"script_key_bytes"`
+}
+
+func _assetLeafKeys(isGroup bool, id string, proofType universerpc.ProofType) (*universerpc.AssetLeafKeyResponse, error) {
+
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+	client := universerpc.NewUniverseClient(conn)
+
+	request := &universerpc.AssetLeafKeysRequest{
+		Id: &universerpc.ID{
+			ProofType: proofType,
+		},
+	}
+	if isGroup {
+		groupKey := &universerpc.ID_GroupKeyStr{
+			GroupKeyStr: id,
+		}
+		request.Id.Id = groupKey
+	} else {
+		AssetId := &universerpc.ID_AssetIdStr{
+			AssetIdStr: id,
+		}
+		request.Id.Id = AssetId
+	}
+
+	response, err := client.AssetLeafKeys(context.Background(), request)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "AssetLeafKeys")
+	}
+	return response, nil
+}
+
+func AssetLeafKeyResponseToAssetKeys(response *universerpc.AssetLeafKeyResponse) *[]AssetKeys {
+	if response == nil {
+		return nil
+	}
+	var assetKeys []AssetKeys
+	for _, key := range response.AssetKeys {
+		assetKeys = append(assetKeys, AssetKeys{
+			OpStr:          key.Outpoint.(*universerpc.AssetKey_OpStr).OpStr,
+			ScriptKeyBytes: hex.EncodeToString(key.GetScriptKeyBytes()),
+		})
+	}
+	return &assetKeys
+}
+
+func _queryProof(isGroup bool, id string, outpoint string, scriptKey string, proofType universerpc.ProofType) (*universerpc.AssetProofResponse, error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+	client := universerpc.NewUniverseClient(conn)
+
+	request := &universerpc.UniverseKey{
+		Id: &universerpc.ID{
+			ProofType: proofType,
+		},
+		LeafKey: &universerpc.AssetKey{
+			Outpoint:  &universerpc.AssetKey_OpStr{OpStr: outpoint},
+			ScriptKey: &universerpc.AssetKey_ScriptKeyStr{ScriptKeyStr: scriptKey},
+		},
+	}
+	if isGroup {
+		groupKey := &universerpc.ID_GroupKeyStr{
+			GroupKeyStr: id,
+		}
+		request.Id.Id = groupKey
+	} else {
+		AssetId := &universerpc.ID_AssetIdStr{
+			AssetIdStr: id,
+		}
+		request.Id.Id = AssetId
+	}
+	response, err := client.QueryProof(context.Background(), request)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "QueryProof")
+	}
+	return response, nil
+}
+
+func QueryProofToGetAssetId(groupKey string, outpoint string, scriptKey string) (string, error) {
+	response, err := _queryProof(true, groupKey, outpoint, scriptKey, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+	if err != nil {
+		return "", err
+	}
+	assetId := hex.EncodeToString(response.AssetLeaf.Asset.AssetGenesis.AssetId)
+	return assetId, nil
+}
+
+type AssetMeta struct {
+	Data     string `json:"data"`
+	Type     string `json:"type"`
+	MetaHash string `json:"meta_hash"`
+}
+
+func _fetchAssetMetaByAssetId(assetId string) (*taprpc.AssetMeta, error) {
+	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
+	if err != nil {
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
+	}
+	defer clearUp()
+	client := taprpc.NewTaprootAssetsClient(conn)
+	request := &taprpc.FetchAssetMetaRequest{
+		Asset: &taprpc.FetchAssetMetaRequest_AssetIdStr{
+			AssetIdStr: assetId,
+		},
+	}
+	response, err := client.FetchAssetMeta(context.Background(), request)
+	return response, err
+}
+
+func FetchAssetMetaByAssetId(assetId string) (*AssetMeta, error) {
+	response, err := _fetchAssetMetaByAssetId(assetId)
+	if err != nil {
+		return nil, err
+	}
+	assetMeta := AssetMeta{
+		Data:     string(response.Data),
+		Type:     response.Type.String(),
+		MetaHash: hex.EncodeToString(response.MetaHash),
+	}
+	return &assetMeta, nil
+}
+
+func GetGroupNamesByGroupKeys(groupKeys []string) (*map[string]string, error) {
+	var totalOutpoints []string
+	groupKeyMapName := make(map[string]string)
+	groupKeyMapOps := make(map[string][]string)
+	opMapScriptKey := make(map[string]string)
+	for _, groupKey := range groupKeys {
+		assetKeys, err := func(isGroup bool, id string, proofType universerpc.ProofType) (*[]AssetKeys, error) {
+			response, err := _assetLeafKeys(isGroup, id, proofType)
+			if err != nil {
+				return nil, err
+			}
+			var assetKeys *[]AssetKeys
+			assetKeys = AssetLeafKeyResponseToAssetKeys(response)
+			return assetKeys, nil
+		}(true, groupKey, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
+		if err != nil {
+			LogError("api AssetLeafKeys err:%v", err)
+		}
+		if len(*assetKeys) == 0 {
+			err = errors.New("length of assetKeys(" + strconv.Itoa(len(*assetKeys)) + ") is zero, not fount AssetLeafKey")
+			if err != nil {
+				LogError("%v", err)
+			}
+		}
+		var outpoints []string
+		for _, assetKey := range *assetKeys {
+			outpoints = append(outpoints, assetKey.OpStr)
+			opMapScriptKey[assetKey.OpStr] = assetKey.ScriptKeyBytes
+		}
+		totalOutpoints = append(totalOutpoints, outpoints...)
+		groupKeyMapOps[groupKey] = outpoints
+	}
+	type timeAndAssetKey struct {
+		Time           int    `json:"time"`
+		OpStr          string `json:"op_str"`
+		ScriptKeyBytes string `json:"script_key_bytes"`
+	}
+	for _, groupKey := range groupKeys {
+		var timeAndAssetKeys []timeAndAssetKey
+		ops := groupKeyMapOps[groupKey]
+		for _, op := range ops {
+			timeAndAssetKeys = append(timeAndAssetKeys, timeAndAssetKey{
+				Time:           0,
+				OpStr:          op,
+				ScriptKeyBytes: opMapScriptKey[op],
+			})
+		}
+		firstAssetKey := timeAndAssetKeys[0]
+		assetId, err := QueryProofToGetAssetId(groupKey, firstAssetKey.OpStr, firstAssetKey.ScriptKeyBytes)
+		if err != nil {
+			LogError("api QueryProofToGetAssetId err:%v", err)
+			continue
+		}
+		assetMeta, err := FetchAssetMetaByAssetId(assetId)
+		if err != nil {
+			LogError("api FetchAssetMetaByAssetId err:%v", err)
+			continue
+		}
+		var meta Meta
+		meta.GetMetaFromStr(assetMeta.Data)
+		groupKeyMapName[groupKey] = meta.GroupName
+	}
+	return &groupKeyMapName, nil
+}
+
+func queryListAssetsByAssetId(assetId string) (assets []ListAssetsResponse, err error) {
+	listAssetsProcessed, err := ListAssetsProcessed(false, false, false)
+	if err != nil {
+		return assets, AppendErrorInfo(err, "ListAssetsProcessed")
+	}
+	for _, asset := range *listAssetsProcessed {
+		if asset.AssetGenesis.AssetID == assetId && asset.ScriptKeyIsLocal {
+			assets = append(assets, asset)
+		}
+	}
+	return assets, nil
+}
+
+type ListAssetAmountInfo struct {
+	Version      string                         `json:"version"`
+	AssetGenesis ListAssetsResponseAssetGenesis `json:"asset_genesis"`
+	Amount       int                            `json:"amount"`
+	AssetGroup   ListAssetsResponseAssetGroup   `json:"asset_group"`
+}
+
+func ListAssetsResponseSliceToListAssetAmountInfo(assets []ListAssetsResponse) (listAssetAmountInfo ListAssetAmountInfo) {
+	for i, asset := range assets {
+		if i == 0 {
+			listAssetAmountInfo = ListAssetAmountInfo{
+				Version:      asset.Version,
+				AssetGenesis: asset.AssetGenesis,
+				AssetGroup:   asset.AssetGroup,
+			}
+		}
+		listAssetAmountInfo.Amount += asset.Amount
+	}
+	return listAssetAmountInfo
+}
+
+func QueryListAssetsByAssetId(assetId string) string {
+	assets, err := queryListAssetsByAssetId(assetId)
+	if err != nil {
+		return MakeJsonErrorResult(QueryListAssetsByAssetIdErr, err.Error(), ListAssetAmountInfo{})
+	}
+	return MakeJsonErrorResult(SUCCESS, SuccessError, ListAssetsResponseSliceToListAssetAmountInfo(assets))
 }

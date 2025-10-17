@@ -2,16 +2,17 @@ package api
 
 import (
 	"fmt"
-	_ "github.com/fatedier/frp/assets/frpc"
-	"github.com/google/uuid"
-	"github.com/wallet/base"
 	"os"
 	"strconv"
+
+	_ "github.com/fatedier/frp/assets/frpc"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/wallet/base"
 )
 
 func WriteConfigFrpcRunTest() {
 	id := uuid.New().String()
-	//	@dev: Get available port twice to compare to prevent being taken
 	port := strconv.Itoa(RequestServerGetPortAvailable(base.QueryConfigByKey("LnurlServerHost")))
 	FrpcConfig(id, port)
 	FrpcRun()
@@ -34,4 +35,14 @@ func WriteConfig(filePath string, serverAddr string, serverPort int, proxyName s
 		return false
 	}
 	return true
+}
+
+func WriteConf(filePath string, serverAddr string, serverPort int, proxyName string, proxyType string, localIP string, localPort int, remotePort int, token string) error {
+	content := fmt.Sprintf("serverAddr = \"%s\"\nserverPort = %d\nauth.token = \"%s\"\n\n[[proxies]]\nname = \"%s\"\ntype = \"%s\"\nlocalIP = \"%s\"\nlocalPort = %d\nremotePort = %d",
+		serverAddr, serverPort, token, proxyName, proxyType, localIP, localPort, remotePort)
+	err := WriteToFile(filePath, content)
+	if err != nil {
+		return errors.Wrap(err, "WriteToFile")
+	}
+	return nil
 }

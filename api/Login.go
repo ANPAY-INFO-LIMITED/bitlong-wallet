@@ -5,14 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/wallet/service"
-	"github.com/wallet/service/untils"
 	"io"
 	"net/http"
 	"time"
-)
 
-var serverHost string = "http://132.232.109.84:8090"
+	"github.com/wallet/service"
+	"github.com/wallet/service/untils"
+)
 
 const (
 	LoginUrl       = "/login"
@@ -20,16 +19,10 @@ const (
 	GetNonceUrl    = "/getNonce"
 	GetDeviceIdUrl = "/getDeviceId"
 	reChangeUrl    = "/reChange"
-	HttpsUrl       = "http://"
 )
 
-func setServerHost(server string) string {
-	serverHost = server
-	return serverHost
-}
-
 func GetServerHost() string {
-	return HttpsUrl + Cfg.BtlServerHost
+	return Cfg.BtlServerHost
 }
 
 func Login(username, password string) (string, error) {
@@ -76,7 +69,7 @@ func getNonce(url string, username string) (string, error) {
 		fmt.Println("An error occurred while unmarshalling the response body:", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%v", result.Error)
 	}
 	return result.Nonce, err
 }
@@ -103,7 +96,7 @@ func getDeviceID(url string, nonce, username string) (string, error) {
 		fmt.Println("An error occurred while unmarshalling the response body:", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%v", result.Error)
 	}
 	fmt.Println("get encryptDeviceID:", result.EncryptDeviceID)
 	fmt.Println("get EncodedSalt:", result.EncodedSalt)
@@ -136,7 +129,7 @@ func login(url string, username string, password string) (string, error) {
 		fmt.Println("An error occurred while unmarshalling the response body:", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%v", result.Error)
 	}
 	return result.Token, err
 }
@@ -163,12 +156,11 @@ func refresh(url string, username string, password string) (string, error) {
 		fmt.Println("An error occurred while unmarshalling the response body:", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%v", result.Error)
 	}
 	return result.Token, err
 }
 
-// TODU: upLoadLog
 func upLoadLog(url string, token string, requestBody []byte) (string, error) {
 	return "", nil
 }
@@ -176,7 +168,6 @@ func upLoadLog(url string, token string, requestBody []byte) (string, error) {
 func SendPostRequest(url string, token string, requestBody []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// 创建HTTP请求
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
 	if err != nil {
 		fmt.Println("An error occurred while creating an HTTP request:", err)
@@ -184,11 +175,9 @@ func SendPostRequest(url string, token string, requestBody []byte) ([]byte, erro
 	}
 	req = req.WithContext(ctx)
 
-	// 设置Authorization Header
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// 发送HTTP请求
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -230,7 +219,7 @@ func reChange(url string, username string, password string) (string, error) {
 		fmt.Println("An error occurred while unmarshalling the response body:", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%v", result.Error)
 	}
 	return result.Token, err
 }

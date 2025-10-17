@@ -10,9 +10,13 @@ import (
 )
 
 type Invoice struct {
-	ID         string `json:"id"`
-	Amount     int    `json:"amount"`
-	InvoiceStr string `json:"invoiceStr"`
+	ID          string      `json:"id"`
+	InvoiceType InvoiceType `json:"invoice_type"`
+	AssetID     string      `json:"asset_id"`
+	Amount      uint64      `json:"amount"`
+	PubKey      string      `json:"pub_key"`
+	Memo        string      `json:"memo"`
+	Invoice     string      `json:"invoice"`
 }
 
 type PhoneStore struct {
@@ -20,7 +24,7 @@ type PhoneStore struct {
 }
 
 func InitPhoneDB() error {
-	_, err := createBucketInPhoneDB(filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db"), "invoices")
+	_, err := createBucketInPhoneDB(filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db"), "gen_invoice")
 	return err
 }
 
@@ -69,8 +73,6 @@ func (s *PhoneStore) AllInvoices(bucket string) ([]Invoice, error) {
 	}
 	return invoices, nil
 }
-
-// CURD
 
 func (s *PhoneStore) CreateOrUpdateInvoice(bucket string, i *Invoice) error {
 	return s.DB.Update(func(tx *bolt.Tx) error {

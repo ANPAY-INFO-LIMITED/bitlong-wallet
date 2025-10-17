@@ -4,26 +4,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
-	"github.com/wallet/service/apiConnect"
-	"github.com/wallet/service/rpcclient"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
+	"github.com/pkg/errors"
+	"github.com/wallet/service/apiConnect"
+	"github.com/wallet/service/rpcclient"
 )
 
-// ListAccounts
-//
-//	@Description: ListAddresses retrieves all the addresses along with their balance.
-//	An account name filter can be provided to filter through all the wallet accounts
-//	and return the addresses of only those matching.
-//	@return string
 func listAccounts() (*walletrpc.ListAccountsResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)
@@ -98,14 +93,10 @@ func FindAccount(name string) string {
 	return MakeJsonErrorResult(AccountNotFoundErr, "account not found", nil)
 }
 
-// ListLeases
-//
-//	@Description: ListLeases lists all currently locked utxos.
-//	@return string
 func ListLeases() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)
@@ -118,15 +109,10 @@ func ListLeases() string {
 	return response.String()
 }
 
-// ListSweeps
-//
-//	@Description: ListSweeps returns a list of the sweep transactions our node has produced.
-//	Note that these sweeps may not be confirmed yet, as we record sweeps on broadcast, not confirmation.
-//	@return string
 func ListSweeps() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)
@@ -142,7 +128,7 @@ func ListSweeps() string {
 func ListUnspentAndGetResponse() (*walletrpc.ListUnspentResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)
@@ -187,7 +173,7 @@ func GetBtcListUnspentUtxos() (Utxos []*UnspentUtxo, err error) {
 
 func PostToSetBtcUtxo(token string, Utxos []*UnspentUtxo) error {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/btc_utxo/set"
+	url := serverDomainOrSocket + "/btc_utxo/set"
 	requestJsonBytes, err := json.Marshal(Utxos)
 	if err != nil {
 		return err
@@ -304,14 +290,10 @@ func BtcUtxos(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SuccessError, response)
 }
 
-// ListUnspent
-// @Description: ListUnspent returns a list of all utxos spendable by the wallet
-// with a number of confirmations between the specified minimum and maximum.
-// By default, all utxos are listed. To list only the unconfirmed utxos, set the unconfirmed_only to true.
 func ListUnspent() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)
@@ -324,12 +306,10 @@ func ListUnspent() string {
 	return response.String()
 }
 
-// NextAddr
-// @Description: NextAddr returns the next unused address within the wallet.
 func NextAddr() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := walletrpc.NewWalletKitClient(conn)

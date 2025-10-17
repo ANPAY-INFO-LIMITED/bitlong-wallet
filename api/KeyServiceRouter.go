@@ -1,14 +1,14 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/wallet/service"
-	"net/http"
 )
 
 type SignMessage struct {
-	Message string `json:"message"` // 正确地将unique和column选项放在同一个gorm标签内
-
+	Message string `json:"message"`
 }
 
 func RouterForKeyService() {

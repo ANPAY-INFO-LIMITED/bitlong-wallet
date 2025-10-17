@@ -3,10 +3,11 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/wallet/base"
 	"path/filepath"
 	"time"
+
+	"github.com/boltdb/bolt"
+	"github.com/wallet/base"
 )
 
 type Addr struct {
@@ -72,8 +73,6 @@ func (s *AddrStore) AllAddresses(bucket string) ([]Addr, error) {
 	}
 	return Addrs, nil
 }
-
-// CURD
 
 func (s *AddrStore) CreateOrUpdateAddr(bucket string, a *Addr) error {
 	return s.DB.Update(func(tx *bolt.Tx) error {

@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/hex"
+
 	"github.com/lightninglabs/taproot-assets/taprpc"
 )
 
-// Tapdroot Addr
-type JsonResultAddr struct {
+type QueriedAddr struct {
 	Encoded          string `json:"encoded"`
 	AssetId          string `json:"asset_id"`
 	AssetType        int    `json:"asset_type"`
@@ -22,7 +22,7 @@ type JsonResultAddr struct {
 	ReceiveNum       int    `json:"receive_num"`
 }
 
-func (r *JsonResultAddr) GetData(response *taprpc.Addr) {
+func (r *QueriedAddr) GetData(response *taprpc.Addr) {
 	r.Encoded = response.Encoded
 	r.AssetId = hex.EncodeToString(response.AssetId)
 	r.AssetType = int(response.AssetType)
@@ -36,7 +36,6 @@ func (r *JsonResultAddr) GetData(response *taprpc.Addr) {
 	r.AddressVersion = int(response.AddressVersion)
 }
 
-// Tapdroot AssetTransfer
 type Inputs struct {
 	AnchorPoint string `json:"anchor_point"`
 	Address     string `json:"address"`

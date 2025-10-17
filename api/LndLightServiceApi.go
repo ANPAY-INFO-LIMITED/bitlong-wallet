@@ -5,28 +5,28 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
+	"github.com/pkg/errors"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
-// GetWalletBalance
-//
-//	@Description: WalletBalance returns total unspent outputs(confirmed and unconfirmed),
-//	all confirmed unspent outputs and all unconfirmed unspent outputs under control of the wallet.
-//	@return string
 func getWalletBalance() (*lnrpc.WalletBalanceResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -40,15 +40,10 @@ func getWalletBalance() (*lnrpc.WalletBalanceResponse, error) {
 
 }
 
-// GetInfoOfLnd
-//
-//	@Description: GetInfo returns general information concerning the lightning node including it's identity pubkey, alias,
-//	the chains it is connected to, and information concerning the number of open+pending channels.
-//	@return string
 func getInfoOfLnd() (*lnrpc.GetInfoResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -168,7 +163,7 @@ func ProcessGetInfoResponse(getInfoResponse *lnrpc.GetInfoResponse, getBlockchai
 func RequestToGetBlockchainInfo(token string) (*PostGetBlockchainInfoResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
 	network := base.NetWork
-	url := "http://" + serverDomainOrSocket + "/bitcoind/" + network + "/blockchain/get_blockchain_info"
+	url := serverDomainOrSocket + "/bitcoind/" + network + "/blockchain/get_blockchain_info"
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -225,8 +220,6 @@ func LndGetInfoAndGetResponse(token string) (*GetInfoResponse, error) {
 	return result, nil
 }
 
-// LndGetInfo
-// @Description: Replace GetInfoOfLnd
 func LndGetInfo(token string) string {
 	response, err := LndGetInfoAndGetResponse(token)
 	if err != nil {
@@ -235,10 +228,27 @@ func LndGetInfo(token string) string {
 	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), response)
 }
 
+func lndSyncToChain() (syncedToChain bool, err error) {
+	response, err := getInfoOfLnd()
+	if err != nil {
+		return false, AppendErrorInfo(err, "getInfoOfLnd")
+	}
+	syncedToChain = response.SyncedToChain
+	return syncedToChain, nil
+}
+
+func LndSyncToChain() string {
+	syncedToChain, err := lndSyncToChain()
+	if err != nil {
+		return MakeJsonErrorResult(lndSyncToChainErr, err.Error(), false)
+	}
+	return MakeJsonErrorResult(SUCCESS, SUCCESS.Error(), syncedToChain)
+}
+
 func sendCoins(addr string, amount int64, feeRate uint64, all bool) (*lnrpc.SendCoinsResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -297,7 +307,6 @@ func ProcessGetWalletBalanceResult(walletBalanceResponse *lnrpc.WalletBalanceRes
 	return walletBalanceResponse, nil
 }
 
-// Deprecated
 func CalculateImportedTapAddressBalanceAmount(listAddressesResponse *walletrpc.ListAddressesResponse) (imported int64) {
 	if listAddressesResponse == nil {
 		return 0
@@ -323,28 +332,19 @@ func GetInfoOfLnd() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// GetIdentityPubkey
-//
-//	@Description: GetInfo returns general information concerning the lightning node including it's identity pubkey, alias,
-//	the chains it is connected to, and information concerning the number of open+pending channels.
-//	@return string
 func GetIdentityPubkey() string {
 	response, err := getInfoOfLnd()
 	if err != nil {
 		fmt.Printf("%s lnrpc GetInfo.IdentityPubkey err: %v\n", GetTimeNow(), err)
-		return ""
+		return MakeJsonErrorResult(GetIdentityPubkeyErr, err.Error(), nil)
 	}
-	return response.GetIdentityPubkey()
+	return MakeJsonErrorResult(SUCCESS, "", response.GetIdentityPubkey())
 }
 
-// GetNewAddress
-//
-//	@Description:NewAddress creates a new address under control of the local wallet.
-//	@return string
 func GetNewAddress() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -360,48 +360,31 @@ func GetNewAddress() string {
 	return response.Address
 }
 
-// AddInvoice
-//
-//	@Description:AddInvoice attempts to add a new invoice to the invoice database.
-//	Any duplicated invoices are rejected, therefore all invoices must have a unique payment preimage.
-//	@return string
-func AddInvoice(value int64, memo string) string {
+func AddInvoice(value int, memo string, private bool) string {
+	AppendFileLog("/data/data/io.bitlong/files/bitlong_api_log.txt", "[sshBtcChannelAddInvoice01]", ValueJsonString(fmt.Sprintf("memo:%s,value:%d", memo, value)))
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.Invoice{
-		Value: value,
-		Memo:  memo,
+		Value:   int64(value),
+		Memo:    memo,
+		Private: private,
 	}
 	response, err := client.AddInvoice(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s client.AddInvoice :%v\n", GetTimeNow(), err)
-		return ""
+		return MakeJsonErrorResult(AddInvoiceErr, err.Error(), nil)
 	}
-	return response.GetPaymentRequest()
+	AppendFileLog("/data/data/io.bitlong/files/bitlong_api_log.txt", "[sshBtcChannelAddInvoice01]", ValueJsonString(fmt.Sprintf("response:%s", response)))
+	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// ListInvoices
-//
-//	@Description:ListInvoices returns a list of all the invoices currently stored within the database.
-//	Any active debug invoices are ignored. It has full support for paginated responses, allowing users to query for specific invoices through their add_index.
-//	This can be done by using either the first_index_offset or last_index_offset fields included in the response as the index_offset of the next request.
-//	By default, the first 100 invoices created will be returned. Backwards pagination is also supported through the Reversed flag.
-//	@return string
 func ListInvoices() string {
-	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
-	}
-
-	defer clearUp()
-	client := lnrpc.NewLightningClient(conn)
-	request := &lnrpc.ListInvoiceRequest{}
-	response, err := client.ListInvoices(context.Background(), request)
+	response, err := rpcclient.ListInvoices(0, false)
 	if err != nil {
 		fmt.Printf("%s client.ListInvoice :%v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(ListInvoicesErr, err.Error(), nil)
@@ -481,15 +464,10 @@ type InvoiceAll struct {
 	FirstIndexOffset string `json:"first_index_offset"`
 }
 
-// LookupInvoice
-//
-//	@Description:LookupInvoice attempts to look up an invoice according to its payment hash.
-//	The passed payment hash must be exactly 32 bytes, if not, an error is returned.
-//	@return string
 func LookupInvoice(rhash string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -506,17 +484,10 @@ func LookupInvoice(rhash string) string {
 	return response.String()
 }
 
-// AbandonChannel
-//
-//	@Description: AbandonChannel removes all channel state from the database except for a close summary.
-//	This method can be used to get rid of permanently unusable channels due to bugs fixed in newer versions of lnd.
-//	This method can also be used to remove externally funded channels where the funding transaction was never broadcast.
-//	Only available for non-externally funded channels in dev build.
-//	@return bool
 func AbandonChannel() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -531,16 +502,10 @@ func AbandonChannel() bool {
 	return true
 }
 
-// BatchOpenChannel
-//
-//	@Description: BatchOpenChannel attempts to open multiple single-funded channels in a single transaction in an atomic way.
-//	This means either all channel open requests succeed at once or all attempts are aborted if any of them fail.
-//	This is the safer variant of using PSBTs to manually fund a batch of channels through the OpenChannel RPC.
-//	@return bool
 func BatchOpenChannel() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -555,15 +520,10 @@ func BatchOpenChannel() bool {
 	return true
 }
 
-// ChannelAcceptor
-//
-//	@Description: ChannelAcceptor dispatches a bi-directional streaming RPC in which OpenChannel requests are sent to the client and the client responds with a boolean that tells LND whether or not to accept the channel.
-//	This allows node operators to specify their own criteria for accepting inbound channels through a single persistent connection.
-//	@return bool
 func ChannelAcceptor() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -588,14 +548,10 @@ func ChannelAcceptor() bool {
 	}
 }
 
-// ChannelBalance
-//
-//	@Description: ChannelBalance returns a report on the total funds across all open channels, categorized in local/remote, pending local/remote and unsettled local/remote balances.
-//	@return string
 func ChannelBalance() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -610,14 +566,10 @@ func ChannelBalance() string {
 	return response.String()
 }
 
-// CheckMacaroonPermissions
-//
-//	@Description: CheckMacaroonPermissions checks whether a request follows the constraints imposed on the macaroon and that the macaroon is authorized to follow the provided permissions.
-//	@return bool
 func CheckMacaroonPermissions() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -632,57 +584,61 @@ func CheckMacaroonPermissions() bool {
 	return true
 }
 
-// CloseChannel
-//
-//	@Description:CloseChannel attempts to close an active channel identified by its channel outpoint (ChannelPoint).
-//	The actions of this method can additionally be augmented to attempt a force close after a timeout period in the case of an inactive peer.
-//	If a non-force close (cooperative closure) is requested, then the user can specify either a target number of blocks until the closure transaction is confirmed, or a manual fee rate.
-//	If neither are specified, then a default lax, block confirmation target is used.
-//	@return bool
-func CloseChannel(fundingTxidStr string, outputIndex int) bool {
+func CloseChannel(channelPoint string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
+
+	parts := strings.Split(channelPoint, ":")
+	if len(parts) != 2 {
+		return MakeJsonErrorResult(CloseChannelErr, "Invalid channelPoint format", nil)
+	}
+
+	// 提取 FundingTxidStr
+	fundingTxidStr := parts[0]
+
+	// 提取 OutputIndex
+	outputIndex, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return MakeJsonErrorResult(CloseChannelErr, "Invalid output index", nil)
+	}
 
 	request := &lnrpc.CloseChannelRequest{
 		ChannelPoint: &lnrpc.ChannelPoint{
 			FundingTxid: &lnrpc.ChannelPoint_FundingTxidStr{FundingTxidStr: fundingTxidStr},
 			OutputIndex: uint32(outputIndex),
 		},
+		SatPerVbyte: 5,
 	}
 	stream, err := client.CloseChannel(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc CloseChannel err: %v\n", GetTimeNow(), err)
-		return false
+		return MakeJsonErrorResult(CloseChannelErr, err.Error(), nil)
 	}
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
 				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
-				return false
+				return MakeJsonErrorResult(CloseChannelErr, err.Error(), nil)
 			}
 			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
-			return false
+			return MakeJsonErrorResult(CloseChannelErr, err.Error(), nil)
+		} else if response != nil {
+			fmt.Printf("%s %v\n", GetTimeNow(), response)
+			return MakeJsonErrorResult(SUCCESS, "", "通道进入关闭状态")
 		}
-		fmt.Printf("%s %v\n", GetTimeNow(), response)
-		return true
 	}
-
 }
 
-// ClosedChannels
-//
-//	@Description: ClosedChannels returns a description of all the closed channels that this node was a participant in.
-//	@return string
 func ClosedChannels() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -719,16 +675,10 @@ func DecodePayReq(payReq string) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
-// ExportAllChannelBackups
-//
-//	@Description: ExportAllChannelBackups returns static channel backups for all existing channels known to lnd.
-//	A set of regular singular static channel backups for each channel are returned.
-//	Additionally, a multi-channel backup is returned as well, which contains a single encrypted blob containing the backups of each channel.
-//	@return bool
 func ExportAllChannelBackups() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -743,16 +693,10 @@ func ExportAllChannelBackups() bool {
 	return true
 }
 
-// ExportChannelBackup
-//
-//	@Description: ExportChannelBackup attempts to return an encrypted static channel backup for the target channel identified by it channel point.
-//	The backup is encrypted with a key generated from the aezeed seed of the user.
-//	The returned backup can either be restored using the RestoreChannelBackup method once lnd is running, or via the InitWallet and UnlockWallet methods from the WalletUnlocker service.
-//	@return bool
 func ExportChannelBackup() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -767,14 +711,10 @@ func ExportChannelBackup() bool {
 	return true
 }
 
-// GetChanInfo
-//
-//	@Description:GetChanInfo returns the latest authenticated network announcement for the given channel identified by its channel ID: an 8-byte integer which uniquely identifies the location of transaction's funding output within the blockchain.
-//	@return string
 func GetChanInfo(chanId string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -794,15 +734,10 @@ func GetChanInfo(chanId string) string {
 	return response.String()
 }
 
-// OpenChannelSync
-//
-//	@Description:OpenChannelSync is a synchronous version of the OpenChannel RPC call. This call is meant to be consumed by clients to the REST proxy.
-//	As with all other sync calls, all byte slices are intended to be populated as hex encoded strings.
-//	@return string
 func OpenChannelSync(nodePubkey string, localFundingAmount int64) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -814,7 +749,6 @@ func OpenChannelSync(nodePubkey string, localFundingAmount int64) string {
 	}
 	response, err := client.OpenChannelSync(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s lnrpc OpenChannelSync err: %v\n", GetTimeNow(), err)
 		return err.Error()
 	}
 	//deal with  the byte-reversed hash
@@ -828,54 +762,140 @@ func OpenChannelSync(nodePubkey string, localFundingAmount int64) string {
 	return txStr + ":" + strconv.Itoa(int(response.GetOutputIndex()))
 }
 
-// OpenChannel
-//
-//	@Description:OpenChannel attempts to open a singly funded channel specified in the request to a remote peer.
-//	Users are able to specify a target number of blocks that the funding transaction should be confirmed in, or a manual fee rate to us for the funding transaction.
-//	If neither are specified, then a lax block confirmation target is used. Each OpenStatusUpdate will return the pending channel ID of the in-progress channel.
-//	Depending on the arguments specified in the OpenChannelRequest, this pending channel ID can then be used to manually progress the channel funding flow.
-//	@return bool
-func OpenChannel(nodePubkey string, localFundingAmount int64) bool {
+func OpenBtcChannel(pubkey string, host string, localFundingAmount int, satPerVbyte int, pushSat int, memo string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
+	}
+
+	defer clearUp()
+	client := lnrpc.NewLightningClient(conn)
+	request := &lnrpc.ConnectPeerRequest{
+		Addr: &lnrpc.LightningAddress{
+			Pubkey: pubkey,
+			Host:   host,
+		},
+	}
+	response, err := client.ConnectPeer(context.Background(), request)
+	if err != nil {
+		fmt.Printf("%s lnrpc ConnectPeer err: %v\n", GetTimeNow(), err)
+		if strings.Contains(err.Error(), "already connected to peer") {
+			fmt.Printf("%s Already connected to peer, skipping error.\n", GetTimeNow())
+		} else {
+			return MakeJsonErrorResult(ConnectPeerErr, err.Error(), nil)
+		}
+	}
+	if pubkey == BtlPubKey && host == BtlHost {
+		pushSat = 5000
+	} else if pubkey == Btl2PubKey && host == Btl2Host {
+		pushSat = 5000
+	}
+
+	AppendFileLog("/data/data/io.bitlong/files/bitlong_api_log.txt", "[sshBtcChannel-pushSat]", ValueJsonString(pushSat))
+	fmt.Printf("%s %v\n", GetTimeNow(), response)
+
+	if satPerVbyte > 10 {
+		err := errors.New("fee rate exceeds max(10)")
+		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
+	return openBtcChannel(pubkey, localFundingAmount, satPerVbyte, pushSat, memo)
+}
+
+func openBtcChannel(nodePubkey string, localFundingAmount int, satPerVbyte int, pushSat int, memo string) string {
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+	if err != nil {
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
 	_nodePubkeyByteSlice, _ := hex.DecodeString(nodePubkey)
 	request := &lnrpc.OpenChannelRequest{
+		SatPerVbyte:        uint64(satPerVbyte),
 		NodePubkey:         _nodePubkeyByteSlice,
-		LocalFundingAmount: localFundingAmount,
+		LocalFundingAmount: int64(localFundingAmount),
+		PushSat:            int64(pushSat),
+		Memo:               memo,
 	}
 	stream, err := client.OpenChannel(context.Background(), request)
 	if err != nil {
 		fmt.Printf("%s lnrpc OpenChannel err: %v\n", GetTimeNow(), err)
-		return false
+		return MakeJsonErrorResult(OpenBtcChannelErr, err.Error(), nil)
+	}
+
+	conversion := func(b []byte) string {
+		for i := 0; i < len(b)/2; i++ {
+			temp := b[i]
+			b[i] = b[len(b)-i-1]
+			b[len(b)-i-1] = temp
+		}
+		txHash := hex.EncodeToString(b)
+		return txHash
 	}
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
 				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
-				return false
+				return MakeJsonErrorResult(OpenBtcChannelErr, err.Error(), nil)
 			}
 			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
-			return false
+			return MakeJsonErrorResult(OpenBtcChannelErr, err.Error(), nil)
+		} else if response.PendingChanId != nil {
+			err := AppendFileLog("/data/data/io.bitlong/files/bitlong_log.txt", "[sshBtcChannels]", ValueJsonString(response))
+			if err != nil {
+				fmt.Printf("%s AppendFileLog err: %v\n", GetTimeNow(), err)
+			}
+			txid := response.GetChanPending().Txid
+			hash := conversion(txid)
+			OutputIndex := response.GetChanPending().OutputIndex
+			resp := fmt.Sprintf("%s:%d", hash, OutputIndex)
+			return MakeJsonErrorResult(SUCCESS, "", resp)
 		}
-		fmt.Printf("%s %v\n", GetTimeNow(), response)
-		return true
 	}
 }
 
-// ListChannels
-//
-//	@Description: ListChannels returns a description of all the open channels that this node is a participant in.
-//	@return string
+type AllBtcChannelBalance struct {
+	AllSatsBalance          int64 `json:"all_sats_balance"`
+	RemoteAllSatsBalance    int64 `json:"remote_all_sats_balance"`
+	TotalCombinedSats       int64 `json:"total_combined_sats"`
+	RemoteTotalCombinedSats int64 `json:"remote_total_combined_sats"`
+}
+
+func SumAllBtcChannelBalances() string {
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+	if err != nil {
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
+	}
+	defer clearUp()
+
+	var balance AllBtcChannelBalance
+
+	client := lnrpc.NewLightningClient(conn)
+	response, err := client.ListChannels(context.Background(), &lnrpc.ListChannelsRequest{})
+	if err != nil {
+		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(ListChannelsErr, err.Error(), nil)
+	}
+	for _, channel := range response.Channels {
+		if len(channel.CustomChannelData) == 0 {
+			balance.AllSatsBalance += channel.LocalBalance
+			balance.RemoteAllSatsBalance += channel.RemoteBalance
+			balance.TotalCombinedSats += channel.LocalBalance
+			balance.RemoteTotalCombinedSats += channel.RemoteBalance
+		} else {
+			balance.TotalCombinedSats += channel.LocalBalance
+			balance.RemoteTotalCombinedSats += channel.RemoteBalance
+		}
+	}
+
+	return MakeJsonErrorResult(SUCCESS, "", balance)
+}
+
 func ListChannels() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
@@ -883,21 +903,15 @@ func ListChannels() string {
 	request := &lnrpc.ListChannelsRequest{}
 	response, err := client.ListChannels(context.Background(), request)
 	if err != nil {
-		fmt.Printf("%s lnrpc ListChannels err: %v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(ListChannelsErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// PendingChannels
-//
-//	@Description: PendingChannels returns a list of all the channels that are currently considered "pending".
-//	A channel is pending if it has finished the funding workflow and is waiting for confirmations for the funding txn, or is in the process of closure, either initiated cooperatively or non-cooperatively.
-//	@return string
 func PendingChannels() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
@@ -911,21 +925,10 @@ func PendingChannels() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// FindChanPoint
-//
-//	@Description:FindChanPoint is a helper function that takes a channel point string and returns the channel state
-//	@return string
-//	ACTIVE: channel is active
-//	INACTIVE: channel is inactive
-//	PENDING_OPEN: channel is pending open
-//	PENDING_CLOSE: channel is pending close
-//	CLOSED: channel is closed
-//	NO_FIND: channel not found
-//	ERR: grpc error
 func GetChannelState(chanPoint string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
@@ -985,17 +988,10 @@ func GetChannelState(chanPoint string) string {
 	return MakeJsonErrorResult(NoFindChannelErr, "NO_FIND_CHANNEL", nil)
 }
 
-// GetChanBalance
-//
-//	@Description:GetChanBalance returns the balance of a channel specified by its channel point.
-//	@return string
-//	（localBalance:remoteBalance) :local balance and remotebalance of the channel
-//	ERR: grpc error
-//	NO_FIND: channel not found
 func GetChannelInfo(chanPoint string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
@@ -1009,22 +1005,16 @@ func GetChannelInfo(chanPoint string) string {
 	}
 	for _, channel := range response.Channels {
 		if channel.ChannelPoint == chanPoint {
-
 			return MakeJsonErrorResult(SUCCESS, "", channel)
 		}
 	}
 	return MakeJsonErrorResult(NoFindChannelErr, "NO_FIND_CHANNEL", nil)
 }
 
-// RestoreChannelBackups
-//
-//	@Description:RestoreChannelBackups accepts a set of singular channel backups, or a single encrypted multi-chan backup and attempts to recover any funds remaining within the channel.
-//	If we are able to unpack the backup, then the new channel will be shown under listchannels, as well as pending channels.
-//	@return bool
 func RestoreChannelBackups() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1039,16 +1029,10 @@ func RestoreChannelBackups() bool {
 	return true
 }
 
-// SubscribeChannelBackups
-//
-//	@Description:SubscribeChannelBackups allows a client to sub-subscribe to the most up to date information concerning the state of all channel backups.
-//	Each time a new channel is added, we return the new set of channels, along with a multi-chan backup containing the backup info for all channels.
-//	Each time a channel is closed, we send a new update, which contains new new chan back ups, but the updated set of encrypted multi-chan backups with the closed channel(s) removed.
-//	@return bool
 func SubscribeChannelBackups() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1075,15 +1059,10 @@ func SubscribeChannelBackups() bool {
 
 }
 
-// SubscribeChannelEvents
-//
-//	@Description: SubscribeChannelEvents creates a uni-directional stream from the server to the client in which any updates relevant to the state of the channels are sent over.
-//	Events include new active channels, inactive channels, and closed channels.
-//	@return bool
 func SubscribeChannelEvents() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1110,15 +1089,10 @@ func SubscribeChannelEvents() bool {
 
 }
 
-// SubscribeChannelGraph
-//
-//	@Description: SubscribeChannelGraph launches a streaming RPC that allows the caller to receive notifications upon any changes to the channel graph topology from the point of view of the responding node.
-//	Events notified include: new nodes coming online, nodes updating their authenticated attributes, new channels being advertised, updates in the routing policy for a directional channel edge, and when channels are closed on-chain.
-//	@return bool
 func SubscribeChannelGraph() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1145,14 +1119,10 @@ func SubscribeChannelGraph() bool {
 
 }
 
-// UpdateChannelPolicy
-//
-//	@Description: UpdateChannelPolicy allows the caller to update the fee schedule and channel policies for all channels globally, or a particular channel.
-//	@return bool
 func UpdateChannelPolicy() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1167,15 +1137,10 @@ func UpdateChannelPolicy() bool {
 	return true
 }
 
-// VerifyChanBackup
-//
-//	@Description: VerifyChanBackup allows a caller to verify the integrity of a channel backup snapshot.
-//	This method will accept either a packed Single or a packed Multi. Specifying both will result in an error.
-//	@return bool
 func VerifyChanBackup() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1190,18 +1155,14 @@ func VerifyChanBackup() bool {
 	return true
 }
 
-// ConnectPeer
-//
-//	@Description:ConnectPeer attempts to establish a connection to a remote peer. This is at the networking level, and is used for communication between nodes.
-//	This is distinct from establishing a channel with a peer.
-//	@return bool
-func ConnectPeer(pubkey, host string) bool {
+func ConnectPeer(pubkey, host string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		AppendFileLog("/data/data/io.bitlong/files/bitlong_api_log.txt", "[connectPeer]", ValueJsonString(err))
+		return MakeJsonErrorResult(ConnectPeerErr, err.Error(), nil)
 	}
-
 	defer clearUp()
+
 	client := lnrpc.NewLightningClient(conn)
 	request := &lnrpc.ConnectPeerRequest{
 		Addr: &lnrpc.LightningAddress{
@@ -1213,25 +1174,20 @@ func ConnectPeer(pubkey, host string) bool {
 	if err != nil {
 		fmt.Printf("%s lnrpc ConnectPeer err: %v\n", GetTimeNow(), err)
 		if strings.Contains(err.Error(), "already connected to peer") {
-			return true
+			return MakeJsonErrorResult(SUCCESS, "", "already connected to peer")
 		} else {
-			return false
+			AppendFileLog("/data/data/io.bitlong/files/bitlong_api_log.txt", "[connectPeer02]", ValueJsonString(err))
+			return MakeJsonErrorResult(ConnectPeerErr, err.Error(), nil)
 		}
 	}
 	fmt.Printf("%s %v\n", GetTimeNow(), response)
-	return true
+	return MakeJsonErrorResult(SUCCESS, "", "connect peer success")
 }
 
-// EstimateFee
-//
-//	@Description:EstimateFee asks the chain backend to estimate the fee rate and total fees for a transaction that pays to multiple specified outputs.
-//	When using REST, the AddrToAmount map type can be set by appending &AddrToAmount[<address>]=<amount_to_send> to the URL.
-//	Unfortunately this map type doesn't appear in the REST API documentation because of a bug in the grpc-gateway library.
-//	@return string
 func EstimateFee(addr string, amount int64) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -1249,15 +1205,10 @@ func EstimateFee(addr string, amount int64) string {
 	return response.String()
 }
 
-// SendPaymentSync
-//
-//	@Description:SendPaymentSync is the synchronous non-streaming version of SendPayment.
-//	This RPC is intended to be consumed by clients of the REST proxy. Additionally, this RPC expects the destination's public key and the payment hash (if any) to be encoded as hex strings.
-//	@return string
 func SendPaymentSync(invoice string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 
 	defer clearUp()
@@ -1277,7 +1228,7 @@ func SendPaymentSync(invoice string) string {
 func SendPaymentSync0amt(invoice string, amt int64) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -1291,7 +1242,7 @@ func SendPaymentSync0amt(invoice string, amt int64) string {
 		fmt.Printf("%s client.SendPaymentSync :%v\n", GetTimeNow(), err)
 		return "false"
 	}
-	fmt.Printf(GetTimeNow() + stream.String())
+	fmt.Printf("%s %s", GetTimeNow(), stream.String())
 	return hex.EncodeToString(stream.PaymentHash)
 }
 
@@ -1310,15 +1261,13 @@ func MergeUTXO(feeRate int64) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// SendCoins
-//
-//	@Description: SendCoins executes a request to send coins to a particular address. Unlike SendMany, this RPC call only allows creating a single output at a time.
-//	If neither target_conf, or sat_per_vbyte are set, then the internal wallet will consult its fee model to determine a fee for the default confirmation target.
-//	@return string
 func SendCoins(addr string, amount int64, feeRate int64, sendAll bool) string {
 	if feeRate > 500 {
 		err := errors.New("fee rate exceeds max(500)")
 		return MakeJsonErrorResult(FeeRateExceedMaxErr, err.Error(), nil)
+	}
+	if !verifyBtcAddress(addr) {
+		return MakeJsonErrorResult(sendCoinsErr, fmt.Sprintf("invalid address:%s", addr), nil)
 	}
 	response, err := sendCoins(addr, amount, uint64(feeRate), sendAll)
 	if err != nil {
@@ -1327,7 +1276,6 @@ func SendCoins(addr string, amount int64, feeRate int64, sendAll bool) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// jsonaddr :{"bcrt1pq83tk5uu0lpwk2gd7f736ttrmexed8xazfz3jmwj0ml26cwyurast4xk3w":1111,"bcrt1pra9w5dphnx75n0pjzcxlc5e8k9vg9sdupttyr36prn2t6ullr9eq0utvac":2222}
 func SendMany(jsonAddr string, feeRate int64) string {
 	if feeRate > 500 {
 		err := errors.New("fee rate exceeds max(500)")
@@ -1346,6 +1294,15 @@ func SendMany(jsonAddr string, feeRate int64) string {
 	}
 	addrTo := make(map[string]int64)
 	for _, addr := range addrs {
+		if addr.Amount <= 0 {
+			return MakeJsonErrorResult(sendManyErr, "cannot send 0 Satoshi", nil)
+		}
+		if !verifyBtcAddress(addr.Address) {
+			if addr.Address == "" {
+				return MakeJsonErrorResult(sendManyErr, "got a empty address", nil)
+			}
+			return MakeJsonErrorResult(sendManyErr, fmt.Sprintf("invalid address:%s", addr.Address), nil)
+		}
 		addrTo[addr.Address] = addr.Amount
 	}
 	response, err := sendMany(addrTo, uint64(feeRate))
@@ -1354,11 +1311,31 @@ func SendMany(jsonAddr string, feeRate int64) string {
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
+func verifyBtcAddress(address string) bool {
+	var params *chaincfg.Params
+	// 解析并验证地址
+	switch base.NetWork {
+	case base.UseTestNet:
+		params = &chaincfg.TestNet3Params
+	case base.UseMainNet:
+		params = &chaincfg.MainNetParams
+	case base.UseRegTest:
+		params = &chaincfg.RegressionNetParams
+	default:
+		log.Println("NetWork need set testnet, mainnet or regtest")
+		return false
+	}
+	_, err := btcutil.DecodeAddress(address, params)
+	if err != nil {
+		return false
+	}
+	return true
+}
 
 func sendMany(addr map[string]int64, feerate uint64) (*lnrpc.SendManyResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -1375,7 +1352,6 @@ func sendMany(addr map[string]int64, feerate uint64) (*lnrpc.SendManyResponse, e
 	return response, nil
 }
 
-// Deprecated: Please Use SendCoins
 func SendAllCoins(addr string, feeRate int) string {
 	if feeRate > 500 {
 		err := errors.New("fee rate exceeds max(500)")
@@ -1388,14 +1364,10 @@ func SendAllCoins(addr string, feeRate int) string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// LndStopDaemon
-//
-//	@Description: Stop gracefully shuts down the Pool trader daemon.
-//	@return bool
 func LndStopDaemon() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 
 	defer clearUp()
@@ -1414,7 +1386,7 @@ func LndStopDaemon() bool {
 func ListPermissions() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 
 	defer clearUp()
@@ -1427,4 +1399,150 @@ func ListPermissions() string {
 	}
 	fmt.Printf("%s %v\n", GetTimeNow(), response)
 	return response.String()
+}
+
+type BtcChanInvoiceSimplified struct {
+	PaymentRequest string `json:"payment_request"`
+	Value          int64  `json:"value"`
+	ChanId         uint64 `json:"chan_id"`
+	State          string `json:"state"`
+	CreationDate   int64  `json:"creation_date"`
+}
+
+func GetBtcChannelListInvoicesSettled(isAllChannel bool, chanId int, indexOffset int, maxInvoices int) string {
+	if !isAllChannel && chanId <= 0 {
+		return MakeJsonErrorResult(InvalidParamsErr, "channel ID is required when isAllChannel is false", nil)
+	}
+	if maxInvoices <= 0 || maxInvoices > 10000 {
+		maxInvoices = 100
+	}
+
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+	if err != nil {
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
+	}
+
+	defer clearUp()
+	client := lnrpc.NewLightningClient(conn)
+	request := &lnrpc.ListInvoiceRequest{}
+	response, err := client.ListInvoices(context.Background(), request)
+	if err != nil {
+		return MakeJsonErrorResult(ListInvoicesErr, err.Error(), nil)
+	}
+
+	invoices := SimplifyBtcChanInvoices(response)
+	sort.Slice(invoices, func(i, j int) bool {
+		return invoices[i].CreationDate > invoices[j].CreationDate
+	})
+	if isAllChannel {
+		start, end := calculatePagination(indexOffset, maxInvoices, len(invoices))
+		result := invoices[start:end]
+		return MakeJsonErrorResult(SUCCESS, "", result)
+	}
+	var InvoiceSimplified []BtcChanInvoiceSimplified
+	for _, invoice := range invoices {
+		if invoice.ChanId == uint64(chanId) {
+			InvoiceSimplified = append(InvoiceSimplified, invoice)
+		}
+	}
+	start, end := calculatePagination(indexOffset, maxInvoices, len(InvoiceSimplified))
+	result := InvoiceSimplified[start:end]
+	return MakeJsonErrorResult(SUCCESS, "", result)
+}
+
+func SimplifyBtcChanInvoices(invoice *lnrpc.ListInvoiceResponse) []BtcChanInvoiceSimplified {
+	var invoices []BtcChanInvoiceSimplified
+	for _, invoice := range invoice.Invoices {
+		if invoice.State == 1 && invoice.Htlcs[0].CustomChannelData == nil {
+			invoices = append(invoices, BtcChanInvoiceSimplified{
+				PaymentRequest: invoice.PaymentRequest,
+				Value:          invoice.Value,
+				ChanId:         invoice.Htlcs[0].ChanId,
+				State:          invoice.State.String(),
+				CreationDate:   invoice.CreationDate,
+			})
+		}
+	}
+	return invoices
+}
+
+type BtcChanPaymentSimplified struct {
+	AssetId        string                      `json:"asset_id"`
+	Amount         int64                       `json:"amount"`
+	RfqId          string                      `json:"rfq_id"`
+	ChanId         uint64                      `json:"chan_id"`
+	ValueSat       int64                       `json:"value_sat"`
+	CreationTimeNs int64                       `json:"creation_time_ns"`
+	PaymentRequest string                      `json:"payment_request"`
+	PaymentIndex   uint64                      `json:"payment_index"`
+	Status         lnrpc.Payment_PaymentStatus `json:"status"`
+	FailureReason  lnrpc.PaymentFailureReason  `json:"failure_reason"`
+}
+
+func GetBtcListPayments(isAllChannel bool, chanId int, indexOffset int, maxPayments int) string {
+	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+	if err != nil {
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
+	}
+
+	defer clearUp()
+	client := lnrpc.NewLightningClient(conn)
+	response, err := client.ListPayments(context.Background(), &lnrpc.ListPaymentsRequest{})
+	if err != nil {
+		return MakeJsonErrorResult(ListPaymentsErr, err.Error(), nil)
+	}
+	payments := SimplifyBtcChanPayments(response)
+	sort.Slice(payments, func(i, j int) bool {
+		return payments[i].CreationTimeNs > payments[j].CreationTimeNs
+	})
+	if isAllChannel {
+		start, end := calculatePagination(indexOffset, maxPayments, len(payments))
+		result := payments[start:end]
+		return MakeJsonErrorResult(SUCCESS, "", result)
+	}
+
+	var PaymentSimplified []BtcChanPaymentSimplified
+	for _, payment := range payments {
+		if payment.ChanId == uint64(chanId) {
+			PaymentSimplified = append(PaymentSimplified, payment)
+		}
+	}
+
+	start, end := calculatePagination(indexOffset, maxPayments, len(PaymentSimplified))
+	result := PaymentSimplified[start:end]
+	return MakeJsonErrorResult(SUCCESS, "", result)
+}
+
+func SimplifyBtcChanPayments(payment *lnrpc.ListPaymentsResponse) []BtcChanPaymentSimplified {
+	var payments []BtcChanPaymentSimplified
+	for _, payment := range payment.Payments {
+		if payment.FailureReason == 0 && payment.Htlcs[0].Route.CustomChannelData == nil {
+			payments = append(payments, BtcChanPaymentSimplified{
+				AssetId:        "00",
+				Amount:         0,
+				RfqId:          "",
+				ChanId:         payment.Htlcs[0].Route.Hops[0].ChanId,
+				ValueSat:       payment.ValueSat,
+				CreationTimeNs: payment.CreationTimeNs,
+				PaymentRequest: payment.PaymentRequest,
+				PaymentIndex:   payment.PaymentIndex,
+				Status:         payment.Status,
+				FailureReason:  payment.FailureReason,
+			})
+		}
+	}
+	return payments
+}
+
+func calculatePagination(offset, limit, total int) (int, int) {
+	if offset >= total {
+		return 0, 0
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return offset, end
 }

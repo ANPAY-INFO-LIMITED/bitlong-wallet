@@ -4,58 +4,36 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
+
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/routerrpc"
 	"github.com/wallet/service/apiConnect"
-	"io"
+	"github.com/wallet/service/rpcclient"
 )
 
-// SendPaymentV2
-//
-//	@Description: SendPaymentV2 attempts to route a payment described by the passed PaymentRequest to the final destination.
-//	The call returns a stream of payment updates. When using this RPC, make sure to set a fee limit, as the default routing fee limit is 0 sats.
-//	Without a non-zero fee limit only routes without fees will be attempted which often fails with FAILURE_REASON_NO_ROUTE.
-//	@return string
-func SendPaymentV2(invoice string, feelimit int64) string {
-	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
+func SendPaymentV2(invoice string, amt int, feelimit int, outgoingChanId int, allowSelfPayment bool) string {
+	finalResponse, err := rpcclient.SendPaymentV2(invoice, amt, feelimit, uint64(outgoingChanId), allowSelfPayment)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		fmt.Printf("%s rpcclient SendPaymentV2 :%v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(SendPaymentV2Err, err.Error(), nil)
 	}
-	defer clearUp()
-	client := routerrpc.NewRouterClient(conn)
-	request := &routerrpc.SendPaymentRequest{
-		PaymentRequest: invoice,
-		FeeLimitSat:    feelimit,
-		TimeoutSeconds: 60,
-	}
-	stream, err := client.SendPaymentV2(context.Background(), request)
-	if err != nil {
-		fmt.Printf("%s routerrpc SendPaymentV2 :%v\n", GetTimeNow(), err)
-		return "false"
-	}
-	for {
-		response, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
-				return "false"
-			}
-			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
-			return "false"
+	if finalResponse != nil {
+		if finalResponse.Status == 2 {
+			return MakeJsonErrorResult(SUCCESS, "", nil)
+		} else if finalResponse.Status == 3 {
+			fmt.Printf("%s %v\n", GetTimeNow(), finalResponse)
+			return MakeJsonErrorResult(SendPaymentV2Err, finalResponse.FailureReason.String(), finalResponse.FailureReason)
 		}
-		fmt.Printf("%s %v\n", GetTimeNow(), response)
-		return response.PaymentHash
 	}
+	fmt.Printf("%s finalResponse is nil,but is not have error\n", GetTimeNow())
+	return MakeJsonErrorResult(SendPaymentV2Err, "finalResponse is nil,but is not have error", nil)
 }
 
-// TrackPaymentV2
-//
-//	@Description: TrackPaymentV2 returns an update stream for the payment identified by the payment hash.
-//	@return string
 func TrackPaymentV2(payhash string) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := routerrpc.NewRouterClient(conn)
@@ -66,36 +44,25 @@ func TrackPaymentV2(payhash string) string {
 	stream, err := client.TrackPaymentV2(context.Background(), request)
 
 	if err != nil {
-		fmt.Printf("%s client.SendPaymentV2 :%v\n", GetTimeNow(), err)
 		return MakeJsonErrorResult(TrackPaymentV2Err, err.Error(), nil)
 	}
 	for {
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				fmt.Printf("%s err == io.EOF, err: %v\n", GetTimeNow(), err)
 				return MakeJsonErrorResult(streamRecvInfoErr, err.Error(), nil)
 			}
-			fmt.Printf("%s stream Recv err: %v\n", GetTimeNow(), err)
 			return MakeJsonErrorResult(streamRecvErr, err.Error(), nil)
 		}
-		fmt.Printf("%s %v\n", GetTimeNow(), response)
 		status := response.Status.String()
 		return MakeJsonErrorResult(SUCCESS, "", status)
 	}
 }
 
-// SendToRouteV2
-//
-//	@Description:SendToRouteV2 attempts to make a payment via the specified route.
-//	This method differs from SendPayment in that it allows users to specify a full route manually.
-//	This can be used for things like rebalancing, and atomic swaps.
-//	@param route
-//	skipped function SendToRouteV2 with unsupported parameter or return types
 func SendToRouteV2(payhash []byte, route *lnrpc.Route) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return
 	}
 	defer clearUp()
 	client := routerrpc.NewRouterClient(conn)
@@ -110,14 +77,10 @@ func SendToRouteV2(payhash []byte, route *lnrpc.Route) {
 	fmt.Printf("%s %v\n", GetTimeNow(), response)
 }
 
-// EstimateRouteFee
-//
-//	@Description: EstimateRouteFee allows callers to obtain a lower bound w.r.t how much it may cost to send an HTLC to the target end destination.
-//	@return string
 func EstimateRouteFee(dest string, amtsat int64) string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := routerrpc.NewRouterClient(conn)

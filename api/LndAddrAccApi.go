@@ -5,26 +5,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/boltdb/bolt"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/lightningnetwork/lnd/lnrpc/walletrpc"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
-// GetNewAddress_P2TR
-// @dev: Get a p2tr address
-// @note: TAPROOT_PUBKEY
-// @Description:NewAddress creates a new address under control of the local wallet.
-// @return string
 func GetNewAddress_P2TR() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 
@@ -47,15 +43,10 @@ func GetNewAddress_P2TR() string {
 	})
 }
 
-// GetNewAddress_P2WKH
-// @dev: Get a p2wkh address
-// @note: WITNESS_PUBKEY_HASH
-// @Description:NewAddress creates a new address under control of the local wallet.
-// @return string
 func GetNewAddress_P2WKH() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -77,15 +68,10 @@ func GetNewAddress_P2WKH() string {
 	})
 }
 
-// GetNewAddress_NP2WKH
-// @dev: Get a np2wkh address
-// @note: HYBRID_NESTED_WITNESS_PUBKEY_HASH
-// @Description: NewAddress creates a new address under control of the local wallet.
-// @return string
 func GetNewAddress_NP2WKH() string {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return MakeJsonErrorResult(GetConnectionErr, err.Error(), nil)
 	}
 	defer clearUp()
 	client := lnrpc.NewLightningClient(conn)
@@ -143,12 +129,6 @@ func GetNewAddress_NP2WKH_Example() string {
 	})
 }
 
-// StoreAddr
-// @Description: Store Addr after being chosen.
-// @param address
-// @param balance
-// @param _type
-// @return string
 func StoreAddr(name string, address string, balance int, addressType string, derivationPath string, isInternal bool) string {
 	_ = InitAddrDB()
 	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
@@ -210,10 +190,6 @@ func StoreAddrAndGetResponseByAddr(addr Addr) (string, error) {
 	return StoreAddrAndGetResponse(addr.Name, addr.Address, addr.Balance, addr.AddressType, addr.DerivationPath, addr.IsInternal)
 }
 
-// RemoveAddr
-// @Description: Remove a addr in all addresses
-// @param address
-// @return string
 func RemoveAddr(address string) string {
 	_ = InitAddrDB()
 	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
@@ -239,11 +215,7 @@ func RemoveAddr(address string) string {
 	return MakeJsonErrorResult(SUCCESS, "", address)
 }
 
-// QueryAddr
-// @Description: Query Addr in all addresses
-// @param address
-// @return string
-func QueryAddr(address string) string {
+func QueryDbAddr(address string) string {
 	_ = InitAddrDB()
 	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
 	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
@@ -264,9 +236,6 @@ func QueryAddr(address string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addr)
 }
 
-// QueryAllAddr
-// @Description: get a json list of addresses
-// @return string
 func QueryAllAddr() string {
 	_ = InitAddrDB()
 	path := filepath.Join(base.QueryConfigByKey("dirpath"), "phone.db")
@@ -309,10 +278,6 @@ func QueryAllAddrAndGetResponse() (*[]Addr, error) {
 	return &addresses, nil
 }
 
-//	 QueryAddresses
-//	 @Description:  Use listAddresses to query the non-zero balance address, exported.
-//					List of non-zero balance addresses constitutes the Total balance.
-//	 @return string
 func GetNonZeroBalanceAddresses() string {
 	listAddrResp, err := rpcclient.ListAddresses()
 	if err != nil {
@@ -341,9 +306,6 @@ func GetNonZeroBalanceAddresses() string {
 	return MakeJsonErrorResult(SUCCESS, "", addrs)
 }
 
-// UpdateAllAddressesByGNZBA
-// @Description: Update all addresses by query non zero balance addresses
-// @return string
 func UpdateAllAddressesByGNZBA() string {
 	listAddrResp, err := rpcclient.ListAddresses()
 	if err != nil {
@@ -419,8 +381,6 @@ func AddrToAddressMapAddr(addrs *[]Addr) *map[string]*Addr {
 	return &addressToAddr
 }
 
-// @dev: Acc
-
 type Account struct {
 	Name              string `json:"name"`
 	AddressType       string `json:"address_type"`
@@ -454,8 +414,6 @@ func GetAllAccounts() []Account {
 	return accs
 }
 
-// AddressTypeToDerivationPath
-// @dev: NOT STANDARD RESULT RETURN
 func AddressTypeToDerivationPath(addressType string) string {
 	accs := GetAllAccounts()
 	addressType = strings.ToUpper(addressType)

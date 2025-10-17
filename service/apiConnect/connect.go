@@ -6,13 +6,14 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
-	"github.com/wallet/base"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/wallet/base"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 type rpccfg struct {
@@ -52,7 +53,6 @@ func GetConnection(grpcTarget string, isNoMacaroon bool) (*grpc.ClientConn, func
 		connCfg.isInit = true
 	}
 	cfg := rpccfg{}
-	//select grpc config by grpcTarget
 	switch grpcTarget {
 	case "lnd":
 		cfg = connCfg.Lndcfg
@@ -63,32 +63,36 @@ func GetConnection(grpcTarget string, isNoMacaroon bool) (*grpc.ClientConn, func
 	default:
 		return nil, nil, fmt.Errorf("grpcTarget not found")
 	}
-	// get tls cert and macaroon
-	creds := NewTlsCert(cfg.tlsCertPath)
+
 	var (
 		conn *grpc.ClientConn
 		err  error
 	)
-	// if isNoMacaroon is true, then we don't need to add macaroon to grpc connection
+	creds, err := NewTlsCert(cfg.tlsCertPath)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "NewTlsCert")
+	}
 	if isNoMacaroon {
 		conn, err = grpc.Dial(cfg.grpcHost, grpc.WithTransportCredentials(creds))
 	} else {
-		macaroon := GetMacaroon(cfg.macaroonPath)
+		macaroon, err := GetMacaroon(cfg.macaroonPath)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "GetMacaroon")
+		}
 		conn, err = grpc.Dial(cfg.grpcHost, grpc.WithTransportCredentials(creds),
 			grpc.WithPerRPCCredentials(NewMacaroonCredential(macaroon)), grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(10*1024*1024), // 10 MB
 				grpc.MaxCallSendMsgSize(10*1024*1024), // 10 MB
 			))
-	}
-
-	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	cleanUp := func() {
 		err := conn.Close()
 		if err != nil {
-			fmt.Printf("%s conn Close err: %v\n", GetTimeNow(), err)
+			fmt.Printf("%v,%v\n", err, "conn.Close")
 		}
 	}
 	return conn, cleanUp, err
@@ -110,30 +114,30 @@ func (c *MacaroonCredential) RequireTransportSecurity() bool {
 	return true
 }
 
-func NewTlsCert(tlsCertPath string) credentials.TransportCredentials {
+func NewTlsCert(tlsCertPath string) (credentials.TransportCredentials, error) {
 	cert, err := os.ReadFile(tlsCertPath)
 	if err != nil {
-		log.Fatalf("Failed to read cert file: %s", err)
+		return nil, fmt.Errorf("failed to read tls cert: %v", err)
 	}
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(cert) {
-		log.Fatalf("Failed to append cert")
+		return nil, fmt.Errorf("failed to append cert: %v", err)
 	}
 	config := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		RootCAs:    certPool,
 	}
 	creds := credentials.NewTLS(config)
-	return creds
+	return creds, nil
 }
 
-func GetMacaroon(macaroonPath string) string {
+func GetMacaroon(macaroonPath string) (string, error) {
 	macaroonBytes, err := os.ReadFile(macaroonPath)
 	if err != nil {
-		panic(err)
+		return "", errors.Wrap(err, "os.ReadFile")
 	}
 	macaroon := hex.EncodeToString(macaroonBytes)
-	return macaroon
+	return macaroon, nil
 }
 
 func GetTimeNow() string {

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/tapfreighter"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
+	"github.com/pkg/errors"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/rpcclient"
 	"sort"
@@ -16,19 +16,19 @@ import (
 	"strings"
 )
 
-type addrEvent struct {
-	CreationTimeUnixSeconds int64           `json:"creation_time_unix_seconds"`
-	Addr                    *JsonResultAddr `json:"addr"`
-	Status                  string          `json:"status"`
-	Outpoint                string          `json:"outpoint"`
-	Txid                    string          `json:"txid"`
-	UtxoAmtSat              int64           `json:"utxo_amt_sat"`
-	TaprootSibling          string          `json:"taproot_sibling"`
-	ConfirmationHeight      int64           `json:"confirmation_height"`
-	HasProof                bool            `json:"has_proof"`
+type AddrEvent struct {
+	CreationTimeUnixSeconds int64        `json:"creation_time_unix_seconds"`
+	Addr                    *QueriedAddr `json:"addr"`
+	Status                  string       `json:"status"`
+	Outpoint                string       `json:"outpoint"`
+	Txid                    string       `json:"txid"`
+	UtxoAmtSat              int64        `json:"utxo_amt_sat"`
+	TaprootSibling          string       `json:"taproot_sibling"`
+	ConfirmationHeight      int64        `json:"confirmation_height"`
+	HasProof                bool         `json:"has_proof"`
 }
 
-func SortAddrEvents(addrEvents *[]addrEvent) *[]addrEvent {
+func SortAddrEvents(addrEvents *[]AddrEvent) *[]AddrEvent {
 	if addrEvents == nil {
 		return nil
 	}
@@ -44,14 +44,14 @@ func AddrReceives(assetId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
 	}
-	var addrEvents []addrEvent
+	var addrEvents []AddrEvent
 	for _, event := range response.Events {
 		if assetId != "" && assetId != hex.EncodeToString(event.Addr.AssetId) {
 			continue
 		}
-		e := addrEvent{}
+		e := AddrEvent{}
 		e.CreationTimeUnixSeconds = int64(event.CreationTimeUnixSeconds)
-		a := JsonResultAddr{}
+		a := QueriedAddr{}
 		a.GetData(event.Addr)
 		e.Addr = &a
 		e.Status = event.Status.String()
@@ -75,15 +75,15 @@ func AddrReceivesOfAllNft() string {
 	if err != nil {
 		return MakeJsonErrorResult(AddrReceivesErr, err.Error(), nil)
 	}
-	var addrEvents []addrEvent
+	var addrEvents []AddrEvent
 	for _, event := range response.Events {
 		if event.Addr.AssetType != taprpc.AssetType_COLLECTIBLE {
 			continue
 		}
-		a := JsonResultAddr{}
+		a := QueriedAddr{}
 		a.GetData(event.Addr)
 		txid, _ := outpointToTransactionAndIndex(event.Outpoint)
-		e := addrEvent{
+		e := AddrEvent{
 			CreationTimeUnixSeconds: int64(event.CreationTimeUnixSeconds),
 			Addr:                    &a,
 			Status:                  event.Status.String(),
@@ -110,7 +110,6 @@ func BurnAsset(token string, AssetIdStr string, amountToBurn int64, deviceId str
 	err = UploadAssetBurn(token, AssetIdStr, int(amountToBurn), deviceId)
 	if err != nil {
 		LogError("Upload asset burn", err)
-		// @dev: Do not return error
 	}
 	txHash := hex.EncodeToString(response.BurnTransfer.AnchorTxHash)
 	return MakeJsonErrorResult(SUCCESS, "", txHash)
@@ -125,8 +124,7 @@ func DecodeAddr(addr string) string {
 	if err != nil {
 		return MakeJsonErrorResult(DecodeAddrErr, err.Error(), nil)
 	}
-	// make result struct
-	result := JsonResultAddr{}
+	result := QueriedAddr{}
 	result.GetData(response)
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
@@ -147,10 +145,6 @@ func FetchAssetMeta(isHash bool, data string) string {
 	return MakeJsonErrorResult(SUCCESS, "", string(response.Data))
 }
 
-// GetInfoOfTap
-//
-//	@Description: GetInfo returns the information for the node.
-//	@return string
 func GetInfoOfTap() string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
@@ -166,10 +160,6 @@ func GetInfoOfTap() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
-// ListAssets
-//
-//	@Description: ListAssets lists the set of assets owned by the target daemon.
-//	@return string
 func ListAssets(withWitness, includeSpent, includeLeased bool) string {
 	response, err := listAssets(withWitness, includeSpent, includeLeased)
 	if err != nil {
@@ -235,7 +225,6 @@ func FindAssetByAssetName(assetName string) string {
 	}
 	var assets []*taprpc.Asset
 	for _, asset := range response.Data.Assets {
-		//if hex.EncodeToString(asset.AssetGenesis.GetAssetId()) == assetName {
 		if asset.AssetGenesis.Name == assetName {
 			assets = append(assets, asset)
 		}
@@ -246,10 +235,6 @@ func FindAssetByAssetName(assetName string) string {
 	return MakeJsonErrorResult(SUCCESS, "", assets)
 }
 
-// ListGroups
-//
-//	@Description: ListGroups lists the asset groups known to the target daemon, and the assets held in each group.
-//	@return string
 func ListGroups() string {
 	response, err := rpcclient.ListGroups()
 	if err != nil {
@@ -269,10 +254,7 @@ func SortAssetTransferSimplified(assetTransfers *[]AssetTransferSimplified) *[]A
 	return assetTransfers
 }
 
-// QueryAssetTransfers
-// @Description: ListTransfers lists outbound asset transfer tracked by the target daemon.
 func QueryAssetTransfers(token string, assetId string) string {
-	// @dev: The token is actually not been used.
 	assetTransfers, err := QueryAssetTransferSimplified(token, assetId)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedErr, err.Error(), nil)
@@ -282,7 +264,6 @@ func QueryAssetTransfers(token string, assetId string) string {
 }
 
 func QueryAssetTransfersOfAllNft(token string) string {
-	// @dev: The token is actually not been used.
 	response, err := QueryAssetTransferSimplifiedOfAllNft(token)
 	if err != nil {
 		return MakeJsonErrorResult(QueryAssetTransferSimplifiedOfAllNftErr, err.Error(), nil)
@@ -466,6 +447,18 @@ func GetTimeForManagedUtxoByBitcoind(token string, managedUtxos *[]ManagedUtxo) 
 	return managedUtxos, nil
 }
 
+func GetTimeForManagedUtxoByBitcoind2(host, token string, managedUtxos *[]ManagedUtxo) (*[]ManagedUtxo, error) {
+	ops := GetAllOutpointsOfManagedUtxos(managedUtxos)
+	opMapTime, err := PostCallBitcoindToQueryTimeByOutpoints2(host, token, ops)
+	if err != nil {
+		return nil, err
+	}
+	for i, utxo := range *managedUtxos {
+		(*managedUtxos)[i].Time = opMapTime.Data[utxo.OutPoint]
+	}
+	return managedUtxos, nil
+}
+
 func SortAssetUtxos(managedUtxos *[]ManagedUtxo) *[]ManagedUtxo {
 	if managedUtxos == nil {
 		return nil
@@ -495,7 +488,7 @@ func AssetUtxos(token string, assetId string) string {
 func ListUtxosAndGetResponse(includeLeased bool) (*taprpc.ListUtxosResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
@@ -505,14 +498,10 @@ func ListUtxosAndGetResponse(includeLeased bool) (*taprpc.ListUtxosResponse, err
 	return client.ListUtxos(context.Background(), request)
 }
 
-// ListUtxos
-//
-//	@Description: ListUtxos lists the UTXOs managed by the target daemon, and the assets they hold.
-//	@return string
 func ListUtxos(includeLeased bool) string {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return ""
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
@@ -527,16 +516,12 @@ func ListUtxos(includeLeased bool) string {
 	return response.String()
 }
 
-// NewAddr
-//
-//	@Description:NewAddr makes a new address from the set of request params.
-//	@return string
 func NewAddr(assetId string, amt int, token string, deviceId string) string {
 	response, err := rpcclient.NewAddr(assetId, amt)
 	if err != nil {
 		return MakeJsonErrorResult(NewAddrErr, err.Error(), "")
 	}
-	result := JsonResultAddr{}
+	result := QueriedAddr{}
 	result.GetData(response)
 	UploadAssetAddr(token, &AssetAddrSetRequest{
 		Encoded:          result.Encoded,
@@ -560,7 +545,7 @@ func NewAddrAndGetResponseEncoded(assetId string, amt int, token string, deviceI
 	if err != nil {
 		return "", err
 	}
-	result := JsonResultAddr{}
+	result := QueriedAddr{}
 	result.GetData(response)
 	UploadAssetAddr(token, &AssetAddrSetRequest{
 		Encoded:          result.Encoded,
@@ -592,12 +577,12 @@ func QueryAddrs(assetId string) string {
 	if err != nil {
 		return MakeJsonErrorResult(QueryAddrErr, err.Error(), "")
 	}
-	var addrs []JsonResultAddr
+	var addrs []QueriedAddr
 	for _, a := range _addrs.Addrs {
 		if assetId != "" && assetId != hex.EncodeToString(a.AssetId) {
 			continue
 		}
-		addrTemp := JsonResultAddr{}
+		addrTemp := QueriedAddr{}
 		addrTemp.GetData(a)
 		addrTemp.ReceiveNum = addrMap[addrTemp.Encoded]
 		addrs = append(addrs, addrTemp)
@@ -608,9 +593,6 @@ func QueryAddrs(assetId string) string {
 	return MakeJsonErrorResult(SUCCESS, "", addrs)
 }
 
-// SendAssets
-// @Description: jsonAddrs : ["addrs1","addrs2",...]
-// @dev: If operation using token fail, ignore it and continue
 func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) string {
 	if int(feeRate) > FeeRateSatPerBToSatPerKw(500) {
 		err := errors.New("fee rate exceeds max(500)")
@@ -619,7 +601,6 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	_, err := IsTokenValid(token)
 	if err != nil {
 		LogError("token is invalid", err)
-		// @dev: Do not return error
 	}
 	var addrs []string
 	err = json.Unmarshal([]byte(jsonAddrs), &addrs)
@@ -635,7 +616,6 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			addrMap[addr] = true
 		}
 	}
-	// Get from addr
 	var formAddr string
 	{
 		if len(addrs) == 1 {
@@ -661,9 +641,7 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 		return MakeJsonErrorResult(sendAssetsErr, err.Error(), nil)
 	}
 
-	// Upload Batch Transfer
 	{
-		// @dev: decode addrs
 		var batchTransfersRequest []BatchTransferRequest
 		var decodedAddr *taprpc.Addr
 		var totalAmount int
@@ -694,15 +672,12 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 		for i, _ := range batchTransfersRequest {
 			batchTransfersRequest[i].TxTotalAmount = totalAmount
 		}
-		// @dev: Upload
 		err = UploadBatchTransfers(token, &batchTransfersRequest)
 		if err != nil {
 			LogError("; Assets sent, but upload failed.", err)
-			// @dev: Do not return error
 		}
 	}
 
-	// Asset Recommend
 	{
 		var decodedAddr *taprpc.Addr
 		for _, addr := range addrs {
@@ -713,21 +688,17 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 		}
 		if decodedAddr != nil {
 			assetId := hex.EncodeToString(decodedAddr.AssetId)
-			//var assetIdMapRecommendUser *map[string]string
 			_, err = GetAssetRecommendUserByJsonAddrs(token, assetId, jsonAddrs, deviceId)
 			if err != nil {
 				LogError("GetAssetRecommendUserByJsonAddrs failed", err)
 			} else {
-				//fmt.Println(ValueJsonString(assetIdMapRecommendUser))
 			}
 		}
 	}
 
 	txid, _ := getTransactionAndIndexByOutpoint(response.Transfer.Outputs[0].Anchor.Outpoint)
 
-	// Upload Nft transfer
 	{
-		// only one addr when send collectible asset
 		if len(addrs) == 1 {
 			addr := addrs[0]
 			var decodedAddr *taprpc.Addr
@@ -735,7 +706,6 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 			if err != nil {
 				LogError("Decode Addr[0]", err)
 			} else {
-				// decode success and type is right
 				if decodedAddr.AssetType == taprpc.AssetType_COLLECTIBLE {
 					assetId := hex.EncodeToString(decodedAddr.AssetId)
 					_time := GetTimestamp()
@@ -751,15 +721,10 @@ func SendAssets(jsonAddrs string, feeRate int64, token string, deviceId string) 
 	return MakeJsonErrorResult(SUCCESS, SuccessError, txid)
 }
 
-// SendAsset
-// @Description:SendAsset uses one or multiple passed Taproot Asset address(es) to attempt to complete an asset send.
-// The method returns information w.r.t the on chain send, as well as the proof file information the receiver needs to fully receive the asset.
-// @return string
-// skipped function SendAsset with unsupported parameter or return types
 func sendAssets(addrs []string, feeRate uint32) (*taprpc.SendAssetResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
@@ -796,14 +761,10 @@ func VerifyProof() {
 
 }
 
-// TapStopDaemon
-//
-//	@Description: StopDaemon will send a shutdown request to the interrupt handler, triggering a graceful shutdown of the daemon.
-//	@return bool
 func TapStopDaemon() bool {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
@@ -819,7 +780,7 @@ func TapStopDaemon() bool {
 func fetchAssetMeta(isHash bool, data string) (*taprpc.AssetMeta, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 
@@ -841,7 +802,7 @@ func fetchAssetMeta(isHash bool, data string) (*taprpc.AssetMeta, error) {
 func listBalances(useGroupKey bool, assetFilter, groupKeyFilter []byte) (*taprpc.ListBalancesResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
@@ -930,6 +891,56 @@ func ListNormalBalances() string {
 	return MakeJsonErrorResult(SUCCESS, "", filtered)
 }
 
+func getAssetsDecimal() (*map[string]int, error) {
+	assetsDecimal := make(map[string]int)
+
+	assets, err := listAssets(false, true, false)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "listAssets")
+	} else {
+		for _, asset := range assets.Assets {
+			if asset.AssetGenesis == nil {
+				continue
+			}
+			decimal := 0
+			if asset.DecimalDisplay != nil {
+				decimal = int(asset.DecimalDisplay.DecimalDisplay)
+			}
+			assetsDecimal[hex.EncodeToString(asset.AssetGenesis.AssetId)] = decimal
+		}
+	}
+	assets2, err := listAssets(false, false, true)
+	if err != nil {
+		return nil, AppendErrorInfo(err, "listAssets2")
+	} else {
+		for _, asset := range assets2.Assets {
+			if asset.AssetGenesis == nil {
+				continue
+			}
+			decimal := 0
+			if asset.DecimalDisplay != nil {
+				decimal = int(asset.DecimalDisplay.DecimalDisplay)
+			}
+			assetsDecimal[hex.EncodeToString(asset.AssetGenesis.AssetId)] = decimal
+		}
+	}
+	return &assetsDecimal, nil
+}
+
+func ListNormalBalances2() string {
+	response, err := listBalances(false, nil, nil)
+	if err != nil {
+		return MakeJsonErrorResult(listBalancesErr, err.Error(), nil)
+	}
+	assetsDecimal, err := getAssetsDecimal()
+	if err != nil {
+		return MakeJsonErrorResult(GetAssetsDecimalErr, err.Error(), nil)
+	}
+	processed := ProcessListBalancesResponse2(response, assetsDecimal)
+	filtered := ExcludeListBalancesResponseCollectible2(processed)
+	return MakeJsonErrorResult(SUCCESS, "", filtered)
+}
+
 func ListBalancesByGroupKey() string {
 	response, err := listBalances(true, nil, nil)
 	if err != nil {
@@ -941,15 +952,14 @@ func ListBalancesByGroupKey() string {
 func listAssets(withWitness, includeSpent, includeLeased bool) (*taprpc.ListAssetResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := taprpc.NewTaprootAssetsClient(conn)
 	request := &taprpc.ListAssetRequest{
-		WithWitness:   withWitness,
-		IncludeSpent:  includeSpent,
-		IncludeLeased: includeLeased,
-		// @dev: default include unconfirmed
+		WithWitness:             withWitness,
+		IncludeSpent:            includeSpent,
+		IncludeLeased:           includeLeased,
 		IncludeUnconfirmedMints: true,
 	}
 	response, err := client.ListAssets(context.Background(), request)
@@ -1052,7 +1062,6 @@ type ListAssetsResponseChainAnchor struct {
 type ListAssetsResponsePrevWitnesses struct {
 	PrevID    ListAssetsResponsePrevWitnessesPrevID `json:"prev_id"`
 	TxWitness []string                              `json:"tx_witness"`
-	//SplitCommitment *SplitCommitment `protobuf:"bytes,3,opt,name=split_commitment,json=splitCommitment,proto3" json:"split_commitment,omitempty"`
 }
 
 type ListAssetsResponsePrevWitnessesPrevID struct {
@@ -1171,7 +1180,6 @@ func ListNftAssetsIncludeSpentAndGetResponse() (*[]ListAssetsResponse, error) {
 	var result []ListAssetsResponse
 	for index, pr := range *processed {
 		if pr.AssetGenesis.AssetType == "COLLECTIBLE" {
-			//pr.IsSpent = true
 			result = append(result, (*processed)[index])
 		}
 	}
@@ -1186,20 +1194,16 @@ func ListSpentNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 	assetNotZero := make(map[string]bool)
 	var spentAssets []ListAssetsResponse
 	for _, asset := range *response {
-		// record not zero assets
 		if asset.Amount != 0 {
 			assetNotZero[asset.AssetGenesis.AssetType] = true
 		}
-		// extract spent records
 		if asset.IsSpent {
 			spentAssets = append(spentAssets, asset)
 		}
 	}
 	zeroAsset := make(map[string]ListAssetsResponse)
 	for _, asset := range spentAssets {
-		// filter not zero assets
 		if !(assetNotZero[asset.AssetGenesis.AssetID]) {
-			// replace new record
 			zeroAsset[asset.AssetGenesis.AssetID] = asset
 		}
 	}
@@ -1210,8 +1214,6 @@ func ListSpentNftAssetsAndGetResponse() (*[]ListAssetsResponse, error) {
 	return &result, nil
 }
 
-// GetSpentNftAssets
-// @Description: Get spent nft assets
 func GetSpentNftAssets() string {
 	response, err := GetSpentNftAssetsAndGetResponse()
 	if err != nil {
@@ -1249,8 +1251,6 @@ func ListAssetsResponseToListAssetsSimplifiedResponse(listAssetsResponse ListAss
 	}
 }
 
-// ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice
-// @Description: Simplify ListAssetsResponse
 func ListAssetsResponseSliceToListAssetsSimplifiedResponseSlice(listAssetsResponseSlice *[]ListAssetsResponse) *[]ListAssetsSimplifiedResponse {
 	if listAssetsResponseSlice == nil {
 		return nil
@@ -1284,6 +1284,102 @@ func GetGroupAssets(groupKey string) (*[]ListAssetsResponse, error) {
 	return &result, nil
 }
 
+func getGroupAssetsIncludingSpentAndLeased(groupKey string) (listAssets *[]ListAssetsResponse, err error) {
+
+	spentListAssetsResponse, err := ListAssetsProcessed(false, true, false)
+	if err != nil {
+		return &[]ListAssetsResponse{}, AppendErrorInfo(err, "ListAssetsProcessed spent")
+	}
+
+	leasedListAssetsResponse, err := ListAssetsProcessed(false, false, true)
+	if err != nil {
+		LogError("ListAssetsProcessed leased", err)
+		leasedListAssetsResponse = &[]ListAssetsResponse{}
+	}
+
+	var gotAssets []ListAssetsResponse
+	var zeroAssets []ListAssetsResponse
+	zeroAssetExist := make(map[string]bool)
+
+	for _, asset := range *spentListAssetsResponse {
+		if asset.AssetGenesis.AssetType != "COLLECTIBLE" {
+			continue
+		}
+		if asset.IsSpent || asset.LeaseOwner != "" || asset.LeaseExpiry != 0 {
+
+			tweakedGroupKey := asset.AssetGroup.TweakedGroupKey
+
+			if len(tweakedGroupKey) == 66 && len(groupKey) == 64 {
+				tweakedGroupKey = tweakedGroupKey[2:]
+			} else if len(tweakedGroupKey) == 64 && len(groupKey) == 66 {
+				groupKey = groupKey[2:]
+			}
+
+			if tweakedGroupKey == groupKey {
+
+				if zeroAssetExist[asset.AssetGenesis.AssetID] {
+					continue
+				}
+
+				asset.Amount = 0
+				zeroAssets = append(zeroAssets, asset)
+
+				zeroAssetExist[asset.AssetGenesis.AssetID] = true
+			}
+
+		} else {
+			tweakedGroupKey := asset.AssetGroup.TweakedGroupKey
+
+			if len(tweakedGroupKey) == 66 && len(groupKey) == 64 {
+				tweakedGroupKey = tweakedGroupKey[2:]
+			} else if len(tweakedGroupKey) == 64 && len(groupKey) == 66 {
+				groupKey = groupKey[2:]
+			}
+
+			if tweakedGroupKey == groupKey {
+				gotAssets = append(gotAssets, asset)
+			}
+		}
+	}
+
+	for _, asset := range *leasedListAssetsResponse {
+		if asset.AssetGenesis.AssetType != "COLLECTIBLE" {
+			continue
+		}
+		if asset.IsSpent || asset.LeaseOwner != "" || asset.LeaseExpiry != 0 {
+
+			tweakedGroupKey := asset.AssetGroup.TweakedGroupKey
+
+			if len(tweakedGroupKey) == 66 && len(groupKey) == 64 {
+				tweakedGroupKey = tweakedGroupKey[2:]
+			} else if len(tweakedGroupKey) == 64 && len(groupKey) == 66 {
+				groupKey = groupKey[2:]
+			}
+
+			if tweakedGroupKey == groupKey {
+
+				if zeroAssetExist[asset.AssetGenesis.AssetID] {
+					continue
+				}
+
+				asset.Amount = 0
+				zeroAssets = append(zeroAssets, asset)
+
+				zeroAssetExist[asset.AssetGenesis.AssetID] = true
+			}
+
+		} else {
+		}
+	}
+
+	var listAssetsResponse []ListAssetsResponse
+	listAssetsResponse = append(listAssetsResponse, gotAssets...)
+	listAssetsResponse = append(listAssetsResponse, zeroAssets...)
+	listAssets = &listAssetsResponse
+
+	return listAssets, nil
+}
+
 func ListAssetsAll() string {
 	response, err := ListAssetsProcessed(true, true, false)
 	if err != nil {
@@ -1292,44 +1388,48 @@ func ListAssetsAll() string {
 	return MakeJsonErrorResult(SUCCESS, "", response)
 }
 
+type NftGroupIdTag struct {
+	Id  string `json:"id"`
+	Tag string `json:"tag"`
+}
+
+type NftGroup struct {
+	GroupKey  string           `json:"group_key"`
+	GroupName string           `json:"group_name"`
+	Supply    int              `json:"supply"`
+	NftIds    *[]NftGroupIdTag `json:"nft_ids"`
+}
+
 func ListNftGroups() string {
 	resResponse, err := rpcclient.ListGroups()
 	if err != nil {
 		return MakeJsonErrorResult(ListGroupsErr, err.Error(), nil)
 	}
-	type NftId struct {
-		Id  string `json:"id"`
-		Tag string `json:"tag"`
-	}
-	type Group struct {
-		GroupKey  string   `json:"group_key"`
-		GroupName string   `json:"group_name"`
-		Supply    int      `json:"supply"`
-		NftIds    *[]NftId `json:"nft_ids"`
-	}
-	var Groups []Group
+
+	var groups []NftGroup
+	var gotKeys []string
 	if resResponse.Groups != nil {
 		for key, group := range resResponse.Groups {
 			if group.Assets[0].Type != taprpc.AssetType_COLLECTIBLE {
 				break
 			}
-			var nftIds []NftId
+			var nftIds []NftGroupIdTag
 			for _, asset := range group.Assets {
-				nftIds = append(nftIds, NftId{
+				nftIds = append(nftIds, NftGroupIdTag{
 					Id:  hex.EncodeToString(asset.Id),
 					Tag: asset.Tag,
 				})
 			}
 			meta := Meta{}
 			meta.FetchAssetMeta(false, hex.EncodeToString(group.Assets[0].Id))
-			// @fix: Do not return group if we cannot find assets in group
 			{
 				assets, err := GetGroupAssets(key)
 				if err != nil || assets == nil || len(*assets) == 0 {
 					continue
 				}
 			}
-			Groups = append(Groups, Group{
+			gotKeys = append(gotKeys, key)
+			groups = append(groups, NftGroup{
 				GroupKey:  key,
 				GroupName: meta.GroupName,
 				Supply:    len(group.Assets),
@@ -1337,7 +1437,16 @@ func ListNftGroups() string {
 			})
 		}
 	}
-	return MakeJsonErrorResult(SUCCESS, "", Groups)
+
+	spentAndLeasedGroups, err := GetSpentAndLeasedGroups(gotKeys)
+	if err != nil {
+		LogError("GetSpentAndLeasedGroups", err)
+		spentAndLeasedGroups = []NftGroup{}
+	}
+
+	groups = append(groups, spentAndLeasedGroups...)
+
+	return MakeJsonErrorResult(SUCCESS, "", groups)
 }
 
 func ListNftAssets() string {
@@ -1370,9 +1479,110 @@ func ListNonGroupNftAssets() string {
 }
 
 func QueryAllNftByGroup(groupKey string) string {
-	response, err := GetGroupAssets(groupKey)
+	response, err := getGroupAssetsIncludingSpentAndLeased(groupKey)
 	if err != nil {
 		return MakeJsonErrorResult(ListNftAssetsAndGetResponseErr, err.Error(), nil)
 	}
 	return MakeJsonErrorResult(SUCCESS, "", response)
+}
+
+func GetSpentAndLeasedGroups(gotKeys []string) (nftGroups []NftGroup, err error) {
+
+	spentListAssetsResponse, err := ListAssetsProcessed(false, true, false)
+	if err != nil {
+		LogError("ListAssetsProcessed spent", err)
+		spentListAssetsResponse = &[]ListAssetsResponse{}
+	}
+	leasedListAssetsResponse, err := ListAssetsProcessed(false, false, true)
+	if err != nil {
+		LogError("ListAssetsProcessed leased", err)
+		leasedListAssetsResponse = &[]ListAssetsResponse{}
+	}
+
+	var groupKeys []string
+	groupKeyExist := make(map[string]bool)
+
+	for _, gotKey := range gotKeys {
+		groupKeyExist[gotKey] = true
+	}
+
+	for _, asset := range *spentListAssetsResponse {
+		if asset.AssetGenesis.AssetType != "COLLECTIBLE" {
+			continue
+		}
+		if asset.IsSpent || asset.LeaseOwner != "" || asset.LeaseExpiry != 0 {
+
+			if asset.AssetGroup.TweakedGroupKey == "" {
+				continue
+			}
+
+			groupKey := asset.AssetGroup.TweakedGroupKey
+			if groupKeyExist[groupKey] {
+				continue
+			}
+
+			groupKeys = append(groupKeys, groupKey)
+			groupKeyExist[groupKey] = true
+
+			nftGroups = append(nftGroups, NftGroup{
+				GroupKey:  groupKey,
+				GroupName: "",
+				Supply:    0,
+				NftIds:    &[]NftGroupIdTag{},
+			})
+
+		}
+	}
+
+	for _, asset := range *leasedListAssetsResponse {
+		if asset.AssetGenesis.AssetType != "COLLECTIBLE" {
+			continue
+		}
+		if asset.IsSpent || asset.LeaseOwner != "" || asset.LeaseExpiry != 0 {
+
+			if asset.AssetGroup.TweakedGroupKey == "" {
+				continue
+			}
+
+			groupKey := asset.AssetGroup.TweakedGroupKey
+			if groupKeyExist[groupKey] {
+				continue
+			}
+
+			groupKeys = append(groupKeys, groupKey)
+			groupKeyExist[groupKey] = true
+
+			nftGroups = append(nftGroups, NftGroup{
+				GroupKey:  groupKey,
+				GroupName: "",
+				Supply:    0,
+				NftIds:    &[]NftGroupIdTag{},
+			})
+
+		}
+	}
+
+	keysMapNames, err := GetGroupNamesByGroupKeys(groupKeys)
+	if err != nil {
+		LogError("GetGroupNamesByGroupKeys", err)
+		mapNames := make(map[string]string)
+		keysMapNames = &mapNames
+	}
+
+	for i, group := range nftGroups {
+		if name, ok := (*keysMapNames)[group.GroupKey]; ok {
+			nftGroups[i].GroupName = name
+		}
+	}
+
+	return nftGroups, nil
+}
+
+type IsLocalResult struct {
+	IsLocal   bool   `json:"is_local"`
+	AssetId   string `json:"asset_id"`
+	BatchTxid string `json:"batch_txid"`
+	Amount    int64  `json:"amount"`
+	Timestamp int64  `json:"timestamp"`
+	ScriptKey string `json:"script_key"`
 }

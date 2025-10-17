@@ -1,0 +1,8 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: btlchannelrpc.BtlChannels.FundBtlChannel
+      post: "/v1/taproot-assets/btlchannelapi/fund-btl-channel"
+      body: "*"

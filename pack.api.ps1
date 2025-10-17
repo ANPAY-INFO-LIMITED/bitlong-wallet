@@ -5,7 +5,7 @@ $specificString = "wallet"
 if ($currentFolderName -eq $specificString) {
     Write-Host "gomobile is in progress, please wait..."
     Set-Location api
-    gomobile bind -target android -tags "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi"
+    gomobile bind -target android -tags "litd_no_ui litd autopilotrpc signrpc walletrpc chainrpc invoicesrpc watchtowerrpc neutrinorpc peersrpc btlapi"
     $packtime = Get-Date -Format "yyyy-MM-dd_HHmmss"
     New-Item -Path ../ -Name "$packtime" -ItemType "directory"
     Copy-Item ./api-sources.jar ../$packtime/

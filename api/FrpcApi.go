@@ -1,23 +1,30 @@
 package api
 
 import (
-	"github.com/fatedier/frp/cmd/frpc/sub"
-	"github.com/fatedier/frp/pkg/util/system"
-	"github.com/wallet/base"
+	"fmt"
 	"path/filepath"
 	"strconv"
+
+	"github.com/fatedier/frp/cmd/frpc/sub"
+	"github.com/pkg/errors"
+	"github.com/wallet/base"
 )
 
-// FrpcConfig
-// Need to test to find the "current path" of the Android
-// 2024-04-03 15:22:47.852 [I] [sub/root.go:142] start frpc service for config file [./frpc.ini]
-// @dev: modified sub/root.go
 func FrpcConfig(id, remotePortStr string) {
 	remotePort, _ := strconv.Atoi(remotePortStr)
 	_ = WriteConfig(filepath.Join(base.QueryConfigByKey("dirpath"), "frpc.ini"), base.QueryConfigByKey("serverAddr"), 7000, id, "tcp", "127.0.0.1", 9090, remotePort)
 }
 
 func FrpcRun() {
-	system.EnableCompatibilityMode()
+	fmt.Println("=========== LNURL =========== Before system.EnableCompatibilityMode")
+	fmt.Println("=========== LNURL =========== Before sub.Execute")
 	sub.Execute()
+}
+
+func FrpcConf(id, remotePortStr string) error {
+	remotePort, err := strconv.Atoi(remotePortStr)
+	if err != nil {
+		return errors.Wrap(err, "strconv.Atoi")
+	}
+	return WriteConf(filepath.Join(base.QueryConfigByKey("dirpath"), "frpc.ini"), base.QueryConfigByKey("serverAddr"), 7000, id, "tcp", "127.0.0.1", 9090, remotePort, base.QueryConfigByKey("frpcToken"))
 }

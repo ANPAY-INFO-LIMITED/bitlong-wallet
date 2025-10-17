@@ -8,10 +8,8 @@ import (
 	"net/http"
 )
 
-// Deprecated
 func GetOwnSet(token string) (string, error) {
 	url := GetServerHost() + "/v1/fair_launch/query/own_set"
-	// Create an HTTP request
 	responce, err := SendGetReq(url, token, nil)
 	return responce, err
 }
@@ -30,7 +28,6 @@ func GetAssetQueryMint(token string, FairLaunchInfoId string, MintedNumber int) 
 		MintedNumber     int    `json:"minted_number"`
 	}{}
 	requestBody, _ := json.Marshal(resquest)
-	// Create an HTTP request
 	responce, err := SendGetReq(url, token, requestBody)
 	return responce, err
 }
@@ -40,10 +37,8 @@ func SendGetReq(url string, token string, requestBody []byte) (string, error) {
 	if err != nil {
 		fmt.Println("An error occurred while creating an HTTP request:", err)
 	}
-	// Set Authorization Header
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	// Send HTTP request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

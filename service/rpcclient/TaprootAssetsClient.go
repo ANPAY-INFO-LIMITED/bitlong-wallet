@@ -5,20 +5,17 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/btcsuite/btcd/wire"
 	"github.com/lightninglabs/taproot-assets/asset"
 	"github.com/lightninglabs/taproot-assets/commitment"
 	"github.com/lightninglabs/taproot-assets/fn"
 	"github.com/lightninglabs/taproot-assets/proof"
+	"github.com/lightninglabs/taproot-assets/rpcutils"
 	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/pkg/errors"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
-)
-
-const (
-	mainnetProofCourierAddr = "universerpc://132.232.109.84:8444"
-	testnetProofCourierAddr = "universerpc://testnet.universe.lightning.finance:10029"
-	regtestProofCourierAddr = "universerpc://132.232.109.84:8443"
 )
 
 func getTaprootAssetsClient() (taprpc.TaprootAssetsClient, func(), error) {
@@ -173,7 +170,7 @@ func DecodeProof(proof []byte, depth uint32, withMetaReveal bool, withPrevWitnes
 	if withMetaReveal || withPrevWitnesses {
 		conn, clearUp, err := apiConnect.GetConnection("tapd", false)
 		if err != nil {
-			fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+			return nil, errors.Wrap(err, "apiConnect.GetConnection")
 		}
 		defer clearUp()
 		client := taprpc.NewTaprootAssetsClient(conn)
@@ -187,7 +184,6 @@ func DecodeProof(proof []byte, depth uint32, withMetaReveal bool, withPrevWitnes
 }
 
 type decodeProofOffline struct {
-	//withPrevWitnesses and withMetaReveal need an online node
 	withPrevWitnesses bool
 	withMetaReveal    bool
 }
@@ -248,7 +244,6 @@ func (d *decodeProofOffline) decodeProof(ctx context.Context,
 				req.ProofAtDepth, latestProofIndex)
 		}
 
-		// Default to latest proof.
 		index := latestProofIndex - req.ProofAtDepth
 		p, err := proofFile.ProofAt(index)
 		if err != nil {
@@ -363,21 +358,7 @@ func (d *decodeProofOffline) marshalProof(ctx context.Context, p *proof.Proof,
 	}
 
 	if withMetaReveal {
-		//metaHash := rpcAsset.AssetGenesis.MetaHash
-		//if len(metaHash) == 0 {
-		//	return nil, fmt.Errorf("asset does not contain meta " +
-		//		"data")
-		//}
-		//
-		//rpcMeta, err = r.FetchAssetMeta(
 		//	ctx, &taprpc.FetchAssetMetaRequest{
-		//		Asset: &taprpc.FetchAssetMetaRequest_MetaHash{
-		//			MetaHash: metaHash,
-		//		},
-		//	},
-		//)
-		//if err != nil {
-		//	return nil, err
 		//}
 	}
 
@@ -423,7 +404,7 @@ func (d *decodeProofOffline) marshalProof(ctx context.Context, p *proof.Proof,
 func (d *decodeProofOffline) marshalChainAsset(ctx context.Context, a *asset.ChainAsset,
 	withWitness bool) (*taprpc.Asset, error) {
 
-	rpcAsset, err := taprpc.MarshalAsset(
+	rpcAsset, err := rpcutils.MarshalAsset(
 		ctx, a.Asset, a.IsSpent, withWitness, nil, fn.None[uint32](),
 	)
 	if err != nil {

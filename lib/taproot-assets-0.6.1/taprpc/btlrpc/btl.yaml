@@ -1,0 +1,12 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: btlrpc.Btl.FundVirtualPsbt2
+      post: "/v1/taproot-assets/btlapi/fund-virtual-psbt-2"
+      body: "*"
+
+    - selector: btlrpc.Btl.GetListEligibleCoins
+      post: "/v1/taproot-assets/btlapi/get-list-eligible-coins"
+      body: "*"

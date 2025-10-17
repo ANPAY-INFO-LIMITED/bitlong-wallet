@@ -37,3 +37,40 @@ func QueryAssetRoots(Id string) *universerpc.QueryRootResponse {
 	}
 	return roots
 }
+
+func AddFederationServer(server string) error {
+	client, clearUp, err := getUniverseClient()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer clearUp()
+
+	quest := &universerpc.AddFederationServerRequest{
+		Servers: []*universerpc.UniverseFederationServer{
+			{
+				Host: server,
+			},
+		},
+	}
+	_, err = client.AddFederationServer(context.Background(), quest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func ListFederationServers() *universerpc.ListFederationServersResponse {
+	client, clearUp, err := getUniverseClient()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	defer clearUp()
+	quest := &universerpc.ListFederationServersRequest{}
+	servers, err := client.ListFederationServers(context.Background(), quest)
+	if err != nil {
+		return nil
+	}
+	return servers
+}

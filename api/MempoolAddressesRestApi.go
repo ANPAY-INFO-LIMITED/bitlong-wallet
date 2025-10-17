@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -133,10 +135,6 @@ func SimplifyTransactions(address string, responses *GetAddressTransactionsRespo
 	return &simplified
 }
 
-// GetAddressInfoByMempool
-// @Description: Get address info by mempool api
-// @param address
-// @return string
 func GetAddressInfoByMempool(address string) string {
 	var targetUrl string
 	switch base.NetWork {
@@ -169,13 +167,13 @@ func getAddressInfoByMempool(address string) *GetAddressResponse {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
-		fmt.Printf("%s http.PostForm :%v\n", GetTimeNow(), err)
+		logrus.Errorln(errors.Wrap(err, "http.Get"))
 		return nil
 	}
 	bodyBytes, _ := io.ReadAll(response.Body)
 	var getAddressResponse GetAddressResponse
 	if err := json.Unmarshal(bodyBytes, &getAddressResponse); err != nil {
-		fmt.Printf("%s GAIBM json.Unmarshal :%v\n", GetTimeNow(), err)
+		logrus.Errorln(errors.Wrap(err, "json.Unmarshal"))
 		return nil
 	}
 	return &getAddressResponse
@@ -249,10 +247,6 @@ func GetAddressTransferOutResult(address string) string {
 	return MakeJsonErrorResult(SUCCESS, "", *transfers)
 }
 
-// GetAddressTransactionsByMempool
-// @Description: Get address transactions by mempool api
-// @param address
-// @return string
 func GetAddressTransactionsByMempool(address string) string {
 	transactions, err := GetAddressTransactions(address)
 	if err != nil {

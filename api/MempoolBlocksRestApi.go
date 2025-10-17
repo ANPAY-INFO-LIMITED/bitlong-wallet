@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/wallet/base"
 	"io"
 	"net/http"
@@ -37,8 +39,6 @@ func GetBlockTipHeightByMempool() string {
 	return MakeJsonErrorResult(SUCCESS, "", height)
 }
 
-// BlockTipHeight
-// @dev: NOT STANDARD RESULT RETURN
 func BlockTipHeight() int {
 	var targetUrl string
 	switch base.NetWork {
@@ -49,10 +49,19 @@ func BlockTipHeight() int {
 	}
 	response, err := http.Get(targetUrl)
 	if err != nil {
+		logrus.Errorln(errors.Wrap(err, "http.Get"))
 		return 0
 	}
-	bodyBytes, _ := io.ReadAll(response.Body)
-	height, _ := strconv.Atoi(string(bodyBytes))
+	bodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		logrus.Errorln(errors.Wrap(err, "io.ReadAll"))
+		return 0
+	}
+	height, err := strconv.Atoi(string(bodyBytes))
+	if err != nil {
+		logrus.Errorln(errors.Wrap(err, "strconv.Atoi"))
+		return 0
+	}
 	return height
 }
 

@@ -5,34 +5,38 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/lightninglabs/taproot-assets/tapdb"
-	"github.com/lightninglabs/taproot-assets/taprpc"
-	"github.com/lightningnetwork/lnd/lnrpc"
-	"google.golang.org/protobuf/proto"
 	"log"
 	"math"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+
+	"github.com/joho/godotenv"
+	"github.com/lightninglabs/taproot-assets/tapdb"
+	"github.com/lightninglabs/taproot-assets/taprpc"
+	"github.com/lightningnetwork/lnd/lnrpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type ErrCode int
 
-// Err type:Normal
 const (
 	DefaultErr   ErrCode = -1
 	SUCCESS      ErrCode = 200
 	NotFoundData ErrCode = iota + 299
 	RequestError
+	SUCCESS_2 ErrCode = 0
 )
 
 const (
@@ -197,171 +201,62 @@ const (
 	CheckIfBackupIsRequiredErr
 	GetAndUploadAssetBalanceHistoriesErr
 	uploadBtcListUnspentUtxosErr
+	FundChannelErr
+	AddInvoiceErr
+	SendPaymentErr
+	ConnectPeerErr
+	GetIdentityPubkeyErr
+	CloseChannelErr
+	DecodeAssetPayReqErr
+	QueryListAssetsByAssetIdErr
+	getSubServerStatusInfoErr
+	lndSyncToChainErr
+	InvalidParamsErr
+	ListPaymentsErr
+	OpenBtcChannelErr
+	SendPaymentV2Err
+	DeriveKeysErr
+	CreateVirtualPSBTErr
+	FundVirtualPSBTErr
+	PrepareOutputAssetsErr
+	SignVirtualPSBTErr
+	PrepareBitcoinPSBTErr
+	GeneratePaymentScriptErr
+	GetAddressBip32DerivationErr
+	SerializeErr
+	CommitVirtualPsbtsErr
+	NewFromRawBytesErr
+	SignBitcoinPSBTErr
+	SignPsbtErr
+	EncodePSBTtoBase64Err
+	FinalizePacketErr
+	QueryAssetRatesErr
+	getListEligibleCoinsErr
+	psbtTrustlessSwapCreateSellOrderSignWithOneFilterErr
+	FromStrErr
+	psbtTrustlessSwapBuySOrderSignErr
+	bytesToPsbtPacketErr
+	tappsbtDecodeErr
+	psbtTrustlessSwapPublishTxErr
+	base64StdEncodingDecodeStringErr
+	psbtTrustlessSwapBuySOrderProofErr
+	LastProofFromStrErr
+	fixVersionDirtyErr
+	requestToGetLastProofErr
+	GetAssetsDecimalErr
+	InvalidDecimalDisplay
+	NullInvoice
+	lnurlPayErr
+	PostServerToRequestInvoiceErr
+	GetServerRequestAvailablePortErr
+	PostServerRequestIsPortListeningErr
+	ServerPortNotAvailable
+	PostServerToRequestLnurlErr
+	ServerRequestPortIsListening
+	FrpcConfErr
+	syncUniverseAssetErr
+	pushProofErr
 )
-
-var ErrCodeMapInfo = map[ErrCode]string{
-	GetBtcTransferOutInfosErr:                        "获取BTC转出记录错误",
-	ListTransfersAndGetProcessedResponseErr:          "列出转账记录并获取处理的响应错误",
-	PostToSetAssetTransferErr:                        "请求发送资产转账记录错误",
-	PostToGetAssetTransferAndGetResponseErr:          "请求获取资产转账记录和响应错误",
-	BatchTxidToAssetIdErr:                            "批量交易ID转换资产ID错误",
-	AddrReceivesAndGetEventsErr:                      "资产地址接收并获取事件错误",
-	PostToSetAddrReceivesEventsErr:                   "请求发送资产接收事件错误",
-	PostToGetAddrReceivesEventsErr:                   "请求获取资产接收事件错误",
-	jsonAddrsToAddrSliceErr:                          "资产地址数组JSON字符串转换资产地址切片错误",
-	DecodeAddrErr:                                    "解码资产地址错误",
-	sendAssetsErr:                                    "发送资产错误",
-	UploadBatchTransfersErr:                          "上传批量转账记录错误",
-	PostToGetBatchTransfersErr:                       "请求获取批量转账记录错误",
-	PostToSetAssetAddrErr:                            "请求发送资产地址记录错误",
-	PostToGetAssetAddrErr:                            "请求获取资产地址记录错误",
-	ListUtxosAndGetResponseErr:                       "列出资产UTXO并获取响应错误",
-	ListUnspentAndGetResponseErr:                     "列出BTC的UTXO并获取相应错误",
-	ListNftAssetsAndGetResponseErr:                   "列出NFT资产并获取响应错误",
-	PostToSetAssetLockErr:                            "请求发送资产锁定信息错误",
-	PostToGetAssetLockErr:                            "请求获取资产锁定信息错误",
-	IsTokenValidErr:                                  "Token无效错误",
-	JsonUnmarshalErr:                                 "JSON解码错误",
-	ListBalancesAndProcessErr:                        "列出BTC余额并获取处理结果错误",
-	PostToSetAssetBalanceInfoErr:                     "请求发送资产余额信息错误",
-	FeeRateExceedMaxErr:                              "费率超出最大值错误",
-	QueryAllAddrAndGetResponseErr:                    "查询所有资产地址并获取响应错误",
-	UpdateAllAddrByAccountWithAddressesErr:           "通过账户更新所有资产地址错误",
-	PostToGetAssetTransferByAssetIdAndGetResponseErr: "请求通过资产ID获取资产转账记录并获取响应错误",
-	QueryAssetTransferSimplifiedErr:                  "查询简化资产转账记录错误",
-	RequestToGetNonZeroAssetBalanceErr:               "请求获取非零资产余额信息错误",
-	GetZeroBalanceAssetBalanceSliceErr:               "获取零余额资产余额信息切片错误",
-	GetAssetHolderNumberByAssetBalancesInfoErr:       "通过资产余额信息获取资产持有人数量错误",
-	GetAssetHolderBalanceByAssetBalancesInfoErr:      "通过资产余额信息获取资产持有人持有信息错误",
-	AddrReceivesErr:                                  "资产接收记录错误",
-	BurnAssetErr:                                     "销毁资产错误",
-	fetchAssetMetaErr:                                "提取资产元数据错误",
-	GetInfoErr:                                       "获取信息错误",
-	GetConnectionErr:                                 "获取连接错误",
-	syncUniverseErr:                                  "同步宇宙错误",
-	ProcessListAllAssetsSimplifiedErr:                "处理列出的所有简化资产信息错误",
-	allAssetBalancesErr:                              "获取所有资产余额信息错误",
-	allAssetGroupBalancesErr:                         "获取所有资产组余额信息错误",
-	assetKeysTransferErr:                             "获取资产转账Key错误",
-	AssetLeavesSpecifiedErr:                          "获取指定类型资产叶子错误",
-	assetLeavesIssuanceErr:                           "获取发行资产叶子错误",
-	DecodeRawProofStringErr:                          "解码原始证明字符串错误",
-	allAssetListErr:                                  "获取列出所有资产信息错误",
-	GetAssetHoldInfosIncludeSpentErr:                 "获取包含已花费的资产持有信息错误",
-	GetAssetHoldInfosExcludeSpentErr:                 "获取不包含已花费的资产持有信息错误",
-	GetAssetTransactionInfosErr:                      "获取资产交易信息错误",
-	GetTimeForManagedUtxoByBitcoindErr:               "通过Bitcoind为BTC的UTXO获取时间错误",
-	subServerStatusErr:                               "获取子服务状态错误",
-	NewAddressP2trErr:                                "生成P2TR地址错误",
-	NewAddressP2wkhErr:                               "生成P2WKH地址错误",
-	NewAddressNp2wkhErr:                              "生成NP2WKH地址错误",
-	CreateOrUpdateAddrErr:                            "创建或更新资产地址信息错误",
-	ReadAddrErr:                                      "读取资产地址错误",
-	DeleteAddrErr:                                    "删除资产地址错误",
-	AllAddressesErr:                                  "获取所有资产地址错误",
-	ListAddressesErr:                                 "列出资产地址错误",
-	GetAccountWithAddressesErr:                       "获取账户与地址错误",
-	UnmarshalErr:                                     "解码错误",
-	resultIsNotSuccessErr:                            "结果未成功错误",
-	GetAllAccountsErr:                                "获取所有账户错误",
-	InvalidAddressTypeErr:                            "无效的资产地址类型错误",
-	GetBlockErr:                                      "获取区块错误",
-	GetBlockHashErr:                                  "获取区块哈希值错误",
-	getWalletBalanceErr:                              "获取钱包余额信息错误",
-	ProcessGetWalletBalanceResultErr:                 "处理获取钱包余额信息的结果错误",
-	getInfoOfLndErr:                                  "获取LND的信息错误",
-	DecodePayReqErr:                                  "解码支付请求错误",
-	ListChannelsErr:                                  "获取列出通道错误",
-	ListInvoicesErr:                                  "获取列出发票错误",
-	PendingChannelsErr:                               "获取等待中的通道错误",
-	ClosedChannelsErr:                                "关闭通道错误",
-	NoFindChannelErr:                                 "没有找到通道错误",
-	sendCoinsErr:                                     "发送BTC币错误",
-	SendPaymentSyncErr:                               "同步发起支付错误",
-	AddrsLenZeroErr:                                  "资产地址为零错误",
-	sendManyErr:                                      "发送多笔支付错误",
-	TrackPaymentV2Err:                                "跟踪支付V2错误",
-	streamRecvInfoErr:                                "流接收信息错误",
-	streamRecvErr:                                    "流接收错误",
-	listAccountsErr:                                  "获取列出账户错误",
-	AccountNotFoundErr:                               "账户未找到错误",
-	BumpFeeErr:                                       "碰撞费率错误",
-	HttpGetErr:                                       "HTTP的GET请求错误",
-	GetAddressTransferOutErr:                         "获取BTC地址转出错误",
-	GetAddressTransactionsErr:                        "通过Mempool获取BTC地址交易记录错误",
-	listAssetsErr:                                    "获取列出资产错误",
-	responseNotSuccessErr:                            "响应未成功错误",
-	assetNotFoundErr:                                 "资产未找到错误",
-	ListGroupsErr:                                    "获取列出资产组错误",
-	ListTransfersErr:                                 "获取列出BTC转账记录错误",
-	NewAddrErr:                                       "新资产地址错误",
-	QueryAddrErr:                                     "查询资产地址错误",
-	listBalancesErr:                                  "获取列出BTC余额错误",
-	assetLeafKeysErr:                                 "获取资产叶子Key错误",
-	ListBatchesAndGetResponseErr:                     "获取列出批次并获取响应错误",
-	assetLeavesErr:                                   "获取资产叶子错误",
-	GetTransactionsAndGetResponseErr:                 "获取交易记录和响应错误",
-	GetAssetInfoErr:                                  "获取资产信息错误",
-	ListAssetsProcessedErr:                           "获取列出已处理的资产信息错误",
-	responseAssetKeysZeroErr:                         "资产Key响应长度为零错误",
-	responseLeavesNullErr:                            "资产叶子响应为空错误",
-	QueryAssetRootsErr:                               "查询资产根错误",
-	blobLenZeroErr:                                   "Blob长度为零错误",
-	DecodeProofErr:                                   "解码证明错误",
-	clientInfoErr:                                    "客户端信息错误",
-	queryAssetRootErr:                                "查询资产根错误",
-	queryAssetStatsErr:                               "查询资产统计错误",
-	GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfosErr: "获取用户所有服务器和本地发行历史记录错误",
-	GetIssuanceTransactionCalculatedFeeErr:                 "获取发行交易计算费用错误",
-	GetMintTransactionCalculatedFeeErr:                     "获取铸造交易计算费用错误",
-	FinalizeBatchErr:                                       "提交批次错误",
-	DecodeStringErr:                                        "解码字符串错误",
-	MintAssetErr:                                           "本地铸造资产错误",
-	getTransactionByMempoolErr:                             "通过Mempool获取交易信息错误",
-	deliverIssuanceProofErr:                                "递送资产发行证明错误",
-	deliverProofErr:                                        "递送资产证明错误",
-	receiveProofErr:                                        "接收资产证明错误",
-	readProofErr:                                           "读取资产证明错误",
-	queryAssetProofsErr:                                    "查询资产证明错误",
-	UploadAssetBurnErr:                                     "上传资产销毁信息错误",
-	GetAssetBurnTotalAmountByAssetIdErr:                    "通过资产ID获取资产销毁总量错误",
-	GetOwnFairLaunchInfoIssuedSimplifiedAndExecuteMintReservedErr: "获取简化的自己发行的公平发射资产信息并执行取回保留部分错误",
-	PostToSetFollowFairLaunchInfoErr:                              "请求关注公平发射信息错误",
-	PostToSetUnfollowFairLaunchInfoErr:                            "请求取消关注公平发射信息错误",
-	RequestToQueryIsFairLaunchFollowedErr:                         "请求查询是否已关注公平发射信息错误",
-	ListBatchesAndPostToSetAssetLocalMintHistoriesErr:             "获取列出批次并请求发送资产本地铸造历史记录错误",
-	ListUtxosAndPostToSetAssetManagedUtxosErr:                     "请求列出UTXO并请求发送资产UTXO信息错误",
-	GetWalletBalanceCalculatedTotalValueErr:                       "获取钱包余额计算总价值错误",
-	UploadLogFileAndGetResponseErr:                                "上传日志文件并获取响应错误",
-	GetAccountAssetBalanceByAssetIdAndGetResponseErr:              "通过资产ID获取账户资产余额信息并获取响应错误",
-	GetAccountAssetTransferByAssetIdAndGetResponseErr:             "通过资产ID获取账户资产转账记录并获取响应错误",
-	GetAssetHolderBalanceWithPageSizeAndPageNumberErr:             "通过页面大小和页号获取资产持有信息错误",
-	GetAccountAssetTransferPageNumberByPageSizeErr:                "通过页面大小获取账户资产转账记录页数错误",
-	GetAccountAssetTransferWithPageSizeAndPageNumberErr:           "通过页面大小和页号获取资产转账信息错误",
-	GetAccountAssetBalancePageNumberByPageSizeErr:                 "通过页面大小获取账户资产余额信息页数错误",
-	GetAccountAssetBalanceWithPageSizeAndPageNumberErr:            "通过页面大小和页号获取账户资产余额信息错误",
-	GetAssetManagedUtxoWithPageSizeAndPageNumberErr:               "通过页面大小和页号获取资产UTXO信息错误",
-	GetAssetManagedUtxoPageNumberByPageSizeErr:                    "通过页面大小获取资产UTXO信息页数错误",
-	GetGroupFirstAssetMetaAndGetResponseErr:                       "获取资产组的首个资产元数据并获取响应错误",
-	SetGroupFirstAssetMetaAndGetResponseErr:                       "请求上传资产组首个资产的元数据并获取响应错误",
-	GetGroupFirstAssetIdAndGetResponseErr:                         "获取资产组的首个资产ID并获取响应错误",
-	QueryAssetTransferSimplifiedOfAllNftErr:                       "查询所有NFT简化资产转账记录错误",
-	GetDeliverProofNeedInfoAndGetResponseErr:                      "获取发送证明文件操作所需前置信息并获取响应错误",
-	GetNftTransferByAssetIdAndGetResponseErr:                      "通过资产ID查询NFT转账记录并获取响应错误",
-	GetSpentNftAssetsAndGetResponseErr:                            "获取已转出的NFT资产并获取响应错误",
-	SchnorrSignErr:                                                "Schnorr签名错误",
-	SchnorrVerifyErr:                                              "Schnorr验证错误",
-	GetAccountAssetBalanceUserHoldTotalAmountByAssetIdErr:         "通过资产ID获取托管资产余额用户持有总量错误",
-	LndGetInfoAndGetResponseErr:                                   "Lnd获取信息并获取相应错误",
-	GetZeroAmountAssetListSliceErr:                                "获取零余额资产列表信息切片错误",
-	PostToSetAssetListInfoErr:                                     "请求发送资产列表信息错误",
-	UploadBigFileAndGetResponseErr:                                "上传大文件并获取响应错误",
-	DuplicateAddrErr:                                              "重复地址错误",
-	GetListBalancesSimpleInfoHashAndUpdateAssetBalanceBackupErr:   "获取资产余额列表简单信息哈希并更新资产余额备份错误",
-	CheckIfBackupIsRequiredErr:                                    "检查是否需要备份错误",
-	GetAndUploadAssetBalanceHistoriesErr:                          "获取并上传资产余额历史记录错误",
-	uploadBtcListUnspentUtxosErr:                                  "上传BTC列出的未花费UTXO错误",
-}
 
 func GetIntErrCodeString(intErrCode int) string {
 	return GetErrCodeString(ErrCode(intErrCode))
@@ -376,6 +271,8 @@ func (ec ErrCode) Error() string {
 	case errors.Is(ec, NotFoundData):
 		return "not found Data"
 	case errors.Is(ec, SUCCESS):
+		return ""
+	case errors.Is(ec, SUCCESS_2):
 		return ""
 	case errors.Is(ec, RequestError):
 		return "request error"
@@ -395,7 +292,6 @@ var (
 )
 
 type JsonResult struct {
-	// Deprecated: Use Code instead
 	Success bool    `json:"success"`
 	Error   string  `json:"error"`
 	Code    ErrCode `json:"code"`
@@ -403,12 +299,11 @@ type JsonResult struct {
 }
 
 type Result2 struct {
-	Errno  int         `json:"errno"`
+	Errnos int         `json:"errno"`
 	ErrMsg string      `json:"errmsg"`
 	Data   interface{} `json:"data"`
 }
 
-// Deprecated: Use MakeJsonErrorResult instead
 func MakeJsonResult(success bool, error string, data any) string {
 	jsr := JsonResult{
 		Success: success,
@@ -439,6 +334,22 @@ func MakeJsonErrorResult(code ErrCode, errorString string, data any) string {
 		jsr.Success = true
 	} else {
 		jsr.Success = false
+	}
+	jstr, err := json.Marshal(jsr)
+	if err != nil {
+		return MakeJsonErrorResult(DefaultErr, err.Error(), nil)
+	}
+	return string(jstr)
+}
+
+func MakeJsonErrorResult2(code ErrCode, errorString string, data any) string {
+	if int(code) == int(SUCCESS) {
+		code = SUCCESS_2
+	}
+	jsr := Result2{
+		Errnos: int(code),
+		ErrMsg: errorString,
+		Data:   data,
 	}
 	jstr, err := json.Marshal(jsr)
 	if err != nil {
@@ -522,45 +433,26 @@ func LogError(description string, err error) {
 	fmt.Printf("%s %s :%v\n", GetTimeNow(), description, err)
 }
 
-// FeeRateBtcPerKbToSatPerKw
-// @Description: BTC/Kb to sat/kw
-// 1 sat/vB = 0.25 sat/wu
-// https://bitcoin.stackexchange.com/questions/106333/different-fee-rate-units-sat-vb-sat-perkw-sat-perkb
 func FeeRateBtcPerKbToSatPerKw(btcPerKb float64) (satPerKw int) {
-	// @dev: 1 BTC/kB = 1e8 sat/kB 1e5 sat/B = 0.25e5 sat/w = 0.25e8 sat/kw
 	return int(0.25e8 * btcPerKb)
 }
 
-// FeeRateBtcPerKbToSatPerB
-// @Description: BTC/Kb to sat/b
-// @param btcPerKb
-// @return satPerB
 func FeeRateBtcPerKbToSatPerB(btcPerKb float64) (satPerB int) {
 	return int(1e5 * btcPerKb)
 }
 
-// FeeRateSatPerKwToBtcPerKb
-// @Description: sat/kw to BTC/Kb
-// @param feeRateSatPerKw
-// @return feeRateBtcPerKb
 func FeeRateSatPerKwToBtcPerKb(feeRateSatPerKw int) (feeRateBtcPerKb float64) {
 	return RoundToDecimalPlace(float64(feeRateSatPerKw)/0.25e8, 8)
 }
 
-// FeeRateSatPerKwToSatPerB
-// @Description: sat/kw to sat/b
 func FeeRateSatPerKwToSatPerB(feeRateSatPerKw int) (feeRateSatPerB int) {
 	return int(math.Ceil(float64(feeRateSatPerKw) * 4 / 1000))
 }
 
-// FeeRateSatPerBToBtcPerKb
-// @Description: sat/b to BTC/Kb
 func FeeRateSatPerBToBtcPerKb(feeRateSatPerB int) (feeRateBtcPerKb float64) {
 	return RoundToDecimalPlace(math.Ceil(float64(feeRateSatPerB)/100000), 8)
 }
 
-// FeeRateSatPerBToSatPerKw
-// @Description: sat/b to sat/kw
 func FeeRateSatPerBToSatPerKw(feeRateSatPerB int) (feeRateSatPerKw int) {
 	return int(math.Ceil(float64(feeRateSatPerB) * 1000 / 4))
 }
@@ -748,7 +640,7 @@ func CreateTestMainFile(testPath string, testFuncName string) {
 			return
 		}
 	}(f)
-	content := []byte("package main\n\nfunc main() {\n\n}\n")
+	content := []byte("package main\n\n/*\n-tags \"litd autopilotrpc signrpc walletrpc chainrpc invoicesrpc watchtowerrpc neutrinorpc peersrpc btlapi\"\n*/\n\nfunc main() {\n\n}\n")
 	_, err = f.Write(content)
 	if err != nil {
 		fmt.Println(err)
@@ -765,7 +657,7 @@ func BuildTestMainFile(testPath string, testFuncName string) {
 	dirPath := path.Join(testPath, ToLowerWordsWithHyphens(testFuncName))
 	filePath := path.Join(dirPath, "main.go")
 	executableFileName := testFuncName + ".exe"
-	tags := "signrpc walletrpc chainrpc invoicesrpc autopilotrpc btlapi"
+	tags := "litd autopilotrpc signrpc walletrpc chainrpc invoicesrpc watchtowerrpc neutrinorpc peersrpc btlapi"
 	cmd := exec.Command("go", "build", "-tags", tags, "-o", executableFileName, filePath)
 	err := cmd.Run()
 	if err != nil {
@@ -785,7 +677,6 @@ func GetTimestamp() int {
 	return int(time.Now().Unix())
 }
 
-// TxHashConversion size-end conversion
 func TxHashConversion(txHash string) string {
 	b, err := hex.DecodeString(txHash)
 	if err != nil {
@@ -800,18 +691,22 @@ func TxHashConversion(txHash string) string {
 	return txHash
 }
 
+func TxHashEncodeToString(h []byte) string {
+	slices.Reverse(h)
+	return hex.EncodeToString(h)
+}
+
+func TxHashStringReverse(h string) (d string) {
+	for i := len(h) - 2; i > -1; i -= 2 {
+		d = d + h[i:i+2]
+	}
+	return d
+}
+
 func FixAsset(output string) string {
-	//str, err := rpcclient.FixAsset(output, false)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return MakeJsonErrorResult(DefaultErr, "FixAsset error, please check the output parameter and whether the asset needs to be repaired", nil)
-	//}
-	//fmt.Println(str)
 	return MakeJsonErrorResult(SUCCESS, "", "str")
 }
 
-// GetRandomNumber
-// @Description: Return a random number whose range is (0,maxValue).
 func GetRandomNumber(maxValue int) int {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	var randNumber int
@@ -821,16 +716,7 @@ func GetRandomNumber(maxValue int) int {
 	return randNumber
 }
 
-// GetRandomNumberSlice
-// @Description: Use this to generate a slice of random number
 func GetRandomNumberSlice(maxValue int, n int) ([]int, error) {
-	// @dev: If the number of times the same random number is obtained exceeds this value,
-	// add this random number to the slice of random number results,
-	// so that duplicates can be obtained relatively randomly
-	// when the range of random numbers is small
-	// (the number of random numbers that can be obtained is less than
-	// the number of random numbers that need to be generated).
-	// The third time when a random number duplicates, it will be accepted.
 	const retryTimes = 2
 	if maxValue < 1 || n < 0 {
 		return nil, errors.New("max value or slice length is negative")
@@ -838,14 +724,12 @@ func GetRandomNumberSlice(maxValue int, n int) ([]int, error) {
 	var slice []int
 	randNumberMapGeneratedTimes := make(map[int]int)
 	for len(slice) < n {
-		// @dev: Return a random number whose range is (0,maxValue].
 		randNumber := GetRandomNumber(maxValue + 1)
 		randNumberMapGeneratedTimes[randNumber]++
 		if randNumberMapGeneratedTimes[randNumber] == 1 || randNumberMapGeneratedTimes[randNumber] > 1+retryTimes {
 			slice = append(slice, randNumber)
 			randNumberMapGeneratedTimes[randNumber] = 1
 		} else {
-			// @dev: length of slice will not add
 			continue
 		}
 	}
@@ -868,13 +752,24 @@ func Sha256(data any) (string, error) {
 	return hashString, nil
 }
 
-// todo:To be optimized
-// 1.Memory risk
-// 2.Use db
+func EncodeDataToBase64(data any) (string, error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(jsonData), nil
+}
+
+func DecodeBase64ToData(encoded string, v any) error {
+	byteData, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(byteData, v)
+}
 
 func DbSetTempStoreMemory() {
 	db := tapdb.GetTestDB()
-	// 设置PRAGMA temp_store=2，将临时文件存储在内存中
 	_, err := db.Exec("PRAGMA temp_store = 2;")
 	if err != nil {
 		fmt.Println("设置PRAGMA失败:", err)
@@ -885,11 +780,64 @@ func DbSetTempStoreMemory() {
 
 func DbSetTempStoreDefault() {
 	db := tapdb.GetTestDB()
-	// 设置PRAGMA temp_store=2，将临时文件存储在内存中
 	_, err := db.Exec("PRAGMA temp_store = 0;")
 	if err != nil {
 		fmt.Println("设置PRAGMA失败:", err)
 		return
 	}
 	fmt.Println("成功设置PRAGMA temp_store=0")
+}
+
+func AppendFileLog(filePath string, prefix string, content string) error {
+	dir := filepath.Dir(filePath)
+	if dir != "." {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			err := os.MkdirAll(dir, 0755)
+			if err != nil {
+				return errors.Wrap(err, "os.MkdirAll")
+			}
+		}
+	}
+
+	fileInfo, err := os.Stat(filePath)
+	if err == nil && fileInfo.Size() > 3*1024*1024 {
+		err := os.Truncate(filePath, 0)
+		if err != nil {
+			return errors.Wrap(err, "os.Truncate")
+		}
+	}
+
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0664)
+	if err != nil {
+		return errors.Wrap(err, "os.OpenFile")
+	}
+	defer file.Close()
+	logger := log.New(file, prefix, log.Lshortfile|log.Ldate|log.Ltime)
+	logger.Println(content)
+	return nil
+}
+
+func WriteToFile(path, content string) error {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0777)
+		if err != nil {
+			return errors.Wrap(err, "os.MkdirAll")
+		}
+	}
+	filename := filepath.Base(path)
+	filePath := dir + "/" + filename
+	err := os.WriteFile(filePath, []byte(content), 0777)
+	if err != nil {
+		return errors.Wrap(err, "os.WriteFile")
+	}
+	return nil
+}
+
+func RespJsonStr(resp proto.Message) (string, error) {
+	jsonBytes, err := lnrpc.ProtoJSONMarshalOpts.Marshal(resp)
+	if err != nil {
+		return "", errors.Wrap(err, "lnrpc.ProtoJSONMarshalOpts.Marshal")
+	}
+	return string(jsonBytes), nil
 }

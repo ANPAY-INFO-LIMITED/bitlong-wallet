@@ -25,7 +25,6 @@ func FixAsset(outpoint string, isSpend bool) (string, error) {
 	}
 	defer clearUp()
 
-	//接收列表中是否存在该资产
 	resiveReq := taprpc.AddrReceivesRequest{}
 	receives, err := client.AddrReceives(context.Background(), &resiveReq)
 	if err != nil {
@@ -41,7 +40,6 @@ func FixAsset(outpoint string, isSpend bool) (string, error) {
 	}
 	return "", fmt.Errorf("did not hold the asset")
 list:
-	//已使用列表中是否存在该资产
 	listReq := taprpc.ListAssetRequest{
 		IncludeSpent: true,
 	}
@@ -56,7 +54,6 @@ list:
 	}
 	return "", fmt.Errorf("did not find the asset in spent list")
 
-	//交易列表中是否存在该资产
 tx:
 	coon, clearUp, err := apiConnect.GetConnection("litd", false)
 	if err != nil {
@@ -82,7 +79,6 @@ tx:
 	return "", errors.New("tapd is not stop")
 
 dbSet:
-	//如果存在，则将spent置为0
 	dbPath := filepath.Join(base.Configure("tapd"), "data", base.NetWork, "tapd.db")
 	fmt.Printf("FixAsset start, dbPath: %s\n, outpoint: %s\n", dbPath, outpoint)
 	db, err := sql.Open("sqlite", dbPath+"?_busy_timeout=500000")
@@ -130,9 +126,6 @@ const test = `
 
 func CheckTapdDb() (bool, error) {
 	dbPath := filepath.Join(base.Configure("tapd"), "data", base.NetWork, "tapd.db")
-	//dir, _ := os.Getwd()
-	//dbPath := filepath.Join(dir, "tapd.db")
-	//dbPath := "C:\\Users\\七月九\\Desktop\\tapd.db"
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		return true, nil
 	}

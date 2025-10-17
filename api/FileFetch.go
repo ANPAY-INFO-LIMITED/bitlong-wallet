@@ -1,9 +1,9 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/tapdbtlutil"
+	"github.com/pkg/errors"
 	"github.com/wallet/base"
 	"github.com/wallet/service/apiConnect"
 	"github.com/wallet/service/universeCourier"
@@ -17,15 +17,20 @@ const (
 	defaulttapdpath = ".tapd"
 )
 
+type Network string
+
 const (
-	UniverseHostMainnet = "universerpc://132.232.109.84:8444"
-	UniverseHostTestnet = "universerpc://127.0.0.1:1235"
-	UniverseHostRegtest = "universerpc://132.232.109.84:8443"
+	Mainnet Network = "mainnet"
+	Testnet Network = "testnet"
+	Regtest Network = "regtest"
 )
-const (
-	BtlServerMainnet = "132.232.109.84:8095"
-	BtlServerTestNet = ""
-	BtlServerRegTest = "132.232.109.84:8090"
+
+func (n Network) String() string {
+	return string(n)
+}
+
+var (
+	invalidNetwork = errors.New("invalid network, must be mainnet, testnet or regtest")
 )
 
 type Config struct {
@@ -35,12 +40,6 @@ type Config struct {
 }
 
 var Cfg Config
-
-var perr string
-
-func GetPError() string {
-	return perr
-}
 
 func SetPath(path string, network string) error {
 	err := base.SetFilePath(path)
@@ -56,24 +55,45 @@ func SetPath(path string, network string) error {
 	if err != nil {
 		return errors.New("load config error ")
 	}
-	//_, err = rpcclient.CheckTapdDb()
-	//if err != nil {
-	//	fmt.Println("4.0 update TapdDb is error")
-	//	return fmt.Errorf("4.0 update TapdDb is error %v", err)
-	//}
 	tapdbtlutil.SetFeeParams(Cfg.Network)
 	return nil
 }
 
+func BoxSetPath(network Network) error {
+	switch network {
+
+	case Mainnet:
+		Cfg = Config{
+			Network:       Mainnet.String(),
+			UniverseUrl:   UniverseHostMainnet,
+			BtlServerHost: BtlServerMainnet,
+		}
+
+	case Testnet:
+		Cfg = Config{
+			Network:       Testnet.String(),
+			UniverseUrl:   UniverseHostTestnet,
+			BtlServerHost: BtlServerTestNet,
+		}
+	case Regtest:
+		Cfg = Config{
+			Network:       Regtest.String(),
+			UniverseUrl:   UniverseHostRegtest,
+			BtlServerHost: BtlServerRegTest,
+		}
+	default:
+		return errors.Wrap(invalidNetwork, network.String())
+	}
+	return nil
+
+}
+
 func (c *Config) loadConfig() error {
-	//load service config
 	err := c.loadServiceConfig()
 	if err != nil {
 		return errors.New("load config error ")
 	}
-	//load config from file
 	c.Network = base.NetWork
-	//load config other
 	switch {
 	case base.NetWork == "mainnet":
 		c.UniverseUrl = UniverseHostMainnet
@@ -102,10 +122,8 @@ func GetPath() string {
 
 const defaultbitcoinpath = "data/chain/bitcoin"
 
-// CheckDir Check the integrity of the directory
 func CheckDir(dir string) error {
 	baseDir := dir
-	//Check whether the snapshot file location exists
 	neutrinoPath := filepath.Join(baseDir, defaultlndpath, defaultbitcoinpath, base.NetWork)
 	fmt.Println(neutrinoPath)
 	if !fileExists(neutrinoPath) {
@@ -116,7 +134,6 @@ func CheckDir(dir string) error {
 	return nil
 }
 
-// fileExists reports whether the named file or directory exists.
 func fileExists(path string) bool {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {

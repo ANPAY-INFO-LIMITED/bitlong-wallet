@@ -3,19 +3,16 @@ package api
 import (
 	"context"
 	"fmt"
+
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/pkg/errors"
 	"github.com/wallet/service/apiConnect"
 )
 
-// GetStateForSubscribe
-//
-//	@Description:SubscribeState subscribes to the state of the wallet.
-//	The current wallet state will always be delivered immediately.
-//	@return bool
 func GetStateForSubscribe() bool {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return false
 	}
 	defer clearUp()
 	client := lnrpc.NewStateClient(conn)
@@ -38,14 +35,10 @@ func GetState() string {
 	return response.State.String()
 }
 
-// getState
-//
-//	@Description: GetState returns the current wallet state without streaming further changes.
-//	@return string
 func getState() (*lnrpc.GetStateResponse, error) {
 	conn, clearUp, err := apiConnect.GetConnection("lnd", true)
 	if err != nil {
-		fmt.Printf("%s did not connect: %v\n", GetTimeNow(), err)
+		return nil, errors.Wrap(err, "apiConnect.GetConnection")
 	}
 	defer clearUp()
 	client := lnrpc.NewStateClient(conn)

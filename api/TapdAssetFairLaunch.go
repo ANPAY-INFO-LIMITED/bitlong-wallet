@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/lightninglabs/taproot-assets/taprpc"
 	"github.com/lightninglabs/taproot-assets/taprpc/universerpc"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/pkg/errors"
 	"github.com/vincent-petithory/dataurl"
 	"github.com/wallet/models"
 	"io"
@@ -36,8 +36,6 @@ type IssuanceHistoryInfo struct {
 	State                int    `json:"state"`
 }
 
-// GetUserOwnIssuanceHistoryInfos
-// @Description: Get User Own Issuance History Infos
 func GetUserOwnIssuanceHistoryInfos(token string) string {
 	result, err := GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token)
 	if err != nil {
@@ -56,7 +54,7 @@ type GetIssuanceTransactionFeeResponse struct {
 
 func RequestToGetIssuanceTransactionFee(token string, feeRate int) (fee int, err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/issuance?fee_rate=" + strconv.Itoa(feeRate)
+	url := serverDomainOrSocket + "/v1/fee/query/fair_launch/issuance?fee_rate=" + strconv.Itoa(feeRate)
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -103,7 +101,7 @@ type GetMintTransactionFeeResponse struct {
 
 func RequestToGetMintTransactionFee(token string, feeRate int) (fee int, err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fee/query/fair_launch/mint?fee_rate=" + strconv.Itoa(feeRate)
+	url := serverDomainOrSocket + "/v1/fee/query/fair_launch/mint?fee_rate=" + strconv.Itoa(feeRate)
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return 0, err
@@ -141,8 +139,6 @@ func RequestToGetMintTransactionFee(token string, feeRate int) (fee int, err err
 	return response.Data, nil
 }
 
-// GetIssuanceTransactionFee
-// @Description: Get Issuance Transaction Fee
 func GetIssuanceTransactionFee(token string, feeRate int) string {
 	result, err := RequestToGetIssuanceTransactionFee(token, feeRate)
 	if err != nil {
@@ -152,8 +148,6 @@ func GetIssuanceTransactionFee(token string, feeRate int) string {
 	return MakeJsonErrorResult(SUCCESS, "", result)
 }
 
-// GetMintTransactionFee
-// @Description: Get Mint Transaction Fee
 func GetMintTransactionFee(token string, feeRate int) string {
 	result, err := RequestToGetMintTransactionFee(token, feeRate)
 	if err != nil {
@@ -169,7 +163,6 @@ func GetLocalIssuanceTransactionFee(feeRate int) string {
 }
 
 func GetLocalIssuanceTransactionByteSize() ByteSize {
-	// TODO: need to complete
 	byteSize := BaseTransactionByteSize * (1 + 0e0)
 	return ByteSize(byteSize)
 }
@@ -197,24 +190,20 @@ func GetMintTransactionCalculatedFee(token string, id int, number int) (fee int,
 }
 
 func GetIssuanceTransactionByteSize() int {
-	// TODO: need to complete
 	return int(float64(GetTapdMintAssetAndFinalizeTransactionByteSize()) + float64(GetTapdSendReservedAssetTransactionByteSize()))
 }
 
 func GetTapdMintAssetAndFinalizeTransactionByteSize() ByteSize {
-	// TODO: need to complete
 	byteSize := BaseTransactionByteSize * (1 + 0x1p-2)
 	return ByteSize(byteSize)
 }
 
 func GetTapdSendReservedAssetTransactionByteSize() ByteSize {
-	// TODO: need to complete
 	byteSize := BaseTransactionByteSize * (1 + 0x1p-2)
 	return ByteSize(byteSize)
 }
 
 func GetMintTransactionByteSize() ByteSize {
-	// TODO: need to complete
 	byteSize := BaseTransactionByteSize * (1 + 0e0)
 	return ByteSize(byteSize)
 }
@@ -227,7 +216,7 @@ type ServerOwnSetFairLaunchInfoResponse struct {
 
 func GetServerOwnSetFairLaunchInfos(token string) (fairLaunchInfos *[]models.FairLaunchInfo, err error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/own_set"
+	url := serverDomainOrSocket + "/v1/fair_launch/query/own_set"
 	client := &http.Client{}
 	var jsonData []byte
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonData))
@@ -268,7 +257,6 @@ func ProcessOwnSetFairLaunchResponseToIssuanceHistoryInfo(fairLaunchInfos *[]mod
 		return nil, err
 	}
 	if len(*(fairLaunchInfos)) == 0 {
-		//LogInfo("fairLaunchInfos length is zero")
 		return &issuanceHistoryInfos, nil
 	}
 	for _, fairLaunchInfo := range *fairLaunchInfos {
@@ -298,7 +286,7 @@ type ServerFeeRateResponse struct {
 
 func GetServerFeeRate(token string) (*ServerFeeRateResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fee/query/rate"
+	url := serverDomainOrSocket + "/v1/fee/query/rate"
 	client := &http.Client{}
 	var jsonData []byte
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonData))
@@ -341,7 +329,7 @@ type ServerQueryMintResponse struct {
 
 func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintResponse, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/v1/fair_launch/query/mint"
+	url := serverDomainOrSocket + "/v1/fair_launch/query/mint"
 	client := &http.Client{}
 	requestJson := struct {
 		FairLaunchInfoId int `json:"fair_launch_info_id"`
@@ -378,8 +366,6 @@ func GetServerQueryMint(token string, id int, number int) (*ServerQueryMintRespo
 	return &serverQueryMintResponse, nil
 }
 
-// GetServerIssuanceHistoryInfos
-// @Description: Get Server Issuance History Info
 func GetServerIssuanceHistoryInfos(token string) (*[]IssuanceHistoryInfo, error) {
 	fairLaunchInfos, err := GetServerOwnSetFairLaunchInfos(token)
 	if err != nil {
@@ -420,11 +406,8 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 	for _, batch := range (*batchs).Batches {
 		var transaction *lnrpc.Transaction
 		transaction, err = GetTransactionByBatchTxid(transactions, batch.Batch.BatchTxid)
-		// transaction not found
 		if err != nil {
-			//LogError("", err)
 			continue
-			//	@dev: Do not return
 		}
 		timestamp = int(transaction.TimeStamp)
 		outpoint = transaction.PreviousOutpoints[0].Outpoint
@@ -456,8 +439,6 @@ func GetLocalTapdIssuanceHistoryInfos() (*[]IssuanceHistoryInfo, error) {
 	return &issuanceHistoryInfos, nil
 }
 
-// GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos
-// @Description: Get User Own Issuance History Infos
 func GetAllUserOwnServerAndLocalTapdIssuanceHistoryInfos(token string) (*[]IssuanceHistoryInfo, error) {
 	var issuanceHistoryInfos []IssuanceHistoryInfo
 	serverResult, err := GetServerIssuanceHistoryInfos(token)
@@ -506,8 +487,6 @@ func GetAssetIdByBatchTxidWithListAssetResponse(listAssetResponse *taprpc.ListAs
 	return "", err
 }
 
-// GetAssetIdByOutpointAndNameWithListAssetResponse
-// @dev: may be deprecated
 func GetAssetIdByOutpointAndNameWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string, name string) (assetId string, err error) {
 	for _, asset := range listAssetResponse.Assets {
 		if outpoint == asset.AssetGenesis.GenesisPoint && name == asset.AssetGenesis.Name {
@@ -520,7 +499,6 @@ func GetAssetIdByOutpointAndNameWithListAssetResponse(listAssetResponse *taprpc.
 
 func GetAssetsByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAssetResponse, outpoint string) (*[]ListAssetResponse, error) {
 	var assets []ListAssetResponse
-	//var err error
 	isAssetIdExist := make(map[string]bool)
 	for _, asset := range listAssetResponse.Assets {
 		if outpoint == asset.AssetGenesis.GenesisPoint {
@@ -564,8 +542,6 @@ func GetAssetsByOutpointWithListAssetResponse(listAssetResponse *taprpc.ListAsse
 	return &assets, nil
 }
 
-// GetImageByImageData
-// @Description: Get Image By Image Data
 func GetImageByImageData(imageData string) []byte {
 	if imageData == "" {
 		return nil
@@ -591,7 +567,7 @@ type FairLaunchFollowSetRequest struct {
 
 func PostToSetFollowFairLaunchInfo(token string, fairLaunchFollowSetRequest *FairLaunchFollowSetRequest) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/follow"
+	url := serverDomainOrSocket + "/fair_launch_follow/follow"
 	requestJsonBytes, err := json.Marshal(fairLaunchFollowSetRequest)
 	if err != nil {
 		return nil, err
@@ -631,7 +607,7 @@ func PostToSetFollowFairLaunchInfo(token string, fairLaunchFollowSetRequest *Fai
 
 func PostToSetUnfollowFairLaunchInfo(token string, assetId string) (*JsonResult, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/unfollow/asset_id/" + assetId
+	url := serverDomainOrSocket + "/fair_launch_follow/unfollow/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return nil, err
@@ -669,8 +645,6 @@ func PostToSetUnfollowFairLaunchInfo(token string, assetId string) (*JsonResult,
 	return &response, nil
 }
 
-// FollowFairLaunchAsset
-// @Description: Follow fair launch asset
 func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, deviceId string) string {
 	_, err := PostToSetFollowFairLaunchInfo(token, &FairLaunchFollowSetRequest{
 		FairLaunchInfoId: fairLaunchInfoId,
@@ -683,8 +657,6 @@ func FollowFairLaunchAsset(token string, fairLaunchInfoId int, assetId string, d
 	return MakeJsonErrorResult(SUCCESS, SuccessError, assetId)
 }
 
-// UnfollowFairLaunchAsset
-// @Description: Unfollow fair launch asset
 func UnfollowFairLaunchAsset(token string, assetId string) string {
 	_, err := PostToSetUnfollowFairLaunchInfo(token, assetId)
 	if err != nil {
@@ -702,7 +674,7 @@ type QueryIsFairLaunchFollowedResponse struct {
 
 func RequestToQueryIsFairLaunchFollowed(token string, assetId string) (bool, error) {
 	serverDomainOrSocket := Cfg.BtlServerHost
-	url := "http://" + serverDomainOrSocket + "/fair_launch_follow/query/user/is_followed/asset_id/" + assetId
+	url := serverDomainOrSocket + "/fair_launch_follow/query/user/is_followed/asset_id/" + assetId
 	requestJsonBytes, err := json.Marshal(nil)
 	if err != nil {
 		return false, err
@@ -741,8 +713,6 @@ func RequestToQueryIsFairLaunchFollowed(token string, assetId string) (bool, err
 
 }
 
-// QueryIsFairLaunchFollowed
-// @Description: Query is fair launch followed
 func QueryIsFairLaunchFollowed(token string, assetId string) string {
 	response, err := RequestToQueryIsFairLaunchFollowed(token, assetId)
 	if err != nil {

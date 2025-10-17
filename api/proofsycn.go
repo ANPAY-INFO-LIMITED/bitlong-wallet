@@ -109,7 +109,6 @@ func deliverIssuanceProof(universeUrl, assetId, groupKey string) error {
 		err error
 	)
 	if groupKey == "" {
-		//TODO
 	}
 	res, err = assetLeaves(false, assetId, universerpc.ProofType_PROOF_TYPE_ISSUANCE)
 	if err != nil {
@@ -147,13 +146,14 @@ func receiveProof(universeUrl, assetId, groupKey, scriptkey, outpoint string) er
 	if universeUrl != "" {
 		addrs[universeUrl] = nil
 	}
+	var err error
 	for key := range addrs {
-		err := universeCourier.ReceiveProof(key, loc)
+		err = universeCourier.ReceiveProof(key, loc)
 		if err == nil {
 			return nil
 		}
 	}
-	return errors.New("receive proof failed")
+	return fmt.Errorf("%w, %w", errors.New("receive proof failed"), err)
 }
 
 func readProof(assetId, groupKey, scriptkey, outpoint string) (*Jstr, error) {
@@ -180,7 +180,6 @@ func readProof(assetId, groupKey, scriptkey, outpoint string) (*Jstr, error) {
 	}
 	str := string(json)
 	js := Jstr{Jsonstr: str}
-	//fmt.Println(str)
 	return &js, nil
 }
 
@@ -208,7 +207,6 @@ func newAddrsMap() map[string]*url.URL {
 	addrs := make(map[string]*url.URL)
 	addrs[Cfg.UniverseUrl] = nil
 	if Cfg.Network == "mainnet" {
-		//addrs["universerpc://44.230.212.183:10029"] = nil
 	}
 	return addrs
 }

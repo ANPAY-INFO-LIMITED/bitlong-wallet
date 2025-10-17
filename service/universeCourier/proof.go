@@ -24,7 +24,6 @@ var ErrNoDefaultProofPath = errors.New("no default proof path set")
 func serverDialOpts() ([]grpc.DialOption, error) {
 	var opts []grpc.DialOption
 
-	// Skip TLS certificate verification.
 	tlsConfig := tls.Config{InsecureSkipVerify: true}
 	transportCredentials := credentials.NewTLS(&tlsConfig)
 	opts = append(opts, grpc.WithTransportCredentials(transportCredentials))
@@ -32,7 +31,6 @@ func serverDialOpts() ([]grpc.DialOption, error) {
 	return opts, nil
 }
 
-// FetchProofs retrieves all proofs for a given asset ID from the proof
 func FetchProofs(id asset.ID) ([]*proof.AnnotatedProof, error) {
 	if defaultProofPath == "" {
 		return nil, ErrNoDefaultProofPath
@@ -47,9 +45,6 @@ func FetchProofs(id asset.ID) ([]*proof.AnnotatedProof, error) {
 
 	proofs := make([]*proof.AnnotatedProof, len(entries))
 	for idx := range entries {
-		// We'll skip any files that don't end with our suffix, this
-		// will include directories as well, so we don't need to check
-		// for those.
 		fileName := entries[idx].Name()
 		if !strings.HasSuffix(fileName, proof.TaprootAssetsFileSuffix) {
 			continue
@@ -79,9 +74,6 @@ func FetchProofs(id asset.ID) ([]*proof.AnnotatedProof, error) {
 }
 
 func FetchProof(id proof.Locator) (*proof.AnnotatedProof, error) {
-	// All our on-disk storage is based on asset IDs, so to look up a path,
-	// we just need to compute the full file path and see if it exists on
-	// disk.
 	if defaultProofPath == "" {
 		return nil, ErrNoDefaultProofPath
 	}
@@ -169,7 +161,6 @@ func ImportProofs(replace bool,
 			return err
 		}
 
-		// Can't replace a file that doesn't exist yet.
 		if replace && !lnrpc.FileExists(proofPath) {
 			return fmt.Errorf("cannot replace p because file "+
 				"%s does not exist", proofPath)
@@ -184,16 +175,12 @@ func ImportProofs(replace bool,
 }
 
 func lookupProofFilePath(rootPath string, loc proof.Locator) (string, error) {
-	// If an outpoint is specified, we want to look up a very specific file
-	// on disk.
 	if loc.OutPoint != nil {
 		fullName, err := genProofFileStoragePath(rootPath, loc)
 		if err != nil {
 			return "", err
 		}
 
-		// If the file doesn't exist under the full name, we know there
-		// just isn't a proof file for that asset yet.
 		if !lnrpc.FileExists(fullName) {
 			return "", fmt.Errorf("proof file %s does not "+
 				"exist: %w", fullName, proof.ErrProofNotFound)
@@ -202,9 +189,6 @@ func lookupProofFilePath(rootPath string, loc proof.Locator) (string, error) {
 		return fullName, nil
 	}
 
-	// If the user didn't specify an outpoint, we look up all proof files
-	// that start with the script key given. If there is exactly one, we
-	// return it.
 	var emptyKey btcec.PublicKey
 	switch {
 	case loc.AssetID == nil:
@@ -223,16 +207,12 @@ func lookupProofFilePath(rootPath string, loc proof.Locator) (string, error) {
 	}
 
 	switch {
-	// We have no proof for this script key.
 	case len(matches) == 0:
 		return "", proof.ErrProofNotFound
 
-	// Exactly one proof for this script key, we'll return it.
 	case len(matches) == 1:
 		return matches[0], nil
 
-	// User needs to specify the outpoint as well, since we have multiple
-	// proofs for this script key.
 	default:
 		return "", proof.ErrMultipleProofs
 	}

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+import "assetwalletrpc/assetwallet.proto";
+
+package btlrpc;
+
+option go_package = "github.com/lightninglabs/taproot-assets/taprpc/btlrpc";
+
+/**
+protoc --go_out . --go_opt paths=source_relative --go-grpc_out require_unimplemented_servers=false:. --go-grpc_opt paths=source_relative btlrpc/btl.proto
+*/
+
+service Btl {
+    // FundVirtualPsbt2 从可用资产承诺中选择输入，为与模板匹配的虚拟交易提供资金。该接口应该在assetwalletrpc.FundVirtualPsbt基础上增加选择的硬币参数
+    rpc FundVirtualPsbt2 (FundVirtualPsbtRequest2) returns (assetwalletrpc.FundVirtualPsbtResponse);
+
+    // GetListEligibleCoins 获取可用于注资虚拟PSBT的硬币列表。该接口调用FundVirtualPsbt的FundPacket的SelectCoins的ListEligibleCoins
+    rpc GetListEligibleCoins (GetListEligibleCoinsRequest) returns (GetListEligibleCoinsResponse);
+}
+
+message FundVirtualPsbtRequest2 {
+    oneof template {
+        // 使用现有 PSBT 数据包作为资助的 PSBT 的模板
+        bytes psbt = 1;
+
+        // 使用此原始模板中的资产输出和可选资产输入
+        assetwalletrpc.TxTemplate raw = 2;
+    }
+
+
+    assetwalletrpc.CoinSelectType coin_select_type = 3;
+    // 硬币过滤器
+    CoinsFilter coins_filter = 4;
+}
+
+message CoinsFilter{
+    // 用于指定使用的硬币
+    repeated Coin coins = 1;
+}
+
+message GetListEligibleCoinsRequest{
+    string asset_id = 1;
+
+    // 通过资产ID获取组键
+
+    // 可能并不需要
+    // uint64 min_amt = 2;
+
+    // 可能不需要，使用默认硬币选择类型即可
+    // uint32 coin_select_type = 3;
+}
+
+message GetListEligibleCoinsResponse{
+    repeated Coin coins = 1;
+}
+
+message Coin{
+    // Commitment 在主链中锚定的 outpoint
+    string anchor_point = 1;
+
+    // 是锚点输出的输出值，但普遍为1000，无需返回
+    // int64 anchor_output_value
+
+    // 用于将 commit 锚定在上述 out point 的内部 key
+    bytes internal_key = 2;
+
+    // TapscriptSibling 是此资产的 tapscript 同级原像。这通常为 nil
+
+    // Commitment 是锚定在上述点的完整 Taproot 资产承诺。这包括要用作输入的资产，以及可能并置在此承诺中的任何其他资产
+
+    // Asset 是批准上述约束的资产，应该用作交易的输入
+
+    // 资产数量
+    uint64 AssetAmount = 3;
+}

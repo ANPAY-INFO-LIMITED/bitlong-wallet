@@ -68,18 +68,14 @@ func (s *KeyStore) CreateOrUpdateKey(i *KeyInfo) error {
 func (s *KeyStore) ReadKey(ID string) (*KeyInfo, error) {
 	var i KeyInfo
 
-	// 使用 SQL 的 SELECT 语句从 keys 表中查询特定 ID 的密钥信息
 	err := s.DB.QueryRow("SELECT id, private_key, public_key FROM keys WHERE id = ?", ID).Scan(&i.ID, &i.PrivateKey, &i.PublicKey)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// 没有找到记录
 			return nil, fmt.Errorf("no key found with ID: %s", ID)
 		}
-		// 数据库查询出错
 		return nil, err
 	}
 	privateKeyEncrypted := []byte(i.PrivateKey)
-	// 对查询到的加密私钥进行解密
 	decryptedKey, err := decrypt(privateKeyEncrypted, passphrase)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt private key: %v", err)
@@ -93,7 +89,6 @@ func getTimeNow() string {
 	return time.Now().Format("2006/01/02 15:04:05")
 }
 
-// Encrypt data using AES
 func encrypt(data []byte, passphrase string) ([]byte, error) {
 	block, err := aes.NewCipher([]byte(passphrase))
 	if err != nil {
@@ -109,7 +104,6 @@ func encrypt(data []byte, passphrase string) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// Decrypt data using AES
 func decrypt(data []byte, passphrase string) ([]byte, error) {
 	block, err := aes.NewCipher([]byte(passphrase))
 	if err != nil {

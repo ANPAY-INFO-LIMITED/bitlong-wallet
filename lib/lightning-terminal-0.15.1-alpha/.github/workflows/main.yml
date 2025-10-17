@@ -1,0 +1,338 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+    branches:
+      - "*"
+
+concurrency:
+  # Cancel any previous workflows if they are from a PR or push.
+  group: ${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # If you change this value, please change it in the following files as well:
+  # /Dockerfile
+  # /dev.Dockerfile
+  GO_VERSION: 1.23.9
+
+jobs:
+  ########################
+  # frontend build checks
+  ########################
+  frontend:
+    name: frontend tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        node_version: [ 16.x ]
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
+
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup nodejs ${{ matrix.node_version }}
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '${{ matrix.node_version }}'
+
+      - name: install dependencies
+        working-directory: ./app
+        run: yarn
+
+      - name: lint code
+        working-directory: ./app
+        run: yarn lint
+
+      - name: typescript compile
+        working-directory: ./app
+        run: yarn tsc
+
+      - name: unit tests
+        working-directory: ./app
+        run: yarn test:ci
+
+  ########################
+  # backend build checks
+  ########################
+  backend:
+    name: backend build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        go_version: [ 1.18.x ]
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
+
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup nodejs ${{ matrix.node_version }}
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '${{ matrix.node_version }}'
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: build backend binary
+        run: make build
+
+      - name: build CLI binaries
+        run: make go-install-cli
+
+  ########################
+  # cross compilation
+  ########################
+  cross-compile:
+    name: cross compilation
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        # Please keep this list in sync with make/release_flags.mk!
+        include:
+          - name: i386
+            sys: linux-386
+          - name: amd64
+            sys: darwin-amd64 linux-amd64 windows-amd64
+          - name: arm
+            sys: darwin-arm64 linux-armv6 linux-armv7 linux-arm64
+    steps:
+      - name: cleanup space
+        run: rm -rf /opt/hostedtoolcache
+
+      - name: git checkout
+        uses: actions/checkout@v4
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: build release for all architectures (skip app build)
+        run: make go-release sys="${{ matrix.sys }}"
+
+  ########################
+  # proto compile check
+  ########################
+  proto-compile-check:
+    name: RPC proto compilation check
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup nodejs ${{ matrix.node_version }}
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '${{ matrix.node_version }}'
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: install dependencies
+        working-directory: ./app
+        run: yarn
+
+      - name: run check
+        run: make rpc-js-compile && make protos-check
+
+      - name: compile rpc for golang
+        run: make rpc
+
+      - name: run check
+        run: make mod-check
+
+  ########################
+  # check commits
+  ########################
+  check-commits:
+    if: github.event_name == 'pull_request'
+    name: check commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: fetch and rebase on ${{ github.base_ref }}
+        run: |
+          git remote add upstream https://github.com/${{ github.repository }}
+          git fetch upstream
+          export GIT_COMMITTER_EMAIL="litd-ci@example.com"
+          export GIT_COMMITTER_NAME="LiT CI"
+          git rebase upstream/${{ github.base_ref }}
+
+      - name: check commits
+        run: scripts/check-each-commit.sh upstream/${{ github.base_ref }}
+
+  #######################
+  # sql model generation
+  #######################
+  sqlc-check:
+    name: Sqlc check
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v3
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: docker image cache
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
+        continue-on-error: true
+
+      - name: Generate sql models
+        run: make sqlc-check
+
+  ########################
+  # lint code
+  ########################
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: prepare dummy static data
+        run: mkdir -p app/build; touch app/build/index.html
+
+      - name: run check
+        run: make mod-check && make lint
+
+  ########################
+  # unit tests
+  ########################
+  unit-test:
+    name: run unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      # Allow other tests in the matrix to continue if one fails.
+      fail-fast: false
+      matrix:
+        unit_type:
+          - unit-race
+          - unit
+          - unit dbbackend=postgres
+          - unit dbbackend=sqlite
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: run ${{ matrix.unit_type }}
+        run: make ${{ matrix.unit_type }}
+
+  ########################
+  # integration tests
+  ########################
+  itest:
+    name: integration test
+    runs-on: ubuntu-latest
+    strategy:
+      # Allow other tests in the matrix to continue if one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - name: bbolt
+            args: itest-no-backward-compat icase=terminal dbbackend=bbolt
+          - name: sqlite
+            args: itest-no-backward-compat icase=terminal dbbackend=sqlite
+          - name: postgres
+            args: itest-no-backward-compat icase=terminal dbbackend=postgres
+          - name: custom-channels
+            args: itest-only icase=custom_channels
+            
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: setup nodejs ${{ matrix.node_version }}
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '${{ matrix.node_version }}'
+
+      - name: setup go ${{ env.GO_VERSION }}
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: install dependencies
+        working-directory: ./app
+        run: yarn
+
+      - name: run itest ${{ matrix.name }}
+        run: make ${{ matrix.args }}
+
+      - name: Zip log files on failure
+        if: ${{ failure() }}
+        timeout-minutes: 5
+        run: 7z a logs-itest-${{ matrix.name }}.zip itest/**/*.log
+
+      - name: Upload log files on failure
+        uses: actions/upload-artifact@v4
+        if: ${{ failure() }}
+        with:
+          name: logs-itest-${{ matrix.name }}
+          path: logs-itest-${{ matrix.name }}.zip
+          retention-days: 5
+
+  ########################
+  # check PR updates release notes
+  ########################
+  release-notes-check:
+    name: check release notes updated
+    runs-on: ubuntu-latest
+    if: '!contains(github.event.pull_request.labels.*.name, ''no-changelog'')'
+    steps:
+      - name: git checkout
+        uses: actions/checkout@v4
+
+      - name: release notes check
+        run: scripts/check-release-notes.sh
